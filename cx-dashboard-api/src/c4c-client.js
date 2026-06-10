@@ -246,7 +246,7 @@ export async function fetchTasks(filters = {}, userJwt) {
     `${ODATA_BASE}/TasksCollection`,
     [
       'ObjectID', 'ID', 'Subject', 'Status', 'StatusText',
-      'DueDateTime', 'PriorityCodeText', 'MainAccountPartyName',
+      'DueDateTime', 'PriorityCodeText',
     ],
     parts.join(' and '),
     userJwt

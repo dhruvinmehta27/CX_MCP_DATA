@@ -183,7 +183,9 @@ export async function getDailySummary(filters, userJwt, userEmail) {
     recentFrom.setUTCDate(recentFrom.getUTCDate() - 7);
     const weekFilters = { ...filters, dateFrom: recentFrom.toISOString().slice(0, 10) };
 
-    const [quotes, opps, tasks, rfqs, visits, appointments] = await Promise.all([
+    // allSettled so one bad collection reports alongside the others
+    // instead of masking them one redeploy at a time
+    const settled = await Promise.allSettled([
       fetchQuotes(filters, userJwt),
       fetchOpportunities(filters, userJwt),
       fetchTasks(filters, userJwt),
@@ -191,6 +193,11 @@ export async function getDailySummary(filters, userJwt, userEmail) {
       fetchVisits(weekFilters, userJwt),
       fetchAppointments(weekFilters, userJwt),
     ]);
+    const failures = settled.filter((s) => s.status === 'rejected');
+    if (failures.length) {
+      throw new Error(failures.map((f) => f.reason?.message || String(f.reason)).join(' || '));
+    }
+    const [quotes, opps, tasks, rfqs, visits, appointments] = settled.map((s) => s.value);
 
     const summary = dailySummary(
       quotes.results, opps.results, tasks.results,
@@ -223,7 +230,6 @@ export async function getDailySummary(filters, userJwt, userEmail) {
         subject: t.Subject,
         status: t.StatusText,
         priority: t.PriorityCodeText,
-        account: t.MainAccountPartyName,
         due: parseODataDate(t.DueDateTime)?.toISOString() || null,
       }));
     return summary;
