@@ -12,7 +12,7 @@
 import axios from 'axios';
 
 const C4C_DESTINATION = process.env.C4C_DESTINATION || 'C4C_QUA_OBO';
-const ODATA_BASE = '/sap/c4c/odata/v2/c4codataapi';
+const ODATA_BASE = '/sap/c4c/odata/v1/c4codataapi';
 const CUSTOM_BASE = '/sap/c4c/odata/cust/v1';
 const PAGE_SIZE = 1000;
 // Promise.all in batches — full parallelism across 199 pages would exhaust sockets
@@ -39,10 +39,13 @@ export async function fetchDestinationToken() {
   const creds = getDestinationServiceCredentials();
   const resp = await axios.post(
     `${creds.url}/oauth/token`,
-    new URLSearchParams({ grant_type: 'client_credentials' }).toString(),
+    new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: creds.clientid,
+      client_secret: creds.clientsecret,
+    }),
     {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      auth: { username: creds.clientid, password: creds.clientsecret },
       timeout: 15_000,
     }
   );
@@ -73,16 +76,18 @@ async function getDestination(userJwt) {
   );
   const dest = resp.data;
   const authToken = dest.authTokens && dest.authTokens[0];
-  if (!authToken || authToken.error) {
-    throw new Error(
-      `Destination ${C4C_DESTINATION} did not return a user token: ${
-        authToken ? authToken.error : 'no authTokens in response'
-      }`
-    );
+  if (authToken?.error) {
+    if (authToken.error.includes('expired')) {
+      throw new Error('Your session has expired. Please sign in again to continue.');
+    }
+    throw new Error(`Authentication error: ${authToken.error}`);
+  }
+  if (!authToken?.value) {
+    throw new Error(`No auth token returned from destination ${C4C_DESTINATION}`);
   }
   return {
-    url: (dest.destinationConfiguration.URL || '').replace(/\/+$/, ''),
-    authHeader: `${authToken.type} ${authToken.value}`,
+    url: (dest.destinationConfiguration?.URL || '').replace(/\/+$/, ''),
+    authHeader: `${authToken.type || 'Bearer'} ${authToken.value}`,
   };
 }
 
@@ -258,22 +263,21 @@ export async function fetchAppointments(filters = {}, userJwt) {
 }
 
 /**
- * Sales org lookup for the FilterBar — OrganisationalUnitCollection with
- * SalesIndicator eq true. Single page is enough for a search dropdown.
+ * Sales org lookup for the FilterBar — custom OData service
+ * cust/v1/orgidnamesandfunc, filtered server-side on SalesIndicator + name.
  */
 export async function fetchSalesOrgs(search, userJwt) {
   const parts = ['SalesIndicator eq true'];
-  const data = await c4cRequest(`${ODATA_BASE}/OrganisationalUnitCollection`, userJwt, {
-    $select: 'ObjectID,ID,Name',
-    $filter: parts.join(' and '),
-    $top: 1000,
-  });
-  let results = data.results || [];
-  if (search) {
-    const s = search.toLowerCase();
-    results = results.filter(
-      (o) => (o.Name || '').toLowerCase().includes(s) || (o.ID || '').toLowerCase().includes(s)
-    );
-  }
-  return results.map((o) => ({ id: o.ID, name: o.Name }));
+  if (search) parts.push(`substringof('${odataEscape(search)}',Name)`);
+  const data = await c4cRequest(
+    `${CUSTOM_BASE}/orgidnamesandfunc/OrganisationalUnitCollection`,
+    userJwt,
+    {
+      $select: 'ObjectID,ID,Name,SalesIndicator',
+      $filter: parts.join(' and '),
+      $top: 50,
+      $inlinecount: 'allpages',
+    }
+  );
+  return (data.results || []).map((o) => ({ id: o.ID, name: o.Name }));
 }
