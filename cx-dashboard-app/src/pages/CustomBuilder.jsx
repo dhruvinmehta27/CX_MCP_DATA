@@ -6,6 +6,7 @@ import DynamicChart from '../components/charts/DynamicChart';
 import DataTable from '../components/ui/DataTable';
 import SkeletonCard from '../components/ui/SkeletonCard';
 import EmptyState from '../components/ui/EmptyState';
+import Icon from '../components/ui/Icon';
 
 const SUGGESTIONS = [
   'Quotes by sales org last quarter',
@@ -59,7 +60,7 @@ export default function CustomBuilder() {
 
   const exportPng = async () => {
     if (!chartRef.current) return;
-    const canvas = await html2canvas(chartRef.current, { backgroundColor: '#1D1D1B' });
+    const canvas = await html2canvas(chartRef.current, { backgroundColor: '#FFFFFF' });
     const link = document.createElement('a');
     link.download = `${(result?.title || 'chart').replace(/\s+/g, '-').toLowerCase()}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -80,7 +81,8 @@ export default function CustomBuilder() {
             onKeyDown={(e) => e.key === 'Enter' && run()}
           />
           <button className="btn" onClick={() => run()} disabled={loading || !request.trim()}>
-            {loading ? 'Generating…' : '✨ Generate Dashboard'}
+            <Icon name="sparkles" size={15} className={loading ? 'spinning' : undefined} />
+            {loading ? 'Generating…' : 'Generate Dashboard'}
           </button>
         </div>
         <div className="suggest-row">
@@ -105,7 +107,7 @@ export default function CustomBuilder() {
 
       {error && (
         <div className="card">
-          <EmptyState icon="⚠️" title="Generation failed" message={error.message} error />
+          <EmptyState title="Generation failed" message={error.message} error />
         </div>
       )}
 
@@ -117,7 +119,10 @@ export default function CustomBuilder() {
                 <div className="chart-card-title">{result.title}</div>
                 {result.summary && <div className="chart-card-subtitle">{result.summary}</div>}
               </div>
-              <button className="btn btn-ghost" onClick={exportPng}>⬇ Export PNG</button>
+              <button className="btn btn-ghost" onClick={exportPng}>
+                <Icon name="download" size={15} />
+                Export PNG
+              </button>
             </div>
             <div ref={chartRef} style={{ padding: 8 }}>
               <DynamicChart config={result.chartConfig} height={400} />
@@ -126,7 +131,10 @@ export default function CustomBuilder() {
 
           {result.insights?.length > 0 && (
             <div className="card">
-              <div className="chart-card-title" style={{ marginBottom: 10 }}>💡 AI Insights</div>
+              <div className="chart-card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="bulb" size={17} style={{ color: 'var(--warning)' }} />
+                AI Insights
+              </div>
               <ul className="insights-list">
                 {result.insights.map((insight, i) => (
                   <li key={i}>{insight}</li>

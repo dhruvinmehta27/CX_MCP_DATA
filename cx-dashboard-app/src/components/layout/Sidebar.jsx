@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
+import Icon from '../ui/Icon';
 
 const NAV = [
-  { to: '/', icon: '☀️', label: 'Daily Briefing', end: true },
-  { to: '/quotes', icon: '📄', label: 'Quote Analytics' },
-  { to: '/pipeline', icon: '📈', label: 'Pipeline Health' },
-  { to: '/rfqs', icon: '📨', label: 'RFQ Tracker' },
-  { to: '/builder', icon: '✨', label: 'Custom Builder' },
+  { to: '/', icon: 'sun', label: 'Daily Briefing', end: true },
+  { to: '/quotes', icon: 'file-text', label: 'Quote Analytics' },
+  { to: '/pipeline', icon: 'trending-up', label: 'Pipeline Health' },
+  { to: '/rfqs', icon: 'inbox', label: 'RFQ Tracker' },
+  { to: '/builder', icon: 'sparkles', label: 'Custom Builder' },
 ];
 
 export default function Sidebar({ collapsed, onToggle }) {
@@ -29,13 +30,16 @@ export default function Sidebar({ collapsed, onToggle }) {
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
             title={item.label}
           >
-            <span className="nav-icon">{item.icon}</span>
+            <span className="nav-icon">
+              <Icon name={item.icon} size={19} />
+            </span>
             {!collapsed && item.label}
           </NavLink>
         ))}
       </nav>
       <button className="sidebar-toggle" onClick={onToggle} title="Toggle sidebar">
-        {collapsed ? '»' : '« Collapse'}
+        <Icon name={collapsed ? 'chevrons-right' : 'chevrons-left'} size={16} />
+        {!collapsed && 'Collapse'}
       </button>
     </aside>
   );

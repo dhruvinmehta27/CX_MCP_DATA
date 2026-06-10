@@ -49,6 +49,7 @@ function AuthGate({ children }) {
           <div className="auth-splash-logo">TSS</div>
           <h1>Dashboard &amp; Analytics</h1>
           <p>Signing you in with Microsoft…</p>
+          <div className="auth-spinner" />
         </div>
       </div>
     );

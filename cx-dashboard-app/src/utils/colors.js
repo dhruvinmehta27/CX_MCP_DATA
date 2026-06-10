@@ -1,18 +1,32 @@
-export const CHART_COLORS = ['#E4002B', '#FF6B6B', '#FFB347', '#4ECDC4', '#45B7D1', '#96CEB4'];
+/**
+ * Fiori Horizon (Morning) inspired palette.
+ * Trelleborg red is reserved for brand marks; UI semantics use Horizon colors.
+ */
+export const CHART_COLORS = [
+  '#0070F2', // indigo (sap brand blue)
+  '#07838F', // teal
+  '#36A41D', // positive green
+  '#E76500', // mango
+  '#7858FF', // purple
+  '#FA4F96', // pink
+  '#0CA6CA', // cyan
+  '#925ACE', // violet
+];
 
 export const COLORS = {
-  background: '#0F0F0F',
-  card: '#1D1D1B',
-  cardHover: '#252523',
-  sidebar: '#161614',
-  primary: '#E4002B',
-  primaryHover: '#C0001F',
-  text: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  textMuted: '#6B7280',
-  border: '#2D2D2B',
-  success: '#10B981',
-  warning: '#F59E0B',
+  background: '#F5F6F7',
+  card: '#FFFFFF',
+  sidebar: '#FFFFFF',
+  primary: '#0070F2',
+  primaryHover: '#0064D9',
+  brandRed: '#E4002B',
+  text: '#1D2D3E',
+  textSecondary: '#556B82',
+  textMuted: '#8396A8',
+  border: '#E5E9ED',
+  success: '#36A41D',
+  warning: '#E76500',
+  danger: '#D20A0A',
 };
 
 export function chartColor(index) {
@@ -20,14 +34,14 @@ export function chartColor(index) {
 }
 
 const STATUS_COLOR_RULES = [
-  { re: /won|complete|accept/i, color: COLORS.success },
-  { re: /lost|cancel|reject|overdue/i, color: COLORS.primary },
-  { re: /pending|process|progress|review/i, color: COLORS.warning },
+  { re: /won|complete|accept|active/i, color: COLORS.success },
+  { re: /lost|cancel|reject|overdue|expired/i, color: COLORS.danger },
+  { re: /pending|process|progress|review|sent/i, color: COLORS.warning },
 ];
 
 export function statusColor(status) {
   for (const { re, color } of STATUS_COLOR_RULES) {
     if (re.test(status || '')) return color;
   }
-  return '#45B7D1';
+  return COLORS.primary;
 }

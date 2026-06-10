@@ -11,6 +11,12 @@ import EmptyState from '../ui/EmptyState';
 import { chartColor } from '../../utils/colors';
 import { tooltipStyle, axisStyle, gridStroke } from './chartTheme';
 
+// Compact ticks for AI-generated charts where the value scale is unknown
+const compact = (v) =>
+  typeof v === 'number' && Math.abs(v) >= 1000
+    ? Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v)
+    : v;
+
 /**
  * Renders a chartConfig produced by POST /api/dashboard/generate:
  * { chartType, data, xKey, yKeys: [{ key, color, label, type }], title }
@@ -36,15 +42,16 @@ export default function DynamicChart({ config, height = 360 }) {
           bars={yKeys}
           colorByEntry={yKeys.length === 1}
           height={height}
+          valueFormatter={compact}
         />
       );
     case 'line':
-      return <LineChart data={data} xKey={xKey} lines={yKeys} height={height} />;
+      return <LineChart data={data} xKey={xKey} lines={yKeys} height={height} valueFormatter={compact} />;
     case 'area':
-      return <AreaChart data={data} xKey={xKey} areas={yKeys} height={height} />;
+      return <AreaChart data={data} xKey={xKey} areas={yKeys} height={height} valueFormatter={compact} />;
     case 'pie':
       return (
-        <PieChart data={data} nameKey={xKey} valueKey={yKeys[0].key} height={height} />
+        <PieChart data={data} nameKey={xKey} valueKey={yKeys[0].key} height={height} valueFormatter={compact} />
       );
     case 'funnel': {
       const stages = data.map((d) => ({

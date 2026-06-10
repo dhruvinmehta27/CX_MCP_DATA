@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { statusColor } from '../../utils/colors';
 import EmptyState from './EmptyState';
+import Icon from './Icon';
 
 /**
  * Sortable, paginated table.
@@ -50,7 +51,7 @@ export default function DataTable({ columns, data, pageSize = 50, sortable = tru
     if (col.type === 'status') {
       const color = statusColor(value);
       return (
-        <span className="badge" style={{ color, borderColor: color, background: `${color}1a` }}>
+        <span className="badge" style={{ color, background: `${color}14` }}>
           {value || '–'}
         </span>
       );
@@ -102,10 +103,18 @@ export default function DataTable({ columns, data, pageSize = 50, sortable = tru
         </span>
         {pages > 1 && (
           <div className="pager">
-            <button className="btn-icon" disabled={currentPage === 0} onClick={() => setPage(0)}>«</button>
-            <button className="btn-icon" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>‹</button>
-            <button className="btn-icon" disabled={currentPage >= pages - 1} onClick={() => setPage(currentPage + 1)}>›</button>
-            <button className="btn-icon" disabled={currentPage >= pages - 1} onClick={() => setPage(pages - 1)}>»</button>
+            <button className="btn-icon" title="First page" disabled={currentPage === 0} onClick={() => setPage(0)}>
+              <Icon name="chevrons-left" size={15} />
+            </button>
+            <button className="btn-icon" title="Previous" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+              <Icon name="chevron-left" size={15} />
+            </button>
+            <button className="btn-icon" title="Next" disabled={currentPage >= pages - 1} onClick={() => setPage(currentPage + 1)}>
+              <Icon name="chevron-right" size={15} />
+            </button>
+            <button className="btn-icon" title="Last page" disabled={currentPage >= pages - 1} onClick={() => setPage(pages - 1)}>
+              <Icon name="chevrons-right" size={15} />
+            </button>
           </div>
         )}
       </div>

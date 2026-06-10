@@ -11,6 +11,7 @@ import DataTable from '../components/ui/DataTable';
 import PieChart from '../components/charts/PieChart';
 import LineChart from '../components/charts/LineChart';
 import BarChart from '../components/charts/BarChart';
+import { CHART_COLORS } from '../utils/colors';
 import { fmtNumber, fmtCurrency, fmtCurrencyFull, fmtPercent, fmtDate, fmtMonth } from '../utils/formatters';
 
 export default function QuoteAnalytics() {
@@ -42,12 +43,12 @@ export default function QuoteAnalytics() {
   return (
     <div className="page">
       <div className="grid grid-4">
-        <MetricCard title="Total Quotes" icon="📄" loading={byStatus.loading} value={fmtNumber(kpis.totalQuotes)} />
-        <MetricCard title="Total Quote Value" icon="💶" loading={byStatus.loading} value={fmtCurrency(kpis.totalValue)} />
-        <MetricCard title="Average Quote Value" icon="⌀" loading={byStatus.loading} value={fmtCurrency(kpis.avgValue)} />
+        <MetricCard title="Total Quotes" icon="file-text" loading={byStatus.loading} value={fmtNumber(kpis.totalQuotes)} />
+        <MetricCard title="Total Quote Value" icon="banknote" loading={byStatus.loading} value={fmtCurrency(kpis.totalValue)} />
+        <MetricCard title="Average Quote Value" icon="trending-up" loading={byStatus.loading} value={fmtCurrency(kpis.avgValue)} />
         <MetricCard
           title="Win Rate"
-          icon="🏆"
+          icon="check-circle"
           loading={byStatus.loading}
           value={kpis.winRate == null ? '–' : fmtPercent(kpis.winRate)}
           subtitle="Won / total closed"
@@ -64,7 +65,7 @@ export default function QuoteAnalytics() {
               data={trend.data.map((d) => ({ ...d, month: fmtMonth(d.month) }))}
               xKey="month"
               lines={[
-                { key: 'count', color: '#E4002B', label: 'Quotes' },
+                { key: 'count', color: CHART_COLORS[0], label: 'Quotes' },
               ]}
             />
           )}
@@ -77,7 +78,7 @@ export default function QuoteAnalytics() {
             <BarChart
               data={topCustomers.data}
               xKey="customer"
-              bars={[{ key: 'totalAmount', color: '#45B7D1', label: 'Value' }]}
+              bars={[{ key: 'totalAmount', color: CHART_COLORS[1], label: 'Value' }]}
               layout="vertical"
               valueFormatter={(v) => fmtCurrency(v)}
             />
@@ -100,7 +101,7 @@ export default function QuoteAnalytics() {
           <BarChart
             data={bySalesOrg.data}
             xKey="salesOrg"
-            bars={[{ key: 'totalAmount', color: '#E4002B', label: 'Value' }]}
+            bars={[{ key: 'totalAmount', color: CHART_COLORS[0], label: 'Value' }]}
             valueFormatter={(v) => fmtCurrency(v)}
           />
         )}

@@ -15,7 +15,7 @@ export default function PieChart({ data, nameKey, valueKey, height = '100%', val
           innerRadius="50%"
           outerRadius="78%"
           paddingAngle={2}
-          stroke="#1D1D1B"
+          stroke="#FFFFFF"
         >
           {data.map((entry, i) => (
             <Cell key={i} fill={chartColor(i)} />

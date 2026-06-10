@@ -10,6 +10,7 @@ import DataTable from '../components/ui/DataTable';
 import FunnelChart from '../components/charts/FunnelChart';
 import BarChart from '../components/charts/BarChart';
 import AreaChart from '../components/charts/AreaChart';
+import { CHART_COLORS } from '../utils/colors';
 import { fmtNumber, fmtCurrency, fmtCurrencyFull, fmtDate, fmtMonth } from '../utils/formatters';
 
 // Simple stage-position weighting: later stages → higher win probability
@@ -44,15 +45,15 @@ export default function PipelineHealth() {
   return (
     <div className="page">
       <div className="grid grid-3">
-        <MetricCard title="Total Pipeline Value" icon="💶" loading={pipeline.loading} value={fmtCurrency(kpis.totalValue)} />
+        <MetricCard title="Total Pipeline Value" icon="banknote" loading={pipeline.loading} value={fmtCurrency(kpis.totalValue)} />
         <MetricCard
           title="Weighted Pipeline"
-          icon="⚖️"
+          icon="target"
           loading={pipeline.loading}
           value={fmtCurrency(kpis.weighted)}
           subtitle="Value × stage probability"
         />
-        <MetricCard title="Average Deal Size" icon="⌀" loading={pipeline.loading} value={fmtCurrency(kpis.avgDeal)} />
+        <MetricCard title="Average Deal Size" icon="briefcase" loading={pipeline.loading} value={fmtCurrency(kpis.avgDeal)} />
       </div>
 
       <ChartCard title="Pipeline Funnel" subtitle="Count and value per stage" loading={pipeline.loading} error={pipeline.error} onRefresh={pipeline.refetch}>
@@ -65,7 +66,7 @@ export default function PipelineHealth() {
             <BarChart
               data={byOwner.data}
               xKey="owner"
-              bars={[{ key: 'totalValue', color: '#FFB347', label: 'Expected value' }]}
+              bars={[{ key: 'totalValue', color: CHART_COLORS[3], label: 'Expected value' }]}
               layout="vertical"
               valueFormatter={(v) => fmtCurrency(v)}
             />
@@ -76,7 +77,7 @@ export default function PipelineHealth() {
             <AreaChart
               data={closeTrend.data.map((d) => ({ ...d, month: fmtMonth(d.month) }))}
               xKey="month"
-              areas={[{ key: 'totalValue', color: '#4ECDC4', label: 'Expected value' }]}
+              areas={[{ key: 'totalValue', color: CHART_COLORS[1], label: 'Expected value' }]}
               valueFormatter={(v) => fmtCurrency(v)}
             />
           )}

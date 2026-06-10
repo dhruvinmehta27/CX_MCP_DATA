@@ -14,16 +14,17 @@ export default function FunnelChart({ stages }) {
         const width = Math.max((s.totalValue / max) * 100, 8);
         return (
           <div key={s.stage} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 150, fontSize: 12, color: '#9CA3AF', textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ width: 150, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, textAlign: 'right', flexShrink: 0 }}>
               {s.stage}
             </div>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
               <div
                 style={{
                   width: `${width}%`,
-                  background: `linear-gradient(90deg, ${chartColor(i)}cc, ${chartColor(i)}66)`,
-                  borderRadius: 6,
-                  padding: '8px 12px',
+                  background: `linear-gradient(90deg, ${chartColor(i)}, ${chartColor(i)}99)`,
+                  borderRadius: 8,
+                  boxShadow: 'var(--shadow-sm)',
+                  padding: '9px 14px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   gap: 12,

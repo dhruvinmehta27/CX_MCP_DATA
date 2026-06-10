@@ -20,7 +20,6 @@ export default class ErrorBoundary extends Component {
       return (
         <div className="card">
           <EmptyState
-            icon="⚠️"
             title="Something went wrong"
             message={this.state.error.message}
             error

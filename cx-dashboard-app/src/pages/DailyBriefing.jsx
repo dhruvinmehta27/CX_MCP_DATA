@@ -8,6 +8,7 @@ import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import BarChart from '../components/charts/BarChart';
 import { fmtNumber, fmtCurrency, fmtDate } from '../utils/formatters';
+import { CHART_COLORS } from '../utils/colors';
 
 export default function DailyBriefing() {
   const navigate = useNavigate();
@@ -18,20 +19,21 @@ export default function DailyBriefing() {
   );
 
   const metrics = [
-    { title: 'Open Quotes', value: fmtNumber(data?.openQuotes), icon: '📄', onClick: () => navigate('/quotes') },
-    { title: 'Pipeline Value', value: fmtCurrency(data?.totalPipelineValue), icon: '💶', onClick: () => navigate('/pipeline') },
-    { title: 'Open Opportunities', value: fmtNumber(data?.openOpportunities), icon: '🎯', onClick: () => navigate('/pipeline') },
+    { title: 'Open Quotes', value: fmtNumber(data?.openQuotes), icon: 'file-text', onClick: () => navigate('/quotes') },
+    { title: 'Pipeline Value', value: fmtCurrency(data?.totalPipelineValue), icon: 'banknote', onClick: () => navigate('/pipeline') },
+    { title: 'Open Opportunities', value: fmtNumber(data?.openOpportunities), icon: 'target', onClick: () => navigate('/pipeline') },
     {
       title: 'Overdue Tasks',
       value: fmtNumber(data?.overdueTasksCount),
-      icon: '⏰',
-      color: data?.overdueTasksCount > 0 ? 'var(--primary)' : undefined,
+      icon: 'clock',
+      accent: data?.overdueTasksCount > 0 ? 'danger' : 'primary',
+      colorValue: data?.overdueTasksCount > 0,
     },
-    { title: 'Open RFQs', value: fmtNumber(data?.openRFQs), icon: '📨', onClick: () => navigate('/rfqs') },
+    { title: 'Open RFQs', value: fmtNumber(data?.openRFQs), icon: 'inbox', onClick: () => navigate('/rfqs') },
     {
       title: "Today's Meetings",
       value: fmtNumber((data?.visitsToday || 0) + (data?.appointmentsToday || 0)),
-      icon: '📅',
+      icon: 'calendar',
       subtitle: data ? `${data.visitsToday} visits · ${data.appointmentsToday} appointments` : undefined,
     },
   ];
@@ -50,7 +52,7 @@ export default function DailyBriefing() {
             <BarChart
               data={data.quotesByDay.map((d) => ({ ...d, day: d.day.slice(5) }))}
               xKey="day"
-              bars={[{ key: 'count', color: '#E4002B', label: 'Quotes' }]}
+              bars={[{ key: 'count', color: CHART_COLORS[0], label: 'Quotes' }]}
             />
           )}
         </ChartCard>
@@ -59,7 +61,7 @@ export default function DailyBriefing() {
             <BarChart
               data={data.pipeline}
               xKey="stage"
-              bars={[{ key: 'count', color: '#4ECDC4', label: 'Opportunities' }]}
+              bars={[{ key: 'count', color: CHART_COLORS[1], label: 'Opportunities' }]}
               layout="vertical"
             />
           ) : (
@@ -87,14 +89,15 @@ export default function DailyBriefing() {
             <div className="task-list">
               {data.todaysTasks.map((t) => (
                 <div className="task-item" key={t.id}>
+                  <span className="task-dot" />
                   <span className="subject">{t.subject}</span>
                   {t.priority && <span className="meta">{t.priority}</span>}
-                  {t.account && <span className="meta">{t.account}</span>}
+                  {t.status && <span className="meta">{t.status}</span>}
                 </div>
               ))}
             </div>
           ) : (
-            !loading && <EmptyState icon="✅" title="No tasks due today" />
+            !loading && <EmptyState icon="check-circle" title="No tasks due today" message="Enjoy the clear schedule." />
           )}
         </ChartCard>
       </div>

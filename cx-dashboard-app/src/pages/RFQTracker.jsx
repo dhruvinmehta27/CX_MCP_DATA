@@ -8,6 +8,7 @@ import ChartCard from '../components/ui/ChartCard';
 import DataTable from '../components/ui/DataTable';
 import PieChart from '../components/charts/PieChart';
 import LineChart from '../components/charts/LineChart';
+import { CHART_COLORS } from '../utils/colors';
 import { fmtNumber, fmtDate, fmtMonth } from '../utils/formatters';
 
 export default function RFQTracker() {
@@ -46,15 +47,16 @@ export default function RFQTracker() {
   return (
     <div className="page">
       <div className="grid grid-3">
-        <MetricCard title="Total Open RFQs" icon="📨" loading={list.loading} value={fmtNumber(kpis.open)} />
+        <MetricCard title="Total Open RFQs" icon="inbox" loading={list.loading} value={fmtNumber(kpis.open)} />
         <MetricCard
           title="Overdue RFQs"
-          icon="🚨"
+          icon="alert-triangle"
           loading={list.loading}
           value={fmtNumber(kpis.overdue)}
-          color={kpis.overdue > 0 ? 'var(--primary)' : undefined}
+          accent={kpis.overdue > 0 ? 'danger' : 'primary'}
+          colorValue={kpis.overdue > 0}
         />
-        <MetricCard title="Due This Week" icon="📅" loading={list.loading} value={fmtNumber(kpis.dueThisWeek)} />
+        <MetricCard title="Due This Week" icon="calendar" loading={list.loading} value={fmtNumber(kpis.dueThisWeek)} />
       </div>
 
       <div className="grid grid-2">
@@ -66,7 +68,7 @@ export default function RFQTracker() {
             <LineChart
               data={trend.data.map((d) => ({ ...d, month: fmtMonth(d.month) }))}
               xKey="month"
-              lines={[{ key: 'count', color: '#E4002B', label: 'RFQs' }]}
+              lines={[{ key: 'count', color: CHART_COLORS[0], label: 'RFQs' }]}
             />
           )}
         </ChartCard>

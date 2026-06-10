@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import useAuth from '../../auth/useAuth';
 import { clearCache } from '../../api/analytics';
+import Icon from '../ui/Icon';
 
 export default function Header({ title, subtitle }) {
   const { user, logout } = useAuth();
@@ -30,14 +31,23 @@ export default function Header({ title, subtitle }) {
         {subtitle && <span>{subtitle}</span>}
       </div>
       <div className="header-actions">
-        <button className="btn btn-ghost" onClick={onRefresh} disabled={refreshing} title="Clear cache and reload data">
-          {refreshing ? 'Refreshing…' : '⟳ Refresh data'}
+        <button
+          className="btn btn-ghost"
+          onClick={onRefresh}
+          disabled={refreshing}
+          title="Clear cache and reload data"
+        >
+          <Icon name="refresh" size={15} className={refreshing ? 'spinning' : undefined} />
+          {refreshing ? 'Refreshing…' : 'Refresh data'}
         </button>
+        <div className="header-divider" />
         <div className="user-chip">
           <div className="user-avatar">{initials}</div>
           {user?.name || user?.username}
         </div>
-        <button className="btn-icon" onClick={logout} title="Sign out">⎋</button>
+        <button className="btn-icon" onClick={logout} title="Sign out">
+          <Icon name="logout" size={17} />
+        </button>
       </div>
     </header>
   );
