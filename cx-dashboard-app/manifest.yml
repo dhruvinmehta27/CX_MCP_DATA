@@ -1,0 +1,13 @@
+---
+applications:
+  - name: cx-dashboard-app
+    memory: 64M
+    buildpacks:
+      - staticfile_buildpack
+    path: dist
+# Runtime config lives in dist/config.js (copied from public/config.js at build
+# time) — VITE_ env vars don't work for static deployments, so the app reads
+# window.__APP_CONFIG__ instead. The Staticfile (public/Staticfile → dist/) has
+# `pushstate: enabled` so React Router deep links resolve to index.html.
+#
+# Deploy:  npm run build && cf push

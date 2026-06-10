@@ -1,0 +1,130 @@
+/**
+ * Claude API integration — natural-language intent parsing, Recharts config
+ * generation, and self-contained ECharts HTML for Copilot Studio inline mode.
+ */
+import Anthropic from '@anthropic-ai/sdk';
+
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-8';
+
+let client = null;
+function getClient() {
+  if (!client) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY is not set (cf set-env cx-dashboard-api ANTHROPIC_API_KEY ...)');
+    }
+    client = new Anthropic();
+  }
+  return client;
+}
+
+function extractText(response) {
+  return response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+}
+
+function parseJsonResponse(text) {
+  // Strip markdown fences if the model added them despite instructions
+  const cleaned = text.replace(/^```(?:json|html)?\s*/i, '').replace(/```\s*$/, '').trim();
+  return JSON.parse(cleaned);
+}
+
+const VALID_ENDPOINTS = [
+  'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
+  'opportunities/pipeline', 'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
+];
+
+/**
+ * Parse a natural-language analytics request into endpoints + chart config.
+ */
+export async function parseIntent(userRequest, filters = {}) {
+  const prompt = `Parse this analytics request and return JSON only, no markdown:
+{
+  "endpoints": ["quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
+  "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel",
+  "title": string,
+  "xKey": string,
+  "yKeys": [string],
+  "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null }
+}
+Current filters from the UI (merge into your filters unless the request overrides them): ${JSON.stringify(filters)}
+Today's date: ${new Date().toISOString().slice(0, 10)}
+Request: ${userRequest}`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  const intent = parseJsonResponse(extractText(response));
+  intent.endpoints = (intent.endpoints || []).filter((e) => VALID_ENDPOINTS.includes(e));
+  if (intent.endpoints.length === 0) intent.endpoints = ['quotes/by-status'];
+  return intent;
+}
+
+/**
+ * Turn aggregated data into a Recharts chart config + insights.
+ */
+export async function generateChartConfig(chartType, data, userRequest) {
+  const prompt = `Return Recharts chart config as JSON only, no markdown:
+{
+  "chartType": string,
+  "data": [...],
+  "xKey": string,
+  "yKeys": [{ "key": string, "color": string, "label": string, "type": string }],
+  "title": string,
+  "summary": string,
+  "insights": [string]
+}
+Chart type: ${chartType}
+Data: ${JSON.stringify(data).slice(0, 30_000)}
+Colors available: ["#E4002B","#FF6B6B","#FFB347","#4ECDC4","#45B7D1","#96CEB4"]
+User request: ${userRequest}
+Rules: keep "data" suitable for direct rendering (flat objects, numeric values as numbers). Provide 2-4 concise business insights.`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return parseJsonResponse(extractText(response));
+}
+
+/**
+ * Generate a complete self-contained ECharts HTML page for Copilot Studio.
+ */
+export async function generateInlineHtml(data, userRequest, chartType) {
+  const prompt = `Generate a complete self-contained HTML page with an ECharts chart.
+Use CDN: https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js
+Style: dark bg #1D1D1B, accent #E4002B, white text, chart fills the viewport.
+Chart type hint: ${chartType || 'choose the best fit'}
+Data: ${JSON.stringify(data).slice(0, 30_000)}
+Request: ${userRequest}
+Return ONLY the HTML, nothing else.`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  let html = extractText(response).trim();
+  html = html.replace(/^```html?\s*/i, '').replace(/```\s*$/, '').trim();
+
+  // Short title/summary for the chat card around the iframe
+  const metaResponse = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 500,
+    messages: [{
+      role: 'user',
+      content: `Return JSON only, no markdown: { "title": string, "summary": string } — a short chart title and one-sentence summary for this analytics request: ${userRequest}\nData sample: ${JSON.stringify(data).slice(0, 2000)}`,
+    }],
+  });
+  let meta = { title: 'Analytics Chart', summary: '' };
+  try {
+    meta = parseJsonResponse(extractText(metaResponse));
+  } catch {
+    // non-fatal — keep defaults
+  }
+  return { html, title: meta.title, summary: meta.summary };
+}

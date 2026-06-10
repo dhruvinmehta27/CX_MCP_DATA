@@ -1,0 +1,23 @@
+{
+  "name": "cx-dashboard-api",
+  "version": "1.0.0",
+  "description": "TSS Dashboard & Analytics API - C4C analytics with Azure AD OBO auth",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --env-file=.env src/server.js",
+    "test:aggregations": "node test/aggregations.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-cache": "^5.1.2"
+  }
+}
