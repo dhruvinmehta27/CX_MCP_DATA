@@ -175,10 +175,13 @@ function odataEscape(value) {
   return String(value).replace(/'/g, "''");
 }
 
+// C4C system datetime fields (CreationDateTime, DueDateTime, Start/EndDateTime)
+// are Edm.DateTimeOffset — a plain datetime'' literal fails with
+// "Invalid parametertype used at function 'ge'".
 function dateFilter(field, dateFrom, dateTo) {
   const parts = [];
-  if (dateFrom) parts.push(`${field} ge datetime'${dateFrom}T00:00:00'`);
-  if (dateTo) parts.push(`${field} le datetime'${dateTo}T23:59:59'`);
+  if (dateFrom) parts.push(`${field} ge datetimeoffset'${dateFrom}T00:00:00Z'`);
+  if (dateTo) parts.push(`${field} le datetimeoffset'${dateTo}T23:59:59Z'`);
   return parts;
 }
 
