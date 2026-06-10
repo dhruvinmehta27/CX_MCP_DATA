@@ -64,16 +64,24 @@ export async function fetchDestinationToken() {
 async function getDestination(userJwt) {
   const creds = getDestinationServiceCredentials();
   const svcToken = await fetchDestinationToken();
-  const resp = await axios.get(
-    `${creds.uri}/destination-configuration/v1/destinations/${C4C_DESTINATION}`,
-    {
-      headers: {
-        Authorization: `Bearer ${svcToken}`,
-        'X-user-token': userJwt,
-      },
-      timeout: 30_000,
-    }
-  );
+  let resp;
+  try {
+    resp = await axios.get(
+      `${creds.uri}/destination-configuration/v1/destinations/${C4C_DESTINATION}`,
+      {
+        headers: {
+          Authorization: `Bearer ${svcToken}`,
+          'X-user-token': userJwt,
+        },
+        timeout: 30_000,
+      }
+    );
+  } catch (err) {
+    throw new Error(
+      `Destination lookup '${C4C_DESTINATION}' failed (HTTP ${err.response?.status ?? '?'}): ` +
+        `${JSON.stringify(err.response?.data ?? err.message).slice(0, 400)}`
+    );
+  }
   const dest = resp.data;
   const authToken = dest.authTokens && dest.authTokens[0];
   if (authToken?.error) {
@@ -92,14 +100,22 @@ async function getDestination(userJwt) {
 }
 
 async function odataGet(dest, path, params) {
-  const resp = await axios.get(`${dest.url}${path}`, {
-    headers: {
-      Authorization: dest.authHeader,
-      Accept: 'application/json',
-    },
-    params,
-    timeout: 120_000,
-  });
+  let resp;
+  try {
+    resp = await axios.get(`${dest.url}${path}`, {
+      headers: {
+        Authorization: dest.authHeader,
+        Accept: 'application/json',
+      },
+      params,
+      timeout: 120_000,
+    });
+  } catch (err) {
+    throw new Error(
+      `C4C call failed (HTTP ${err.response?.status ?? '?'}) on ${dest.url}${path}: ` +
+        `${JSON.stringify(err.response?.data ?? err.message).slice(0, 400)}`
+    );
+  }
   // OData v2 JSON shape: { d: { results: [...], __count: "N" } }
   return resp.data && resp.data.d ? resp.data.d : { results: [] };
 }
