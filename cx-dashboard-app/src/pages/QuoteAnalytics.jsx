@@ -12,6 +12,8 @@ import PieChart from '../components/charts/PieChart';
 import LineChart from '../components/charts/LineChart';
 import BarChart from '../components/charts/BarChart';
 import { CHART_COLORS } from '../utils/colors';
+import Icon from '../components/ui/Icon';
+import { c4cObjectUrl } from '../utils/c4cLinks';
 import { fmtNumber, fmtCurrency, fmtCurrencyFull, fmtPercent, fmtDate, fmtMonth } from '../utils/formatters';
 
 export default function QuoteAnalytics() {
@@ -124,6 +126,14 @@ export default function QuoteAnalytics() {
             { key: 'amount', label: 'Value', type: 'currency', render: (v, r) => fmtCurrencyFull(v, r.currency) },
             { key: 'created', label: 'Date', type: 'date', render: (v) => fmtDate(v) },
             { key: 'owner', label: 'Owner' },
+            { key: 'objectId', label: 'C4C', sortable: false, render: (v) => {
+              const url = c4cObjectUrl('quote', v);
+              return url ? (
+                <a className="c4c-link" href={url} target="_blank" rel="noreferrer">
+                  Open <Icon name="external" size={12} />
+                </a>
+              ) : '–';
+            } },
           ]}
           data={list.data?.rows || []}
         />

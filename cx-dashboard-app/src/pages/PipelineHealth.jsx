@@ -11,6 +11,8 @@ import FunnelChart from '../components/charts/FunnelChart';
 import BarChart from '../components/charts/BarChart';
 import AreaChart from '../components/charts/AreaChart';
 import { CHART_COLORS } from '../utils/colors';
+import Icon from '../components/ui/Icon';
+import { c4cObjectUrl } from '../utils/c4cLinks';
 import { fmtNumber, fmtCurrency, fmtCurrencyFull, fmtDate, fmtMonth } from '../utils/formatters';
 
 // Fallback when the API doesn't supply weightedValue: later stages → higher probability
@@ -102,6 +104,14 @@ export default function PipelineHealth() {
             { key: 'expectedValue', label: 'Expected Value', type: 'currency', render: (v) => fmtCurrencyFull(v) },
             { key: 'expectedClose', label: 'Expected Close', type: 'date', render: (v) => fmtDate(v) },
             { key: 'owner', label: 'Owner' },
+            { key: 'objectId', label: 'C4C', sortable: false, render: (v) => {
+              const url = c4cObjectUrl('opportunity', v);
+              return url ? (
+                <a className="c4c-link" href={url} target="_blank" rel="noreferrer">
+                  Open <Icon name="external" size={12} />
+                </a>
+              ) : '–';
+            } },
           ]}
           data={list.data?.rows || []}
         />

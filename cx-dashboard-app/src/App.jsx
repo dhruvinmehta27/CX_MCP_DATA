@@ -16,7 +16,7 @@ const PAGE_TITLES = {
   '/quotes': ['Quote Analytics', 'Full quote analysis'],
   '/pipeline': ['Pipeline Health', 'Opportunity pipeline analysis'],
   '/rfqs': ['RFQ Tracker', 'Request-for-quote status and due dates'],
-  '/builder': ['Custom Builder', 'Describe an analysis in natural language'],
+  '/builder': ['AI Report Builder', 'Describe a report in plain English'],
 };
 
 function Shell() {

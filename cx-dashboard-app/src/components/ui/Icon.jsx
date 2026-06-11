@@ -121,6 +121,14 @@ const PATHS = {
       <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
     </>
   ),
+  external: (
+    <>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M15 3h6v6M10 14L21 3" />
+    </>
+  ),
+  'arrow-right': <path d="M5 12h14M12 5l7 7-7 7" />,
+  'arrow-left': <path d="M19 12H5M12 19l-7-7 7-7" />,
   users: (
     <>
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />

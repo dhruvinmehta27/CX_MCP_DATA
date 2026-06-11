@@ -108,6 +108,7 @@ export async function quotesList(filters, userJwt, userEmail) {
       .slice(0, limit)
       .map((q) => ({
         id: q.ID,
+        objectId: q.ObjectID,
         customer: q.BuyerPartyName,
         salesOrg: q.SalesOrganisationName,
         status: q.LifeCycleStatusCodeText,
@@ -157,6 +158,7 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
       .slice(0, limit)
       .map((o) => ({
         id: o.ID,
+        objectId: o.ObjectID,
         name: o.Name,
         account: o.ProspectPartyName,
         stage: o.SalesCyclePhaseCodeText,
@@ -194,6 +196,7 @@ export async function rfqsList(filters, userJwt, userEmail) {
       .slice(0, limit)
       .map((r) => ({
         id: r.ID,
+        objectId: r.ObjectID,
         name: r.Name,
         account: r.AccountName,
         status: r.RFQStatusText,
@@ -243,6 +246,7 @@ export async function getDailySummary(filters, userJwt, userEmail) {
       .slice(0, 10)
       .map((q) => ({
         id: q.ID,
+        objectId: q.ObjectID,
         customer: q.BuyerPartyName,
         status: q.LifeCycleStatusCodeText,
         amount: toNumber(q.NetAmount),

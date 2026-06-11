@@ -9,6 +9,8 @@ import EmptyState from '../components/ui/EmptyState';
 import BarChart from '../components/charts/BarChart';
 import { fmtNumber, fmtCurrency, fmtDate } from '../utils/formatters';
 import { CHART_COLORS } from '../utils/colors';
+import Icon from '../components/ui/Icon';
+import { c4cObjectUrl } from '../utils/c4cLinks';
 
 export default function DailyBriefing() {
   const navigate = useNavigate();
@@ -80,6 +82,14 @@ export default function DailyBriefing() {
               { key: 'status', label: 'Status', type: 'status' },
               { key: 'amount', label: 'Value', type: 'currency', render: (v, r) => fmtCurrency(v, r.currency) },
               { key: 'created', label: 'Created', type: 'date', render: (v) => fmtDate(v) },
+              { key: 'objectId', label: 'C4C', sortable: false, render: (v) => {
+                const url = c4cObjectUrl('quote', v);
+                return url ? (
+                  <a className="c4c-link" href={url} target="_blank" rel="noreferrer">
+                    Open <Icon name="external" size={12} />
+                  </a>
+                ) : '–';
+              } },
             ]}
             data={data?.recentOpenQuotes || []}
           />

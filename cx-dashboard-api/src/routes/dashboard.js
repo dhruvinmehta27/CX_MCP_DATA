@@ -4,10 +4,25 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, generateChartConfig, generateInlineHtml } from '../claude.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateInlineHtml } from '../claude.js';
 import { ENDPOINT_HANDLERS } from '../analytics-service.js';
 
 const router = Router();
+
+// Step 1 of the report wizard: parse intent only, so the UI can show what
+// the AI understood (data sources, chart type, title) before building.
+router.post('/plan', async (req, res, next) => {
+  try {
+    const { userRequest, filters = {} } = req.body || {};
+    if (!userRequest) {
+      return res.status(400).json({ error: 'userRequest is required' });
+    }
+    const intent = await parseIntent(userRequest, filters);
+    res.json({ intent });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post('/generate', async (req, res, next) => {
   try {
@@ -16,8 +31,10 @@ router.post('/generate', async (req, res, next) => {
       return res.status(400).json({ error: 'userRequest is required' });
     }
 
-    // 1. Parse intent with Claude
-    const intent = await parseIntent(userRequest, filters);
+    // 1. Use the confirmed plan when provided (wizard flow), otherwise parse
+    const intent = req.body.intent
+      ? sanitizeIntent(req.body.intent)
+      : await parseIntent(userRequest, filters);
     const mergedFilters = { ...filters, ...(intent.filters || {}) };
 
     // 2. Call the identified analytics endpoints (in-process, same caching)

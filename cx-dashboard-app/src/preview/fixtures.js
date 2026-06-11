@@ -24,6 +24,7 @@ const STAGES = [
 
 const QUOTE_ROWS = Array.from({ length: 137 }, (_, i) => ({
   id: String(8200 + i),
+  objectId: `00163E09PREVIEW${String(i).padStart(4, '0')}`,
   customer: ['ACME Industrial', 'Globex GmbH', 'Initech AG', 'Umbrella Corp', 'Stark Industries', 'Wayne Enterprises'][i % 6],
   salesOrg: ['TSS Germany', 'TSS Americas', 'TSS Nordic', 'TSS Italy'][i % 4],
   status: ['Open', 'In Process', 'Won', 'Lost', 'Pending Release'][i % 5],
@@ -34,6 +35,16 @@ const QUOTE_ROWS = Array.from({ length: 137 }, (_, i) => ({
 }));
 
 export const FIXTURES = {
+  'dashboard/plan': {
+    intent: {
+      endpoints: ['quotes/by-sales-org'],
+      chartType: 'bar',
+      title: 'Quote Value by Sales Org — Last Quarter',
+      xKey: 'salesOrg',
+      yKeys: ['totalAmount'],
+      filters: { dateFrom: '2026-03-01', dateTo: '2026-06-11' },
+    },
+  },
   'daily-summary': {
     openQuotes: 1284,
     openOpportunities: 480,
@@ -110,6 +121,7 @@ export const FIXTURES = {
     total: 480,
     rows: Array.from({ length: 60 }, (_, i) => ({
       id: String(5100 + i),
+      objectId: `00163E09OPPPREV${String(i).padStart(4, '0')}`,
       name: `Sealing solution ${['hydraulics', 'aerospace', 'food & beverage', 'automotive'][i % 4]} #${i + 1}`,
       account: QUOTE_ROWS[i % 6].customer,
       stage: STAGES[i % 5].stage,

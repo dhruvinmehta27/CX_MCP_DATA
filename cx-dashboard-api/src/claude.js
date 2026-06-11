@@ -35,6 +35,12 @@ const VALID_ENDPOINTS = [
   'opportunities/pipeline', 'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
 ];
 
+export function sanitizeIntent(intent = {}) {
+  intent.endpoints = (intent.endpoints || []).filter((e) => VALID_ENDPOINTS.includes(e));
+  if (intent.endpoints.length === 0) intent.endpoints = ['quotes/by-status'];
+  return intent;
+}
+
 /**
  * Parse a natural-language analytics request into endpoints + chart config.
  */
@@ -57,10 +63,7 @@ Request: ${userRequest}`;
     max_tokens: 2000,
     messages: [{ role: 'user', content: prompt }],
   });
-  const intent = parseJsonResponse(extractText(response));
-  intent.endpoints = (intent.endpoints || []).filter((e) => VALID_ENDPOINTS.includes(e));
-  if (intent.endpoints.length === 0) intent.endpoints = ['quotes/by-status'];
-  return intent;
+  return sanitizeIntent(parseJsonResponse(extractText(response)));
 }
 
 /**
