@@ -22,15 +22,27 @@ export function makeCacheKey(userEmail, queryType, filters) {
 }
 
 /**
- * Cache-aside helper: hit → return immediately; miss → run fn, store, return.
+ * Cache-aside helper with in-flight coalescing: concurrent misses on the
+ * same key share one upstream fetch instead of stampeding C4C.
  */
+const inflight = new Map();
+
 export async function getOrSet(userEmail, queryType, filters, fn, ttl = DEFAULT_TTL) {
   const key = makeCacheKey(userEmail, queryType, filters);
   const hit = cache.get(key);
   if (hit !== undefined) return { data: hit, cached: true };
-  const data = await fn();
-  cache.set(key, data, ttl);
-  return { data, cached: false };
+  if (inflight.has(key)) return { data: await inflight.get(key), cached: true };
+  const promise = (async () => {
+    const data = await fn();
+    cache.set(key, data, ttl);
+    return data;
+  })();
+  inflight.set(key, promise);
+  try {
+    return { data: await promise, cached: false };
+  } finally {
+    inflight.delete(key);
+  }
 }
 
 /**

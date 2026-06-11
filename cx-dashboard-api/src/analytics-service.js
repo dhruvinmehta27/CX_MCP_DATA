@@ -15,9 +15,39 @@ import { getOrSet } from './cache.js';
 
 const BIZ_TYPE_LABELS = { 11: 'New', 12: 'Follow-up', 13: 'Replacement' };
 
+/**
+ * Raw-dataset cache shared by all endpoints of one entity. Keyed only on
+ * the base filters, so the six quote endpoints (by-status, trend, list, …)
+ * trigger ONE paginated C4C fetch instead of six — combined with in-flight
+ * coalescing in getOrSet this prevents the parallel-fetch stampede that
+ * exhausted memory on wide date ranges.
+ */
+function baseFilters(filters = {}) {
+  const { salesOrgId, ownerId, dateFrom, dateTo } = filters;
+  return { salesOrgId, ownerId, dateFrom, dateTo };
+}
+
+async function rawQuotes(filters, userJwt, userEmail) {
+  const base = baseFilters(filters);
+  const { data } = await getOrSet(userEmail, 'raw:quotes', base, () => fetchQuotes(base, userJwt));
+  return data;
+}
+
+async function rawOpportunities(filters, userJwt, userEmail) {
+  const base = baseFilters(filters);
+  const { data } = await getOrSet(userEmail, 'raw:opportunities', base, () => fetchOpportunities(base, userJwt));
+  return data;
+}
+
+async function rawRFQs(filters, userJwt, userEmail) {
+  const base = baseFilters(filters);
+  const { data } = await getOrSet(userEmail, 'raw:rfqs', base, () => fetchRFQs(base, userJwt));
+  return data;
+}
+
 export async function quotesByStatus(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'quotes/by-status', filters, async () => {
-    const { results } = await fetchQuotes(filters, userJwt);
+    const { results } = await rawQuotes(filters, userJwt, userEmail);
     const sums = sumBy(results, 'LifeCycleStatusCodeText', 'NetAmount');
     const currency = results.find((r) => r.CurrencyCode)?.CurrencyCode || 'EUR';
     return sums.map(({ label, count, total }) => ({
@@ -29,7 +59,7 @@ export async function quotesByStatus(filters, userJwt, userEmail) {
 export async function quotesBySalesOrg(filters, userJwt, userEmail) {
   const limit = parseInt(filters.limit || '20', 10);
   return getOrSet(userEmail, 'quotes/by-sales-org', { ...filters, limit }, async () => {
-    const { results } = await fetchQuotes(filters, userJwt);
+    const { results } = await rawQuotes(filters, userJwt, userEmail);
     return sumBy(results, 'SalesOrganisationName', 'NetAmount')
       .slice(0, limit)
       .map(({ label, count, total }) => ({ salesOrg: label, count, totalAmount: total }));
@@ -42,7 +72,7 @@ export async function quotesTrend(filters, userJwt, userEmail) {
     const from = new Date();
     from.setUTCMonth(from.getUTCMonth() - (months - 1), 1);
     const effective = { ...filters, dateFrom: filters.dateFrom || from.toISOString().slice(0, 10) };
-    const { results } = await fetchQuotes(effective, userJwt);
+    const { results } = await rawQuotes(effective, userJwt, userEmail);
     return trendByMonth(results, 'CreationDateTime', 'NetAmount', months)
       .map(({ month, count, total }) => ({ month, count, totalAmount: total }));
   });
@@ -50,7 +80,7 @@ export async function quotesTrend(filters, userJwt, userEmail) {
 
 export async function quotesByBizType(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'quotes/by-biz-type', filters, async () => {
-    const { results } = await fetchQuotes(filters, userJwt);
+    const { results } = await rawQuotes(filters, userJwt, userEmail);
     return sumBy(results, 'ZBIZTYPE', 'NetAmount').map(({ label, count, total }) => ({
       bizType: BIZ_TYPE_LABELS[label] || label,
       count,
@@ -62,7 +92,7 @@ export async function quotesByBizType(filters, userJwt, userEmail) {
 export async function quotesTopCustomers(filters, userJwt, userEmail) {
   const limit = parseInt(filters.limit || '10', 10);
   return getOrSet(userEmail, 'quotes/top-customers', { ...filters, limit }, async () => {
-    const { results } = await fetchQuotes(filters, userJwt);
+    const { results } = await rawQuotes(filters, userJwt, userEmail);
     return sumBy(results, 'BuyerPartyName', 'NetAmount')
       .slice(0, limit)
       .map(({ label, count, total }) => ({ customer: label, count, totalAmount: total }));
@@ -72,7 +102,7 @@ export async function quotesTopCustomers(filters, userJwt, userEmail) {
 export async function quotesList(filters, userJwt, userEmail) {
   const limit = Math.min(parseInt(filters.limit || '500', 10), 2000);
   return getOrSet(userEmail, 'quotes/list', { ...filters, limit }, async () => {
-    const { total, results } = await fetchQuotes(filters, userJwt);
+    const { total, results } = await rawQuotes(filters, userJwt, userEmail);
     const rows = [...results]
       .sort((a, b) => (parseODataDate(b.CreationDateTime) || 0) - (parseODataDate(a.CreationDateTime) || 0))
       .slice(0, limit)
@@ -92,14 +122,14 @@ export async function quotesList(filters, userJwt, userEmail) {
 
 export async function opportunitiesPipeline(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'opportunities/pipeline', filters, async () => {
-    const { results } = await fetchOpportunities(filters, userJwt);
+    const { results } = await rawOpportunities(filters, userJwt, userEmail);
     return pipelineStages(results);
   });
 }
 
 export async function opportunitiesByOwner(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'opportunities/by-owner', filters, async () => {
-    const { results } = await fetchOpportunities(filters, userJwt);
+    const { results } = await rawOpportunities(filters, userJwt, userEmail);
     return sumBy(results, 'MainEmployeeResponsiblePartyName', 'ExpectedRevenueAmount')
       .slice(0, 20)
       .map(({ label, count, total }) => ({ owner: label, count, totalValue: total }));
@@ -109,7 +139,7 @@ export async function opportunitiesByOwner(filters, userJwt, userEmail) {
 export async function opportunitiesCloseTrend(filters, userJwt, userEmail) {
   const months = parseInt(filters.months || '6', 10);
   return getOrSet(userEmail, 'opportunities/close-trend', { ...filters, months }, async () => {
-    const { results } = await fetchOpportunities(filters, userJwt);
+    const { results } = await rawOpportunities(filters, userJwt, userEmail);
     const now = new Date();
     // Expected closes look forward, not back
     const future = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months - 1, 1));
@@ -121,7 +151,7 @@ export async function opportunitiesCloseTrend(filters, userJwt, userEmail) {
 export async function opportunitiesList(filters, userJwt, userEmail) {
   const limit = Math.min(parseInt(filters.limit || '500', 10), 2000);
   return getOrSet(userEmail, 'opportunities/list', { ...filters, limit }, async () => {
-    const { total, results } = await fetchOpportunities(filters, userJwt);
+    const { total, results } = await rawOpportunities(filters, userJwt, userEmail);
     const rows = [...results]
       .sort((a, b) => (parseODataDate(b.CreationDateTime) || 0) - (parseODataDate(a.CreationDateTime) || 0))
       .slice(0, limit)
@@ -141,7 +171,7 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
 
 export async function rfqsByStatus(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'rfqs/by-status', filters, async () => {
-    const { results } = await fetchRFQs(filters, userJwt);
+    const { results } = await rawRFQs(filters, userJwt, userEmail);
     return countBy(results, 'RFQStatusText').map(({ label, count }) => ({ status: label, count }));
   });
 }
@@ -149,7 +179,7 @@ export async function rfqsByStatus(filters, userJwt, userEmail) {
 export async function rfqsTrend(filters, userJwt, userEmail) {
   const months = parseInt(filters.months || '6', 10);
   return getOrSet(userEmail, 'rfqs/trend', { ...filters, months }, async () => {
-    const { results } = await fetchRFQs(filters, userJwt);
+    const { results } = await rawRFQs(filters, userJwt, userEmail);
     return trendByMonth(results, 'CreationDateTime', null, months)
       .map(({ month, count }) => ({ month, count }));
   });
@@ -158,7 +188,7 @@ export async function rfqsTrend(filters, userJwt, userEmail) {
 export async function rfqsList(filters, userJwt, userEmail) {
   const limit = Math.min(parseInt(filters.limit || '500', 10), 2000);
   return getOrSet(userEmail, 'rfqs/list', { ...filters, limit }, async () => {
-    const { total, results } = await fetchRFQs(filters, userJwt);
+    const { total, results } = await rawRFQs(filters, userJwt, userEmail);
     const rows = [...results]
       .sort((a, b) => (parseODataDate(a.RFQDueDate) || Infinity) - (parseODataDate(b.RFQDueDate) || Infinity))
       .slice(0, limit)
@@ -186,10 +216,10 @@ export async function getDailySummary(filters, userJwt, userEmail) {
     // allSettled so one bad collection reports alongside the others
     // instead of masking them one redeploy at a time
     const settled = await Promise.allSettled([
-      fetchQuotes(filters, userJwt),
-      fetchOpportunities(filters, userJwt),
+      rawQuotes(filters, userJwt, userEmail),
+      rawOpportunities(filters, userJwt, userEmail),
       fetchTasks(filters, userJwt),
-      fetchRFQs(filters, userJwt),
+      rawRFQs(filters, userJwt, userEmail),
       fetchVisits(weekFilters, userJwt),
       fetchAppointments(weekFilters, userJwt),
     ]);

@@ -1,7 +1,7 @@
 ---
 applications:
   - name: cx-dashboard-api
-    memory: 512M
+    memory: 1024M
     buildpacks:
       - nodejs_buildpack
     path: .

@@ -10,7 +10,8 @@ export function setTokenGetter(fn) {
 
 const client = axios.create({
   baseURL: cfg.DASHBOARD_API_URL,
-  timeout: 180_000,
+  // first cold fetch of a wide date range pages through the full dataset
+  timeout: 300_000,
 });
 
 client.interceptors.request.use(async (config) => {
