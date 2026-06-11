@@ -214,8 +214,8 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   return fetchAllPages(
     `${ODATA_BASE}/OpportunityCollection`,
     [
-      'ObjectID', 'ID', 'Name', 'SalesPhaseCode', 'SalesPhaseCodeText',
-      'ExpectedRevenueAmount', 'ExpectedProcessingEndDate',
+      'ObjectID', 'ID', 'Name', 'SalesCyclePhaseCode', 'SalesCyclePhaseCodeText',
+      'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
       'CreationDateTime', 'MainEmployeeResponsiblePartyName',
       'ProspectPartyName', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
     ],

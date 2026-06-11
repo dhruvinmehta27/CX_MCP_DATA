@@ -129,7 +129,7 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
         id: o.ID,
         name: o.Name,
         account: o.ProspectPartyName,
-        stage: o.SalesPhaseCodeText,
+        stage: o.SalesCyclePhaseCodeText,
         status: o.LifeCycleStatusCodeText,
         expectedValue: toNumber(o.ExpectedRevenueAmount),
         expectedClose: parseODataDate(o.ExpectedProcessingEndDate)?.toISOString() || null,

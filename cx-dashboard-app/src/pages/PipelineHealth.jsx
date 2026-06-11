@@ -13,7 +13,7 @@ import AreaChart from '../components/charts/AreaChart';
 import { CHART_COLORS } from '../utils/colors';
 import { fmtNumber, fmtCurrency, fmtCurrencyFull, fmtDate, fmtMonth } from '../utils/formatters';
 
-// Simple stage-position weighting: later stages → higher win probability
+// Fallback when the API doesn't supply weightedValue: later stages → higher probability
 function stageWeight(index, total) {
   return total > 1 ? (index + 1) / total : 0.5;
 }
@@ -32,7 +32,8 @@ export default function PipelineHealth() {
     const totalValue = stages.reduce((a, s) => a + s.totalValue, 0);
     const totalCount = stages.reduce((a, s) => a + s.count, 0);
     const weighted = stages.reduce(
-      (a, s, i) => a + s.totalValue * stageWeight(i, stages.length),
+      (a, s, i) =>
+        a + (s.weightedValue != null ? s.weightedValue : s.totalValue * stageWeight(i, stages.length)),
       0
     );
     return {
@@ -51,7 +52,7 @@ export default function PipelineHealth() {
           icon="target"
           loading={pipeline.loading}
           value={fmtCurrency(kpis.weighted)}
-          subtitle="Value × stage probability"
+          subtitle="Value × win probability"
         />
         <MetricCard title="Average Deal Size" icon="briefcase" loading={pipeline.loading} value={fmtCurrency(kpis.avgDeal)} />
       </div>

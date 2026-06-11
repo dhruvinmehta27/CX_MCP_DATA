@@ -74,29 +74,33 @@ export function trendByMonth(records, dateField, valueField, months = 6, now = n
 }
 
 /**
- * Opportunity pipeline grouped by SalesPhaseCodeText, ordered by the
- * (numeric-ish) SalesPhaseCode so stages appear in logical pipeline order.
+ * Opportunity pipeline grouped by SalesCyclePhaseCodeText, ordered by the
+ * phase code so stages appear in logical pipeline order. weightedValue uses
+ * the real C4C ProbabilityPercent per opportunity.
  */
 export function pipelineStages(opportunities) {
   const byStage = new Map();
   for (const o of opportunities) {
-    const stage = o.SalesPhaseCodeText || 'Unknown';
+    const stage = o.SalesCyclePhaseCodeText || 'Unknown';
     if (!byStage.has(stage)) {
-      byStage.set(stage, { stage, code: o.SalesPhaseCode || '', count: 0, totalValue: 0 });
+      byStage.set(stage, { stage, code: o.SalesCyclePhaseCode || '', count: 0, totalValue: 0, weightedValue: 0 });
     }
     const s = byStage.get(stage);
     s.count += 1;
-    s.totalValue += toNumber(o.ExpectedRevenueAmount);
-    if (o.SalesPhaseCode && (!s.code || String(o.SalesPhaseCode) < String(s.code))) {
-      s.code = o.SalesPhaseCode;
+    const value = toNumber(o.ExpectedRevenueAmount);
+    s.totalValue += value;
+    s.weightedValue += value * (toNumber(o.ProbabilityPercent) / 100);
+    if (o.SalesCyclePhaseCode && (!s.code || String(o.SalesCyclePhaseCode) < String(s.code))) {
+      s.code = o.SalesCyclePhaseCode;
     }
   }
   return [...byStage.values()]
     .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
-    .map(({ stage, count, totalValue }) => ({
+    .map(({ stage, count, totalValue, weightedValue }) => ({
       stage,
       count,
       totalValue,
+      weightedValue,
       avgValue: count ? totalValue / count : 0,
     }));
 }

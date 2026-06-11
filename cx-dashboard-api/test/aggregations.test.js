@@ -40,18 +40,20 @@ assert.equal(trend[2].count, 2);
 assert.equal(trend[2].total, 300.5);
 assert.equal(trend[0].total, 50);
 
-// pipelineStages ordered by code
+// pipelineStages ordered by code, weighted by real ProbabilityPercent
 const opps = [
-  { SalesPhaseCode: '03', SalesPhaseCodeText: 'Quote', ExpectedRevenueAmount: '500', LifeCycleStatusCodeText: 'Open' },
-  { SalesPhaseCode: '01', SalesPhaseCodeText: 'Identify', ExpectedRevenueAmount: '100', LifeCycleStatusCodeText: 'Open' },
-  { SalesPhaseCode: '01', SalesPhaseCodeText: 'Identify', ExpectedRevenueAmount: '300', LifeCycleStatusCodeText: 'Open' },
+  { SalesCyclePhaseCode: 'Z03', SalesCyclePhaseCodeText: 'Quote', ExpectedRevenueAmount: '500', ProbabilityPercent: '60.000000', LifeCycleStatusCodeText: 'Open' },
+  { SalesCyclePhaseCode: 'Z01', SalesCyclePhaseCodeText: 'Identify', ExpectedRevenueAmount: '100', ProbabilityPercent: '10.000000', LifeCycleStatusCodeText: 'Open' },
+  { SalesCyclePhaseCode: 'Z01', SalesCyclePhaseCodeText: 'Identify', ExpectedRevenueAmount: '300', ProbabilityPercent: '20.000000', LifeCycleStatusCodeText: 'Open' },
 ];
 const stages = pipelineStages(opps);
 assert.equal(stages[0].stage, 'Identify');
 assert.equal(stages[0].count, 2);
 assert.equal(stages[0].totalValue, 400);
 assert.equal(stages[0].avgValue, 200);
+assert.equal(stages[0].weightedValue, 70); // 100*0.1 + 300*0.2
 assert.equal(stages[1].stage, 'Quote');
+assert.equal(stages[1].weightedValue, 300);
 
 // isOpenStatus
 assert.equal(isOpenStatus('Open'), true);
