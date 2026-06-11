@@ -132,8 +132,11 @@ export async function c4cRequest(path, userJwt, params = {}) {
  * Paginated fetcher — C4C returns max 1000 records per request.
  * 1. First page with $inlinecount=allpages + $select
  * 2. Read __count for the total
- * 3. Fetch remaining pages in parallel ($skip=1000, 2000, ...)
+ * 3. Fetch remaining pages in parallel ($skip strided by the page size the
+ *    server ACTUALLY returned — some tenants cap below the requested $top,
+ *    and assuming 1000 would silently skip records between pages)
  * 4. Merge and return { total, results }
+ * Falls back to sequential paging when the server omits __count.
  */
 export async function fetchAllPages(collectionPath, selectFields, filterString, userJwt) {
   const dest = await getDestination(userJwt);
@@ -149,22 +152,36 @@ export async function fetchAllPages(collectionPath, selectFields, filterString, 
     $inlinecount: 'allpages',
   });
   const firstResults = first.results || [];
-  const total = first.__count !== undefined ? parseInt(first.__count, 10) : firstResults.length;
   let results = firstResults;
+  const pageSize = firstResults.length;
+  if (pageSize === 0) return { total: 0, results: [] };
 
-  const pages = Math.ceil(total / PAGE_SIZE);
-  if (pages > 1) {
-    const skips = [];
-    for (let p = 1; p < pages; p++) skips.push(p * PAGE_SIZE);
-    for (let i = 0; i < skips.length; i += PARALLEL_BATCH) {
-      const batch = skips.slice(i, i + PARALLEL_BATCH);
-      const pagesData = await Promise.all(
-        batch.map((skip) => odataGet(dest, collectionPath, { ...baseParams, $skip: skip }))
-      );
-      for (const page of pagesData) results = results.concat(page.results || []);
+  if (first.__count !== undefined) {
+    const total = parseInt(first.__count, 10);
+    if (total > pageSize) {
+      const skips = [];
+      for (let skip = pageSize; skip < total; skip += pageSize) skips.push(skip);
+      for (let i = 0; i < skips.length; i += PARALLEL_BATCH) {
+        const batch = skips.slice(i, i + PARALLEL_BATCH);
+        const pagesData = await Promise.all(
+          batch.map((skip) => odataGet(dest, collectionPath, { ...baseParams, $skip: skip }))
+        );
+        for (const page of pagesData) results = results.concat(page.results || []);
+      }
     }
+    return { total, results };
   }
-  return { total, results };
+
+  // No inline count — page sequentially until a short page signals the end
+  let skip = pageSize;
+  while (true) {
+    const page = await odataGet(dest, collectionPath, { ...baseParams, $skip: skip });
+    const rows = page.results || [];
+    results = results.concat(rows);
+    if (rows.length < pageSize) break;
+    skip += rows.length;
+  }
+  return { total: results.length, results };
 }
 
 // ---------------------------------------------------------------------------

@@ -11,6 +11,8 @@ const PRESETS = [
   { label: 'Last 3M', range: (now) => [subMonths(now, 3), now] },
   { label: 'Last 6M', range: (now) => [subMonths(now, 6), now] },
   { label: 'This Year', range: (now) => [startOfYear(now), now] },
+  // deliberate full-history fetch — first load takes minutes on big tenants
+  { label: 'All Time', range: (now) => [new Date(Date.UTC(2000, 0, 1)), now] },
 ];
 
 export default function FilterBar() {
