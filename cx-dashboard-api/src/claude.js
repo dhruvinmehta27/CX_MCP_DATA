@@ -131,3 +131,44 @@ Return ONLY the HTML, nothing else.`;
   }
   return { html, title: meta.title, summary: meta.summary };
 }
+
+const AUDIENCE_TONES = {
+  board: 'Board / Executive — strategic overview, revenue focus. Concise, confident, no operational minutiae.',
+  regional: 'Regional Manager — operational detail, owner performance, bottlenecks, concrete next actions.',
+  customer: 'Customer Meeting — value-oriented, opportunity focused. NEVER include internal-only figures (win rates, loss counts, stale-deal counts, owner performance).',
+  team: 'Sales Team — win rates, pipeline health, motivating and energetic tone, celebrate wins.',
+  territory: 'Territory Review — sales-org breakdown, geographic performance comparison.',
+  investor: 'Investor / Stakeholder — growth story, pipeline momentum, forward-looking confidence with credible numbers.',
+};
+
+/**
+ * Write a structured, print-ready sales brief tailored to the audience.
+ */
+export async function generateBrief({ audience, intent, data, preparedBy, period }) {
+  const prompt = `Write a sales brief for Trelleborg Sealing Solutions (industrial sealing manufacturer) based on live CRM data.
+Audience: ${AUDIENCE_TONES[audience] || audience}
+${intent ? `The presenter specifically wants to communicate: "${intent}"` : 'No specific message given — provide a balanced full overview.'}
+Prepared by: ${preparedBy}. Data period: ${period}.
+Return JSON only, no markdown fences:
+{
+  "title": string,
+  "subtitle": string,
+  "keyMetrics": [{ "label": string, "value": string }],
+  "sections": [{ "heading": string, "body": string, "bullets": [string] }],
+  "keyTakeaways": [string]
+}
+Rules:
+- 4-6 keyMetrics with values formatted for slides (e.g. "€45.1M", "33%", "592").
+- 3-5 sections; each body is 1-2 short paragraphs of flowing prose; bullets optional (max 4).
+- 3-5 keyTakeaways, each a single punchy sentence.
+- Every number must come from the data below — never invent figures.
+- Currency is EUR unless the data says otherwise.
+Data: ${JSON.stringify(data).slice(0, 40_000)}`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return parseJsonResponse(extractText(response));
+}

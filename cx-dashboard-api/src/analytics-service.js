@@ -283,3 +283,76 @@ export const ENDPOINT_HANDLERS = {
   'rfqs/by-status': rfqsByStatus,
   'daily-summary': getDailySummary,
 };
+
+/**
+ * Headline numbers for the Sales Brief "data included" panel.
+ * Stale = open opportunity untouched for 90+ days (EntityLastChangedOn).
+ */
+export async function briefStats(filters, userJwt, userEmail) {
+  return getOrSet(userEmail, 'brief/stats', filters, async () => {
+    const [quotes, opps] = await Promise.all([
+      rawQuotes(filters, userJwt, userEmail),
+      rawOpportunities(filters, userJwt, userEmail),
+    ]);
+    const now = new Date();
+    const in12m = new Date(now);
+    in12m.setUTCMonth(in12m.getUTCMonth() + 12);
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
+
+    const open = opps.results.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
+    const won = quotes.results.filter((q) => /won|accept/i.test(q.LifeCycleStatusCodeText || ''));
+    const lost = quotes.results.filter((q) => /lost|reject/i.test(q.LifeCycleStatusCodeText || ''));
+    const closed = won.length + lost.length;
+
+    return {
+      totalOpportunities: opps.total,
+      totalQuotes: quotes.total,
+      openDeals: open.length,
+      openPipelineValue: open.reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount), 0),
+      winRate: closed ? Math.round((won.length / closed) * 100) : null,
+      wonCount: won.length,
+      sopNext12MValue: open
+        .filter((o) => {
+          const d = parseODataDate(o.ExpectedProcessingEndDate);
+          return d && d >= now && d <= in12m;
+        })
+        .reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount), 0),
+      staleCount: open.filter((o) => {
+        const d = parseODataDate(o.EntityLastChangedOn);
+        return d && d < ninetyDaysAgo;
+      }).length,
+      orgCount: new Set(quotes.results.map((q) => q.SalesOrganisationName).filter(Boolean)).size,
+      ownerCount: new Set(opps.results.map((o) => o.MainEmployeeResponsiblePartyName).filter(Boolean)).size,
+    };
+  });
+}
+
+/**
+ * Full aggregate package the brief is written from — every piece comes out
+ * of the shared raw caches, so this adds no extra C4C round trips.
+ */
+export async function briefData(filters, userJwt, userEmail) {
+  const [stats, byStatus, bySalesOrg, trend, customers, pipeline, byOwner, closeTrend, rfqStatus] =
+    await Promise.all([
+      briefStats(filters, userJwt, userEmail),
+      quotesByStatus(filters, userJwt, userEmail),
+      quotesBySalesOrg({ ...filters, limit: 15 }, userJwt, userEmail),
+      quotesTrend({ ...filters, months: 12 }, userJwt, userEmail),
+      quotesTopCustomers({ ...filters, limit: 10 }, userJwt, userEmail),
+      opportunitiesPipeline(filters, userJwt, userEmail),
+      opportunitiesByOwner(filters, userJwt, userEmail),
+      opportunitiesCloseTrend({ ...filters, months: 12 }, userJwt, userEmail),
+      rfqsByStatus(filters, userJwt, userEmail),
+    ]);
+  return {
+    stats: stats.data,
+    quotesByStatus: byStatus.data,
+    quotesBySalesOrg: bySalesOrg.data,
+    quoteTrend: trend.data,
+    topCustomers: customers.data,
+    pipelineStages: pipeline.data,
+    pipelineByOwner: byOwner.data,
+    expectedCloseByMonth: closeTrend.data,
+    rfqsByStatus: rfqStatus.data,
+  };
+}

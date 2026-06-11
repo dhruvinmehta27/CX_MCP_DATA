@@ -4,10 +4,48 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, sanitizeIntent, generateChartConfig, generateInlineHtml } from '../claude.js';
-import { ENDPOINT_HANDLERS } from '../analytics-service.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateInlineHtml, generateBrief } from '../claude.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData } from '../analytics-service.js';
 
 const router = Router();
+
+function pickFilters(source = {}) {
+  const { salesOrgId, ownerId, dateFrom, dateTo } = source;
+  return { salesOrgId, ownerId, dateFrom, dateTo };
+}
+
+// Headline numbers for the Sales Brief "data included" panel
+router.get('/brief-stats', async (req, res, next) => {
+  try {
+    const { data, cached } = await briefStats(pickFilters(req.query), req.userJwt, req.userEmail);
+    res.set('X-Cache', cached ? 'HIT' : 'MISS');
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Audience-tailored, print-ready sales brief from live C4C data
+router.post('/brief', async (req, res, next) => {
+  try {
+    const { audience, intent, filters = {} } = req.body || {};
+    if (!audience) {
+      return res.status(400).json({ error: 'audience is required' });
+    }
+    const f = pickFilters(filters);
+    const data = await briefData(f, req.userJwt, req.userEmail);
+    const brief = await generateBrief({
+      audience,
+      intent,
+      data,
+      preparedBy: req.userEmail,
+      period: `${f.dateFrom || 'start'} to ${f.dateTo || 'today'}`,
+    });
+    res.json({ brief, stats: data.stats });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Step 1 of the report wizard: parse intent only, so the UI can show what
 // the AI understood (data sources, chart type, title) before building.

@@ -233,7 +233,7 @@ export async function fetchOpportunities(filters = {}, userJwt) {
     [
       'ObjectID', 'ID', 'Name', 'SalesCyclePhaseCode', 'SalesCyclePhaseCodeText',
       'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
-      'CreationDateTime', 'MainEmployeeResponsiblePartyName',
+      'CreationDateTime', 'EntityLastChangedOn', 'MainEmployeeResponsiblePartyName',
       'ProspectPartyName', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
     ],
     parts.join(' and '),

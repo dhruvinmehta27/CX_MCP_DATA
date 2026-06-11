@@ -35,6 +35,52 @@ const QUOTE_ROWS = Array.from({ length: 137 }, (_, i) => ({
 }));
 
 export const FIXTURES = {
+  'dashboard/brief-stats': {
+    totalOpportunities: 592,
+    totalQuotes: 18400,
+    openDeals: 581,
+    openPipelineValue: 45100000000 / 1000,
+    winRate: 33,
+    wonCount: 2,
+    sopNext12MValue: 170600000,
+    staleCount: 265,
+    orgCount: 51,
+    ownerCount: 113,
+  },
+  'dashboard/brief': {
+    stats: { totalOpportunities: 592, totalQuotes: 18400 },
+    brief: {
+      title: 'Pipeline Strength with a Clear Execution Mandate',
+      subtitle: 'TSS enters the second half with €45.1M of open pipeline across 51 sales organisations — momentum is real, and so is the stale-deal risk that needs attention.',
+      keyMetrics: [
+        { label: 'Open pipeline', value: '€45.1M' },
+        { label: 'Win rate', value: '33%' },
+        { label: 'SOP next 12 months', value: '€170.6M' },
+        { label: 'Open deals', value: '581' },
+        { label: 'Coverage', value: '51 orgs' },
+      ],
+      sections: [
+        {
+          heading: 'Where the business stands',
+          body: 'The open pipeline of €45.1M across 581 active deals reflects sustained demand across all four business segments. Quote volume has grown steadily over the period, with TSS Germany and TSS Americas together contributing the majority of value.',
+          bullets: ['581 open deals across 51 sales organisations', 'Top two orgs account for 65% of quote value'],
+        },
+        {
+          heading: 'Momentum and risk',
+          body: 'Expected closings of €170.6M over the next twelve months provide a strong revenue runway. However, 265 opportunities have seen no activity for over 90 days — clearing or closing these would sharpen forecast accuracy considerably.',
+        },
+        {
+          heading: 'Recommended focus',
+          body: 'Concentrate field capacity on the negotiation-stage deals maturing this quarter, and run a structured stale-deal review per sales organisation before the next board cycle.',
+        },
+      ],
+      keyTakeaways: [
+        '€45.1M open pipeline gives strong second-half cover.',
+        'Stale deals (265) are the single biggest forecast-quality lever.',
+        'Germany and Americas remain the growth engines — protect their capacity.',
+      ],
+    },
+  },
   'dashboard/plan': {
     intent: {
       endpoints: ['quotes/by-sales-org'],

@@ -7,6 +7,7 @@ const NAV = [
   { to: '/pipeline', icon: 'trending-up', label: 'Pipeline Health' },
   { to: '/rfqs', icon: 'inbox', label: 'RFQ Tracker' },
   { to: '/builder', icon: 'sparkles', label: 'AI Report Builder' },
+  { to: '/brief', icon: 'briefcase', label: 'Sales Brief' },
 ];
 
 export default function Sidebar({ collapsed, onToggle }) {
