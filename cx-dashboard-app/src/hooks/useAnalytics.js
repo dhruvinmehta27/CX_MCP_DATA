@@ -18,7 +18,11 @@ export default function useAnalytics(fetcher, deps = []) {
       const result = await fetcher();
       if (id === requestId.current) setData(result);
     } catch (err) {
-      if (id === requestId.current) setError(err);
+      if (id === requestId.current) {
+        setError(err);
+        // drop stale results — showing previous data next to an error is misleading
+        setData(null);
+      }
     } finally {
       if (id === requestId.current) setLoading(false);
     }
