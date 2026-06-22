@@ -235,6 +235,8 @@ export async function fetchOpportunities(filters = {}, userJwt) {
       'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
       'CreationDateTime', 'EntityLastChangedOn', 'MainEmployeeResponsiblePartyName',
       'ProspectPartyName', 'ProspectPartyID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
+      // Value in group/base currency (EUR) — avoids mixing transaction currencies
+      'ZBaseCurrency_KUTContent_KUT', 'ZBaseCurrency_KUTcurrencyCode_KUT',
       // Pipeline Command Center filter dimensions (confirmed from tenant payload):
       'OriginTypeCode', 'OriginTypeCodeText',            // Opportunity Source
       'OpportunityLevel_KUT', 'OpportunityLevel_KUTText', // Opportunity Type (level)

@@ -17,6 +17,22 @@ export function toNumber(value) {
   return Number.isNaN(n) ? 0 : n;
 }
 
+/**
+ * Opportunity value in the group/base currency (EUR). Uses the converted
+ * custom field ZBaseCurrency_KUTContent_KUT so amounts in different transaction
+ * currencies are never summed together; falls back to ExpectedRevenueAmount
+ * only when the base-currency field is empty, so value is never lost.
+ */
+export function oppValue(o) {
+  const base = toNumber(o.ZBaseCurrency_KUTContent_KUT);
+  return base || toNumber(o.ExpectedRevenueAmount);
+}
+
+// Resolve a sum/value accessor that is either a field name or a function.
+function valueAccessor(field) {
+  return typeof field === 'function' ? field : (r) => toNumber(r[field]);
+}
+
 export function groupBy(records, field) {
   const groups = {};
   for (const r of records) {
@@ -35,11 +51,12 @@ export function countBy(records, field) {
 
 export function sumBy(records, groupField, sumField) {
   const groups = groupBy(records, groupField);
+  const val = valueAccessor(sumField);
   return Object.entries(groups)
     .map(([label, recs]) => ({
       label,
       count: recs.length,
-      total: recs.reduce((acc, r) => acc + toNumber(r[sumField]), 0),
+      total: recs.reduce((acc, r) => acc + val(r), 0),
     }))
     .sort((a, b) => b.total - a.total);
 }
@@ -61,6 +78,7 @@ export function trendByMonth(records, dateField, valueField, months = 6, now = n
     keys.push(key);
     buckets.set(key, { month: key, count: 0, total: 0 });
   }
+  const val = valueField ? valueAccessor(valueField) : null;
   for (const r of records) {
     const d = parseODataDate(r[dateField]);
     if (!d) continue;
@@ -68,7 +86,7 @@ export function trendByMonth(records, dateField, valueField, months = 6, now = n
     const bucket = buckets.get(key);
     if (!bucket) continue;
     bucket.count += 1;
-    bucket.total += valueField ? toNumber(r[valueField]) : 0;
+    bucket.total += val ? val(r) : 0;
   }
   return keys.map((k) => buckets.get(k));
 }
@@ -87,7 +105,7 @@ export function pipelineStages(opportunities) {
     }
     const s = byStage.get(stage);
     s.count += 1;
-    const value = toNumber(o.ExpectedRevenueAmount);
+    const value = oppValue(o);
     s.totalValue += value;
     s.weightedValue += value * (toNumber(o.ProbabilityPercent) / 100);
     if (o.SalesCyclePhaseCode && (!s.code || String(o.SalesCyclePhaseCode) < String(s.code))) {
@@ -152,9 +170,9 @@ export function pipelineOverview(records, now = new Date()) {
     (o) => !isOpenStatus(o.LifeCycleStatusCodeText) && !isWonStatus(o.LifeCycleStatusCodeText)
   );
 
-  const sumVal = (rows) => rows.reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount), 0);
+  const sumVal = (rows) => rows.reduce((a, o) => a + oppValue(o), 0);
   const sumWeighted = (rows) =>
-    rows.reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100), 0);
+    rows.reduce((a, o) => a + oppValue(o) * (toNumber(o.ProbabilityPercent) / 100), 0);
 
   const totalPipelineValue = sumVal(open);
   const weightedPipelineValue = sumWeighted(open);
@@ -184,7 +202,7 @@ export function pipelineOverview(records, now = new Date()) {
     const d = parseODataDate(o.ExpectedProcessingEndDate);
     if (!d) continue;
     const k = quarterKey(quarterOf(d));
-    const w = toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100);
+    const w = oppValue(o) * (toNumber(o.ProbabilityPercent) / 100);
     if (k === curKey) forecastThisQuarter += w;
     else if (k === nextKey) forecastNextQuarter += w;
   }
@@ -231,7 +249,7 @@ export function pipelineOverview(records, now = new Date()) {
       return d && d >= new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     }),
     'ExpectedProcessingEndDate',
-    'ExpectedRevenueAmount',
+    oppValue,
     6,
     new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 5, 1))
   ).map((m) => {
@@ -253,8 +271,8 @@ export function pipelineOverview(records, now = new Date()) {
     if (!d) continue;
     const bucket = quarterMap.get(quarterKey(quarterOf(d)));
     if (!bucket) continue;
-    bucket.openValue += toNumber(o.ExpectedRevenueAmount);
-    bucket.weightedValue += toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100);
+    bucket.openValue += oppValue(o);
+    bucket.weightedValue += oppValue(o) * (toNumber(o.ProbabilityPercent) / 100);
     bucket.count += 1;
   }
   const quarters = [...quarterMap.values()].map((q) => ({ ...q, isCurrent: q.quarter === curKey }));
@@ -401,7 +419,7 @@ export function dailySummary(quotes, opps, tasks, rfqs, visits, appointments, to
   }).length;
 
   const totalPipelineValue = openOpps.reduce(
-    (acc, o) => acc + toNumber(o.ExpectedRevenueAmount),
+    (acc, o) => acc + oppValue(o),
     0
   );
 

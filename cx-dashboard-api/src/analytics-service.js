@@ -10,7 +10,7 @@ import {
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
   quotesByDayThisWeek, isOpenStatus, parseODataDate, toNumber,
-  pipelineOverview, funnelSnapshot,
+  pipelineOverview, funnelSnapshot, oppValue,
 } from './aggregations.js';
 import { getOrSet } from './cache.js';
 
@@ -132,7 +132,7 @@ export async function opportunitiesPipeline(filters, userJwt, userEmail) {
 export async function opportunitiesByOwner(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'opportunities/by-owner', filters, async () => {
     const { results } = await rawOpportunities(filters, userJwt, userEmail);
-    return sumBy(results, 'MainEmployeeResponsiblePartyName', 'ExpectedRevenueAmount')
+    return sumBy(results, 'MainEmployeeResponsiblePartyName', oppValue)
       .slice(0, 20)
       .map(({ label, count, total }) => ({ owner: label, count, totalValue: total }));
   });
@@ -145,7 +145,7 @@ export async function opportunitiesCloseTrend(filters, userJwt, userEmail) {
     const now = new Date();
     // Expected closes look forward, not back
     const future = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months - 1, 1));
-    return trendByMonth(results, 'ExpectedProcessingEndDate', 'ExpectedRevenueAmount', months, future)
+    return trendByMonth(results, 'ExpectedProcessingEndDate', oppValue, months, future)
       .map(({ month, count, total }) => ({ month, count, totalValue: total }));
   });
 }
@@ -167,9 +167,9 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
         stage: o.SalesCyclePhaseCodeText,
         stageCode: o.SalesCyclePhaseCode,
         status: o.LifeCycleStatusCodeText,
-        expectedValue: toNumber(o.ExpectedRevenueAmount),
+        expectedValue: oppValue(o),
         probability: toNumber(o.ProbabilityPercent),
-        weightedValue: toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100),
+        weightedValue: oppValue(o) * (toNumber(o.ProbabilityPercent) / 100),
         expectedClose: parseODataDate(o.ExpectedProcessingEndDate)?.toISOString() || null,
         created: parseODataDate(o.CreationDateTime)?.toISOString() || null,
         owner: o.MainEmployeeResponsiblePartyName,
@@ -351,7 +351,7 @@ export async function briefStats(filters, userJwt, userEmail) {
       totalOpportunities: opps.total,
       totalQuotes: quotes.total,
       openDeals: open.length,
-      openPipelineValue: open.reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount), 0),
+      openPipelineValue: open.reduce((a, o) => a + oppValue(o), 0),
       winRate: closed ? Math.round((won.length / closed) * 100) : null,
       wonCount: won.length,
       sopNext12MValue: open
@@ -359,7 +359,7 @@ export async function briefStats(filters, userJwt, userEmail) {
           const d = parseODataDate(o.ExpectedProcessingEndDate);
           return d && d >= now && d <= in12m;
         })
-        .reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount), 0),
+        .reduce((a, o) => a + oppValue(o), 0),
       staleCount: open.filter((o) => {
         const d = parseODataDate(o.EntityLastChangedOn);
         return d && d < ninetyDaysAgo;
