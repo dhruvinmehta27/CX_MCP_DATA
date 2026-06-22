@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import {
   parseODataDate, groupBy, countBy, sumBy, trendByMonth,
-  pipelineStages, dailySummary, isOpenStatus, quotesByDayThisWeek,
+  pipelineStages, dailySummary, isOpenStatus, isRfqOpen, quotesByDayThisWeek,
 } from '../src/aggregations.js';
 
 const NOW = new Date('2026-06-10T12:00:00Z');
@@ -61,6 +61,14 @@ assert.equal(isOpenStatus('In Process'), true);
 assert.equal(isOpenStatus('Won'), false);
 assert.equal(isOpenStatus('Completed'), false);
 
+// isRfqOpen — RFQ is closed ONLY when Confirmed or Rejected
+assert.equal(isRfqOpen('Open'), true);
+assert.equal(isRfqOpen('In Process'), true);
+assert.equal(isRfqOpen('Submitted'), true);
+assert.equal(isRfqOpen('Confirmed'), false);
+assert.equal(isRfqOpen('Rejected'), false);
+assert.equal(isRfqOpen(''), true);
+
 // dailySummary
 const tasks = [
   { StatusText: 'Open', DueDateTime: od('2026-06-10T09:00:00Z') },   // today
@@ -69,7 +77,7 @@ const tasks = [
 ];
 const visits = [{ StartDateTime: od('2026-06-10T10:00:00Z') }];
 const appts = [{ StartDate: od('2026-06-10T14:00:00Z') }];
-const rfqs = [{ RFQStatusText: 'Open' }, { RFQStatusText: 'Closed' }];
+const rfqs = [{ RFQStatusText: 'Open' }, { RFQStatusText: 'Confirmed' }];
 const summary = dailySummary(quotes, opps, tasks, rfqs, visits, appts, NOW);
 assert.equal(summary.openQuotes, 2);
 assert.equal(summary.openOpportunities, 3);

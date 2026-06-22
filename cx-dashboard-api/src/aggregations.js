@@ -132,6 +132,13 @@ export function isOpenStatus(statusText) {
   return !CLOSED_STATUS_RE.test(statusText);
 }
 
+// RFQ-specific rule (per business definition): an RFQ is CLOSED only when it is
+// Confirmed or Rejected; every other status counts as Open.
+const RFQ_CLOSED_RE = /confirm|reject/i;
+export function isRfqOpen(statusText) {
+  return !RFQ_CLOSED_RE.test(statusText || '');
+}
+
 export function isWonStatus(statusText) {
   return WON_STATUS_RE.test(statusText || '');
 }
@@ -391,7 +398,7 @@ const TASK_DONE_RE = /complete|finish|cancel/i;
 export function dailySummary(quotes, opps, tasks, rfqs, visits, appointments, today = new Date()) {
   const openQuotes = quotes.filter((q) => isOpenStatus(q.LifeCycleStatusCodeText));
   const openOpps = opps.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
-  const openRFQs = rfqs.filter((r) => isOpenStatus(r.RFQStatusText));
+  const openRFQs = rfqs.filter((r) => isRfqOpen(r.RFQStatusText));
 
   let overdueTasksCount = 0;
   let tasksToday = 0;

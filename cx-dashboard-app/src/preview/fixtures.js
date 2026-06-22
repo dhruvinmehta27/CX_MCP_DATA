@@ -204,25 +204,45 @@ export const FIXTURES = {
     },
   },
   'rfqs/by-status': [
-    { status: 'Open', count: 52 },
-    { status: 'In Process', count: 31 },
-    { status: 'Completed', count: 144 },
-    { status: 'Cancelled', count: 18 },
+    { status: 'Open', count: 52, open: true },
+    { status: 'In Process', count: 31, open: true },
+    { status: 'Submitted', count: 40, open: true },
+    { status: 'Confirmed', count: 96, open: false },
+    { status: 'Rejected', count: 26, open: false },
   ],
   'rfqs/trend': Array.from({ length: 6 }, (_, i) => ({ month: month(i - 5), count: [28, 35, 31, 44, 39, 26][i] })),
-  'rfqs/list': {
-    total: 245,
-    rows: Array.from({ length: 40 }, (_, i) => ({
-      id: `RFQ-${3000 + i}`,
-      name: `RFQ ${['rotary seals', 'O-rings', 'gaskets', 'wear rings'][i % 4]} batch ${i + 1}`,
-      account: QUOTE_ROWS[i % 6].customer,
-      status: ['Open', 'In Process', 'Completed'][i % 3],
-      dueDate: iso(i - 6),
-      owner: ['Dhruvin Mehta', 'Anna Schmidt', 'Luca Rossi'][i % 3],
-      created: iso(-(i + 4)),
-      open: i % 3 !== 2,
-    })),
-  },
+  'rfqs/list': (() => {
+    const STATUSES = ['Open', 'In Process', 'Submitted', 'Confirmed', 'Rejected'];
+    const rows = Array.from({ length: 60 }, (_, i) => {
+      const status = STATUSES[i % 5];
+      const open = !/confirm|reject/i.test(status);
+      return {
+        id: `RFQ-${3000 + i}`,
+        objectId: `00163E09RFQPREV${String(i).padStart(4, '0')}`,
+        name: `RFQ ${['rotary seals', 'O-rings', 'gaskets', 'wear rings'][i % 4]} batch ${i + 1}`,
+        account: QUOTE_ROWS[i % 6].customer,
+        status,
+        dueDate: iso((i % 20) - 8),
+        owner: ['Dhruvin Mehta', 'Anna Schmidt', 'Luca Rossi'][i % 3],
+        created: iso(-(i + 4)),
+        open,
+      };
+    });
+    const now = Date.now();
+    const week = now + 7 * 86400000;
+    const openRows = rows.filter((r) => r.open);
+    return {
+      total: 245,
+      openCount: openRows.length,
+      closedCount: rows.length - openRows.length,
+      overdueCount: openRows.filter((r) => new Date(r.dueDate).getTime() < now).length,
+      dueThisWeekCount: openRows.filter((r) => {
+        const t = new Date(r.dueDate).getTime();
+        return t >= now && t <= week;
+      }).length,
+      rows,
+    };
+  })(),
   'sales-orgs': [
     { id: 'DE01', name: 'TSS Germany' },
     { id: 'US01', name: 'TSS Americas' },

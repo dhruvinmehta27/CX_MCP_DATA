@@ -9,7 +9,7 @@ import {
 } from './c4c-client.js';
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
-  quotesByDayThisWeek, isOpenStatus, parseODataDate, toNumber,
+  quotesByDayThisWeek, isOpenStatus, isRfqOpen, parseODataDate, toNumber,
   pipelineOverview, funnelSnapshot, oppValue,
 } from './aggregations.js';
 import { getOrSet } from './cache.js';
@@ -217,7 +217,11 @@ export async function pipelineOverviewSvc(filters, userJwt, userEmail) {
 export async function rfqsByStatus(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'rfqs/by-status', filters, async () => {
     const { results } = await rawRFQs(filters, userJwt, userEmail);
-    return countBy(results, 'RFQStatusText').map(({ label, count }) => ({ status: label, count }));
+    return countBy(results, 'RFQStatusText').map(({ label, count }) => ({
+      status: label,
+      count,
+      open: isRfqOpen(label),
+    }));
   });
 }
 
@@ -234,6 +238,28 @@ export async function rfqsList(filters, userJwt, userEmail) {
   const limit = Math.min(parseInt(filters.limit || '500', 10), 2000);
   return getOrSet(userEmail, 'rfqs/list', { ...filters, limit }, async () => {
     const { total, results } = await rawRFQs(filters, userJwt, userEmail);
+
+    // Accurate open/closed + due counts over the FULL result set (not the
+    // capped rows below) so the KPIs are correct even on large RFQ volumes.
+    const now = new Date();
+    const weekEnd = new Date(now.getTime() + 7 * 86_400_000);
+    let openCount = 0;
+    let closedCount = 0;
+    let overdueCount = 0;
+    let dueThisWeekCount = 0;
+    for (const r of results) {
+      if (isRfqOpen(r.RFQStatusText)) {
+        openCount += 1;
+        const due = parseODataDate(r.RFQDueDate);
+        if (due) {
+          if (due < now) overdueCount += 1;
+          else if (due <= weekEnd) dueThisWeekCount += 1;
+        }
+      } else {
+        closedCount += 1;
+      }
+    }
+
     const rows = [...results]
       .sort((a, b) => (parseODataDate(a.RFQDueDate) || Infinity) - (parseODataDate(b.RFQDueDate) || Infinity))
       .slice(0, limit)
@@ -246,9 +272,9 @@ export async function rfqsList(filters, userJwt, userEmail) {
         dueDate: parseODataDate(r.RFQDueDate)?.toISOString() || null,
         owner: r.OwnerName,
         created: parseODataDate(r.CreationDateTime)?.toISOString() || null,
-        open: isOpenStatus(r.RFQStatusText),
+        open: isRfqOpen(r.RFQStatusText),
       }));
-    return { total, rows };
+    return { total, openCount, closedCount, overdueCount, dueThisWeekCount, rows };
   });
 }
 
