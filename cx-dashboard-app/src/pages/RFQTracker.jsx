@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { addDays } from 'date-fns';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
@@ -22,15 +22,23 @@ export default function RFQTracker() {
   const { filters, version } = useFilters();
   const api = toApiFilters(filters);
   const [scope, setScope] = useState('open');
+  const [query, setQuery] = useState('');
 
   const byStatus = useAnalytics(() => getRFQsByStatus(api), [version]);
   const trend = useAnalytics(() => getRFQsTrend({ ...api, months: 6 }), [version]);
   // Scope is filtered server-side so the table reflects the true Open/Closed set
   // (not whatever fell into a capped sample); refetch when the scope changes.
-  const list = useAnalytics(() => getRFQsList({ ...api, limit: 2000, scope }), [version, scope]);
+  const list = useAnalytics(() => getRFQsList({ ...api, limit: 20000, scope }), [version, scope]);
 
   const d = list.data;
-  const rows = d?.rows || [];
+  const rows = useMemo(() => {
+    const all = d?.rows || [];
+    const q = query.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((r) =>
+      `${r.id || ''} ${r.name || ''} ${r.account || ''} ${r.owner || ''} ${r.status || ''}`.toLowerCase().includes(q)
+    );
+  }, [d, query]);
 
   const rowClassName = (row) => {
     if (!row.open || !row.dueDate) return undefined;
@@ -84,13 +92,27 @@ export default function RFQTracker() {
             </button>
           );
         })}
+        <div className="board-search rfq-search">
+          <Icon name="search" size={15} />
+          <input
+            className="board-search-input"
+            placeholder="Search ID, name, account, owner…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button className="board-search-clear" onClick={() => setQuery('')} title="Clear">
+              <Icon name="close" size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       <ChartCard
         title={`${SCOPES.find((s) => s.id === scope).label} RFQs`}
         subtitle={
           d
-            ? `${fmtNumber(rows.length)} shown of ${fmtNumber(d.matching ?? d.total)} ${scope === 'all' ? 'total' : scope} · red = overdue, yellow = due within 7 days`
+            ? `${fmtNumber(rows.length)}${query ? ' matching' : ' shown'} of ${fmtNumber(d.matching ?? d.total)} ${scope === 'all' ? 'total' : scope} · red = overdue, yellow = due within 7 days`
             : undefined
         }
         loading={list.loading}

@@ -235,7 +235,9 @@ export async function rfqsTrend(filters, userJwt, userEmail) {
 }
 
 export async function rfqsList(filters, userJwt, userEmail) {
-  const limit = Math.min(parseInt(filters.limit || '500', 10), 2000);
+  // High cap so All/Closed scopes (which can run to tens of thousands) are fully
+  // browsable client-side; the raw set is already fetched, this only slices it.
+  const limit = Math.min(parseInt(filters.limit || '500', 10), 20000);
   const scope = filters.scope === 'open' || filters.scope === 'closed' ? filters.scope : 'all';
   return getOrSet(userEmail, 'rfqs/list', { ...filters, limit, scope }, async () => {
     const { results } = await rawRFQs(filters, userJwt, userEmail);
