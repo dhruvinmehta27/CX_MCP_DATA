@@ -1009,6 +1009,7 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
 .board-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap;
+  position: relative; z-index: 30; /* keep the Export menu above the board */
 }
 .view-tabs { display: inline-flex; gap: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: var(--shadow-sm); }
 .view-tab {
@@ -1032,6 +1033,8 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
   padding: 14px 16px;
   box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column; gap: 12px;
+  /* lift the filter bar (and its open dropdowns) above the board below */
+  position: relative; z-index: 20;
 }
 .board-filters-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .board-search {
