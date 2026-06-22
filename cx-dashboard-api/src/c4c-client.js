@@ -234,7 +234,13 @@ export async function fetchOpportunities(filters = {}, userJwt) {
       'ObjectID', 'ID', 'Name', 'SalesCyclePhaseCode', 'SalesCyclePhaseCodeText',
       'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
       'CreationDateTime', 'EntityLastChangedOn', 'MainEmployeeResponsiblePartyName',
-      'ProspectPartyName', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
+      'ProspectPartyName', 'ProspectPartyID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
+      // Pipeline Command Center filter dimensions (confirmed from tenant payload):
+      'OriginTypeCode', 'OriginTypeCodeText',            // Opportunity Source
+      'OpportunityLevel_KUT', 'OpportunityLevel_KUTText', // Opportunity Type (level)
+      'SalesTerritoryID', 'SalesTerritoryName',          // Sales Region / Team
+      'BUS_SEG_CDE_KUT', 'BUS_SEG_CDE_KUTText',          // Industry — business segment
+      'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
     ],
     parts.join(' and '),
     userJwt

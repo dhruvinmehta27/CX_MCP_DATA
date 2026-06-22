@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
 import { getOpportunitiesList, getPipelineOverview } from '../api/analytics';
-import { computeOverview, applyBoardFilters, orderedStages } from '../utils/pipeline';
+import { computeOverview, applyBoardFilters, orderedStages, emptyBoardFilters } from '../utils/pipeline';
 import { downloadCSV, downloadExcel, exportPDF } from '../utils/exporters';
 import { fmtCurrencyFull, fmtNumber, fmtDate } from '../utils/formatters';
 import Icon from '../components/ui/Icon';
@@ -35,15 +35,12 @@ const EXPORT_COLUMNS = [
   { key: 'weightedValue', label: 'Weighted', render: (v) => Math.round(v || 0) },
   { key: 'expectedClose', label: 'Expected Close', render: (v) => (v ? v.slice(0, 10) : '') },
   { key: 'owner', label: 'Owner' },
+  { key: 'source', label: 'Source' },
+  { key: 'oppType', label: 'Type' },
+  { key: 'territory', label: 'Region / Team' },
+  { key: 'segment', label: 'Segment' },
+  { key: 'subSegment', label: 'Sub-segment' },
 ];
-
-const emptyBoardFilters = () => ({
-  search: '',
-  stages: [],
-  statuses: [],
-  valueRange: [null, null],
-  probRange: [0, 100],
-});
 
 function decodeBoardFilters(raw) {
   try {
@@ -166,7 +163,7 @@ export default function PipelineBoard() {
         </div>
       </div>
 
-      <BoardFilters value={board} onChange={setBoard} stageOptions={stageOptions} onShare={share} />
+      <BoardFilters value={board} onChange={setBoard} stageOptions={stageOptions} rows={rows} onShare={share} />
 
       {list.loading ? (
         <SkeletonCard />

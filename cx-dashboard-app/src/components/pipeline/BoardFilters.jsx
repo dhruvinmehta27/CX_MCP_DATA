@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../ui/Icon';
-import { STATUS_BUCKETS } from '../../utils/pipeline';
+import MultiSelect from './MultiSelect';
+import { STATUS_BUCKETS, distinctValues, emptyBoardFilters } from '../../utils/pipeline';
 
 const PRESET_KEY = 'pipelineBoardPresets';
 
-// Requested filters that depend on C4C fields not yet in the OData pull.
-// Surfaced as disabled chips so the intent is visible while field names are
-// being confirmed on the Prod tenant (see hand-off notes).
-const PENDING_FILTERS = ['Region', 'Country', 'Industry', 'Opportunity Source', 'Opportunity Type'];
+// Geographic Country/State live only on the account; deferred until the
+// account join is added (see hand-off notes).
+const PENDING_FILTERS = ['Country', 'Geographic region'];
 
 function loadPresets() {
   try {
@@ -17,7 +17,7 @@ function loadPresets() {
   }
 }
 
-export default function BoardFilters({ value, onChange, stageOptions, onShare }) {
+export default function BoardFilters({ value, onChange, stageOptions, rows, onShare }) {
   const [presets, setPresets] = useState(loadPresets);
   const [presetOpen, setPresetOpen] = useState(false);
   const boxRef = useRef(null);
@@ -50,7 +50,7 @@ export default function BoardFilters({ value, onChange, stageOptions, onShare })
     localStorage.setItem(PRESET_KEY, JSON.stringify(next));
   };
   const applyPreset = (name) => {
-    onChange({ ...presets[name] });
+    onChange({ ...emptyBoardFilters(), ...presets[name] });
     setPresetOpen(false);
   };
   const deletePreset = (name, e) => {
@@ -61,10 +61,24 @@ export default function BoardFilters({ value, onChange, stageOptions, onShare })
     localStorage.setItem(PRESET_KEY, JSON.stringify(next));
   };
 
-  const reset = () =>
-    onChange({ search: '', stages: [], statuses: [], valueRange: [null, null], probRange: [0, 100] });
+  const reset = () => onChange(emptyBoardFilters());
 
   const presetNames = Object.keys(presets);
+
+  // Sub-segment options are constrained by the chosen business segment(s)
+  const dimOptions = useMemo(() => {
+    const segSet = value.segments.length ? new Set(value.segments) : null;
+    const subRows = segSet ? rows.filter((r) => segSet.has(r.segment)) : rows;
+    return {
+      sources: distinctValues(rows, 'source'),
+      types: distinctValues(rows, 'oppType'),
+      territories: distinctValues(rows, 'territory'),
+      segments: distinctValues(rows, 'segment'),
+      subSegments: distinctValues(subRows, 'subSegment'),
+    };
+  }, [rows, value.segments]);
+
+  const setDim = (key, vals) => onChange({ ...value, [key]: vals });
 
   return (
     <div className="board-filters">
@@ -141,6 +155,14 @@ export default function BoardFilters({ value, onChange, stageOptions, onShare })
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="board-filters-row board-dims-row">
+        <MultiSelect label="Source" options={dimOptions.sources} selected={value.sources} onChange={(v) => setDim('sources', v)} />
+        <MultiSelect label="Type" options={dimOptions.types} selected={value.types} onChange={(v) => setDim('types', v)} />
+        <MultiSelect label="Region / Team" options={dimOptions.territories} selected={value.territories} onChange={(v) => setDim('territories', v)} />
+        <MultiSelect label="Segment" options={dimOptions.segments} selected={value.segments} onChange={(v) => setDim('segments', v)} />
+        <MultiSelect label="Sub-segment" options={dimOptions.subSegments} selected={value.subSegments} onChange={(v) => setDim('subSegments', v)} />
       </div>
 
       <div className="board-filters-row board-ranges-row">

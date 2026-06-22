@@ -50,6 +50,11 @@ export default function OpportunityDrawer({ opp, onClose }) {
           <Field label="Created" value={fmtDate(opp.created)} />
           <Field label="Probability" value={`${opp.probability ?? 0}%`} />
           <Field label="Weighted value" value={fmtCurrencyFull(opp.weightedValue)} />
+          <Field label="Source" value={opp.source || '—'} />
+          <Field label="Type" value={opp.oppType || '—'} />
+          <Field label="Region / Team" value={opp.territory || '—'} />
+          <Field label="Segment" value={opp.segment || '—'} />
+          <Field label="Sub-segment" value={opp.subSegment || '—'} />
         </div>
 
         {url && (

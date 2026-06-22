@@ -226,6 +226,39 @@ export function computeOverview(rows, now = new Date()) {
   };
 }
 
+// Categorical dimensions wired from confirmed C4C fields. Each maps a board
+// filter key to the row property it constrains.
+export const DIMENSIONS = [
+  { key: 'sources', field: 'source', label: 'Source' },
+  { key: 'types', field: 'oppType', label: 'Type' },
+  { key: 'territories', field: 'territory', label: 'Region / Team' },
+  { key: 'segments', field: 'segment', label: 'Segment' },
+  { key: 'subSegments', field: 'subSegment', label: 'Sub-segment' },
+];
+
+/** Canonical empty board-filter state (shared by the page, filters and URL sync). */
+export function emptyBoardFilters() {
+  return {
+    search: '',
+    stages: [],
+    statuses: [],
+    valueRange: [null, null],
+    probRange: [0, 100],
+    sources: [],
+    types: [],
+    territories: [],
+    segments: [],
+    subSegments: [],
+  };
+}
+
+/** Distinct, sorted values for a row field (drops blanks). */
+export function distinctValues(rows, field) {
+  const set = new Set();
+  for (const r of rows) if (r[field]) set.add(r[field]);
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
 /** Apply board-level filters to the row set (client-side, instant). */
 export function applyBoardFilters(rows, f) {
   const q = (f.search || '').trim().toLowerCase();
@@ -233,9 +266,14 @@ export function applyBoardFilters(rows, f) {
   const statusSet = f.statuses && f.statuses.length ? new Set(f.statuses) : null;
   const [vMin, vMax] = f.valueRange || [null, null];
   const [pMin, pMax] = f.probRange || [0, 100];
+  const dimSets = DIMENSIONS.map((d) => ({
+    field: d.field,
+    set: f[d.key] && f[d.key].length ? new Set(f[d.key]) : null,
+  })).filter((d) => d.set);
   return rows.filter((r) => {
     if (stageSet && !stageSet.has(r.stage)) return false;
     if (statusSet && !statusSet.has(statusBucket(r.status))) return false;
+    for (const d of dimSets) if (!d.set.has(r[d.field])) return false;
     const v = r.expectedValue || 0;
     if (vMin != null && v < vMin) return false;
     if (vMax != null && v > vMax) return false;

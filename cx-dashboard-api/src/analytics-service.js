@@ -173,6 +173,11 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
         expectedClose: parseODataDate(o.ExpectedProcessingEndDate)?.toISOString() || null,
         created: parseODataDate(o.CreationDateTime)?.toISOString() || null,
         owner: o.MainEmployeeResponsiblePartyName,
+        source: o.OriginTypeCodeText || null,
+        oppType: o.OpportunityLevel_KUTText || null,
+        territory: o.SalesTerritoryName || null,
+        segment: o.BUS_SEG_CDE_KUTText || null,
+        subSegment: o.MKT_SEG_CODEText || null,
       }));
     return { total, rows };
   });

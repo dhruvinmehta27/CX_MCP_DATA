@@ -186,6 +186,11 @@ export const FIXTURES = {
         expectedClose: iso((i * 5) % 200),
         created: iso(-(60 + (i * 7) % 220)),
         owner: ['Dhruvin Mehta', 'Anna Schmidt', 'Luca Rossi', 'Erik Larsen'][i % 4],
+        source: ['Sales', 'Marketing', 'Referral', 'Web'][i % 4],
+        oppType: ['Level 1 - Managed Opportunity', 'Level 2 - Standard', 'Level 3 - Transactional'][i % 3],
+        territory: ['NCA - TSS West', 'EMEA - TSS Central', 'APAC - TSS East', 'NCA - TSS East'][i % 4],
+        segment: ['Automotive', 'Industrial', 'Aerospace', 'Life Sciences'][i % 4],
+        subSegment: ['Light Vehicle Manufacturers', 'Bicycles', 'Hydraulics', 'Medical Devices', 'Commercial Aircraft'][i % 5],
       };
     }),
   },
