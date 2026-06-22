@@ -11,7 +11,7 @@
  */
 import axios from 'axios';
 
-const C4C_DESTINATION = process.env.C4C_DESTINATION || 'C4C_QUA_OBO';
+const C4C_DESTINATION = process.env.C4C_DESTINATION || 'C4C_PROD_OBO';
 const ODATA_BASE = '/sap/c4c/odata/v1/c4codataapi';
 const CUSTOM_BASE = '/sap/c4c/odata/cust/v1';
 const PAGE_SIZE = 1000;
@@ -57,7 +57,7 @@ export async function fetchDestinationToken() {
 }
 
 /**
- * Resolve the C4C_QUA_OBO destination for the given user.
+ * Resolve the C4C_PROD_OBO destination for the given user.
  * Passes the raw Azure AD access token as X-user-token; the Destination
  * Service returns the destination config including a user-scoped C4C token.
  */

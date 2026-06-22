@@ -106,10 +106,255 @@ export function pipelineStages(opportunities) {
 }
 
 const CLOSED_STATUS_RE = /won|lost|completed|cancel|closed|rejected|finished/i;
+const WON_STATUS_RE = /won/i;
+const LOST_STATUS_RE = /lost|cancel|reject|stopped/i;
 
 export function isOpenStatus(statusText) {
   if (!statusText) return true;
   return !CLOSED_STATUS_RE.test(statusText);
+}
+
+export function isWonStatus(statusText) {
+  return WON_STATUS_RE.test(statusText || '');
+}
+
+export function isLostStatus(statusText) {
+  return !WON_STATUS_RE.test(statusText || '') && LOST_STATUS_RE.test(statusText || '');
+}
+
+function quarterOf(date) {
+  return { year: date.getUTCFullYear(), q: Math.floor(date.getUTCMonth() / 3) + 1 };
+}
+
+function quarterKey({ year, q }) {
+  return `${year}-Q${q}`;
+}
+
+function shiftQuarter({ year, q }, by) {
+  const idx = year * 4 + (q - 1) + by;
+  return { year: Math.floor(idx / 4), q: (idx % 4) + 1 };
+}
+
+/**
+ * Single-pass pipeline analytics for the Pipeline Command Center.
+ * Pure function over the opportunity snapshot — no transition history exists
+ * in the OData feed, so the Sankey flow is DERIVED from the current stage
+ * distribution and final phase of closed deals (clearly labelled in the UI).
+ *
+ * @param {object[]} records  opportunity rows (already filtered)
+ * @param {Date}     now
+ * @returns aggregate package consumed by /opportunities/pipeline-overview
+ */
+export function pipelineOverview(records, now = new Date()) {
+  const open = records.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
+  const won = records.filter((o) => isWonStatus(o.LifeCycleStatusCodeText));
+  const lost = records.filter(
+    (o) => !isOpenStatus(o.LifeCycleStatusCodeText) && !isWonStatus(o.LifeCycleStatusCodeText)
+  );
+
+  const sumVal = (rows) => rows.reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount), 0);
+  const sumWeighted = (rows) =>
+    rows.reduce((a, o) => a + toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100), 0);
+
+  const totalPipelineValue = sumVal(open);
+  const weightedPipelineValue = sumWeighted(open);
+  const closedWonValue = sumVal(won);
+  const closedLostValue = sumVal(lost);
+
+  // Average sales cycle: create → last change, for closed deals with both dates
+  let cycleSum = 0;
+  let cycleN = 0;
+  for (const o of [...won, ...lost]) {
+    const created = parseODataDate(o.CreationDateTime);
+    const changed = parseODataDate(o.EntityLastChangedOn);
+    if (created && changed && changed > created) {
+      cycleSum += (changed - created) / 86_400_000;
+      cycleN += 1;
+    }
+  }
+
+  // Quarter buckets keyed off expected close date (open deals only)
+  const curQ = quarterOf(now);
+  const nextQ = shiftQuarter(curQ, 1);
+  const curKey = quarterKey(curQ);
+  const nextKey = quarterKey(nextQ);
+  let forecastThisQuarter = 0;
+  let forecastNextQuarter = 0;
+  for (const o of open) {
+    const d = parseODataDate(o.ExpectedProcessingEndDate);
+    if (!d) continue;
+    const k = quarterKey(quarterOf(d));
+    const w = toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100);
+    if (k === curKey) forecastThisQuarter += w;
+    else if (k === nextKey) forecastNextQuarter += w;
+  }
+
+  // Ordered open stages (reuse pipelineStages, plus avg probability)
+  const stages = pipelineStages(open);
+  const probByStage = new Map();
+  for (const o of open) {
+    const s = o.SalesCyclePhaseCodeText || 'Unknown';
+    const acc = probByStage.get(s) || { sum: 0, n: 0 };
+    acc.sum += toNumber(o.ProbabilityPercent);
+    acc.n += 1;
+    probByStage.set(s, acc);
+  }
+  const stagesWithProb = stages.map((s) => {
+    const p = probByStage.get(s.stage);
+    return { ...s, avgProbability: p && p.n ? Math.round(p.sum / p.n) : 0 };
+  });
+
+  // Funnel: conversion to next + drop-off, biggest drop flagged
+  const funnelStages = stagesWithProb.map((s, i) => {
+    const next = stagesWithProb[i + 1];
+    const conversionToNext = next && s.count ? (next.count / s.count) * 100 : null;
+    const dropOff = conversionToNext == null ? null : 100 - conversionToNext;
+    return {
+      stage: s.stage,
+      count: s.count,
+      totalValue: s.totalValue,
+      weightedValue: s.weightedValue,
+      conversionToNext: conversionToNext == null ? null : Math.round(conversionToNext),
+      dropOff: dropOff == null ? null : Math.round(dropOff),
+    };
+  });
+  const maxDrop = Math.max(...funnelStages.map((s) => (s.dropOff == null ? -1 : s.dropOff)), -1);
+  for (const s of funnelStages) {
+    s.highDropOff = s.dropOff != null && s.dropOff === maxDrop && s.dropOff >= 50;
+  }
+  const overallWinRate = won.length + lost.length ? Math.round((won.length / (won.length + lost.length)) * 100) : null;
+
+  // Monthly forecast trend (next 6 months by expected close, weighted + gross)
+  const monthly = trendByMonth(
+    open.filter((o) => {
+      const d = parseODataDate(o.ExpectedProcessingEndDate);
+      return d && d >= new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    }),
+    'ExpectedProcessingEndDate',
+    'ExpectedRevenueAmount',
+    6,
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 5, 1))
+  ).map((m) => {
+    const inMonth = open.filter((o) => {
+      const d = parseODataDate(o.ExpectedProcessingEndDate);
+      return d && `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}` === m.month;
+    });
+    return { month: m.month, openValue: m.total, weightedValue: sumWeighted(inMonth) };
+  });
+
+  // Forecast by quarter (open expected-close), current + next 3
+  const quarterMap = new Map();
+  for (let i = 0; i < 4; i++) {
+    const qq = shiftQuarter(curQ, i);
+    quarterMap.set(quarterKey(qq), { quarter: quarterKey(qq), openValue: 0, weightedValue: 0, count: 0 });
+  }
+  for (const o of open) {
+    const d = parseODataDate(o.ExpectedProcessingEndDate);
+    if (!d) continue;
+    const bucket = quarterMap.get(quarterKey(quarterOf(d)));
+    if (!bucket) continue;
+    bucket.openValue += toNumber(o.ExpectedRevenueAmount);
+    bucket.weightedValue += toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100);
+    bucket.count += 1;
+  }
+  const quarters = [...quarterMap.values()].map((q) => ({ ...q, isCurrent: q.quarter === curKey }));
+
+  // ---- Snapshot-derived flow (Sankey) ----
+  // Progression i→i+1 ≈ deals that reached stage i+1 (its current count).
+  // Closed deals terminate from their recorded final phase into Won / Lost.
+  const stageNames = stagesWithProb.map((s) => s.stage);
+  const nodeNames = [...stageNames, 'Won', 'Lost'];
+  const idx = new Map(nodeNames.map((n, i) => [n, i]));
+  const links = [];
+  for (let i = 0; i < stagesWithProb.length - 1; i++) {
+    const next = stagesWithProb[i + 1];
+    if (next.count > 0) {
+      links.push({ source: i, target: i + 1, value: next.count, amount: next.totalValue, kind: 'progress' });
+    }
+  }
+  const terminalFrom = (rows, targetName) => {
+    const byPhase = groupBy(rows, 'SalesCyclePhaseCodeText');
+    for (const [phase, recs] of Object.entries(byPhase)) {
+      const from = idx.has(phase) ? idx.get(phase) : stageNames.length - 1; // fall back to last stage
+      if (from < 0) continue;
+      links.push({
+        source: from,
+        target: idx.get(targetName),
+        value: recs.length,
+        amount: sumVal(recs),
+        kind: targetName.toLowerCase(),
+      });
+    }
+  };
+  if (stageNames.length) {
+    terminalFrom(won, 'Won');
+    terminalFrom(lost, 'Lost');
+  }
+  // Collapse duplicate (source,target) links produced by phase grouping
+  const merged = new Map();
+  for (const l of links) {
+    const key = `${l.source}->${l.target}`;
+    const m = merged.get(key);
+    if (m) {
+      m.value += l.value;
+      m.amount += l.amount;
+    } else {
+      merged.set(key, { ...l });
+    }
+  }
+  const flow = {
+    nodes: nodeNames.map((name) => ({ name })),
+    links: [...merged.values()].filter((l) => l.value > 0),
+    derived: true,
+  };
+
+  return {
+    kpis: {
+      totalPipelineValue,
+      weightedPipelineValue,
+      openOpportunities: open.length,
+      avgDealSize: open.length ? totalPipelineValue / open.length : 0,
+      winRate: overallWinRate,
+      avgSalesCycleDays: cycleN ? Math.round(cycleSum / cycleN) : null,
+      forecastThisQuarter,
+      forecastNextQuarter,
+      closedWonValue,
+      closedLostValue,
+    },
+    stages: stagesWithProb,
+    funnel: { stages: funnelStages, overallWinRate },
+    forecast: {
+      byStage: stagesWithProb.map((s) => ({ stage: s.stage, totalValue: s.totalValue, weightedValue: s.weightedValue })),
+      monthly,
+      quarters,
+      currentQuarter: curKey,
+      nextQuarter: nextKey,
+      forecastThisQuarter,
+      forecastNextQuarter,
+      closedWonValue,
+      closedLostValue,
+    },
+    flow,
+    meta: {
+      total: records.length,
+      openCount: open.length,
+      wonCount: won.length,
+      lostCount: lost.length,
+      currency: records.find((r) => r.CurrencyCode)?.CurrencyCode || 'EUR',
+    },
+  };
+}
+
+/** Compact funnel for the previous-period comparison overlay. */
+export function funnelSnapshot(records) {
+  const open = records.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
+  const won = records.filter((o) => isWonStatus(o.LifeCycleStatusCodeText));
+  const lost = records.filter(
+    (o) => !isOpenStatus(o.LifeCycleStatusCodeText) && !isWonStatus(o.LifeCycleStatusCodeText)
+  );
+  const stages = pipelineStages(open).map((s) => ({ stage: s.stage, count: s.count, totalValue: s.totalValue }));
+  const overallWinRate = won.length + lost.length ? Math.round((won.length / (won.length + lost.length)) * 100) : null;
+  return { stages, overallWinRate };
 }
 
 function isSameDay(a, b) {

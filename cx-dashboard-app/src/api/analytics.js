@@ -12,6 +12,7 @@ export const getPipeline = (filters) => get('/api/analytics/opportunities/pipeli
 export const getPipelineByOwner = (filters) => get('/api/analytics/opportunities/by-owner', filters);
 export const getCloseTrend = (filters) => get('/api/analytics/opportunities/close-trend', filters);
 export const getOpportunitiesList = (filters) => get('/api/analytics/opportunities/list', filters);
+export const getPipelineOverview = (filters) => get('/api/analytics/opportunities/pipeline-overview', filters);
 export const getRFQsByStatus = (filters) => get('/api/analytics/rfqs/by-status', filters);
 export const getRFQsTrend = (filters) => get('/api/analytics/rfqs/trend', filters);
 export const getRFQsList = (filters) => get('/api/analytics/rfqs/list', filters);

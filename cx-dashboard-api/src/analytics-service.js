@@ -10,6 +10,7 @@ import {
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
   quotesByDayThisWeek, isOpenStatus, parseODataDate, toNumber,
+  pipelineOverview, funnelSnapshot,
 } from './aggregations.js';
 import { getOrSet } from './cache.js';
 
@@ -150,7 +151,9 @@ export async function opportunitiesCloseTrend(filters, userJwt, userEmail) {
 }
 
 export async function opportunitiesList(filters, userJwt, userEmail) {
-  const limit = Math.min(parseInt(filters.limit || '500', 10), 2000);
+  // Cap raised to 20k so the Pipeline Command Center can aggregate large
+  // pipelines client-side; the Kanban virtualizes cards per column.
+  const limit = Math.min(parseInt(filters.limit || '500', 10), 20000);
   return getOrSet(userEmail, 'opportunities/list', { ...filters, limit }, async () => {
     const { total, results } = await rawOpportunities(filters, userJwt, userEmail);
     const rows = [...results]
@@ -162,12 +165,47 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
         name: o.Name,
         account: o.ProspectPartyName,
         stage: o.SalesCyclePhaseCodeText,
+        stageCode: o.SalesCyclePhaseCode,
         status: o.LifeCycleStatusCodeText,
         expectedValue: toNumber(o.ExpectedRevenueAmount),
+        probability: toNumber(o.ProbabilityPercent),
+        weightedValue: toNumber(o.ExpectedRevenueAmount) * (toNumber(o.ProbabilityPercent) / 100),
         expectedClose: parseODataDate(o.ExpectedProcessingEndDate)?.toISOString() || null,
+        created: parseODataDate(o.CreationDateTime)?.toISOString() || null,
         owner: o.MainEmployeeResponsiblePartyName,
       }));
     return { total, rows };
+  });
+}
+
+/**
+ * One-pass aggregate package for the Pipeline Command Center
+ * (KPI header + Kanban totals + Funnel + Forecast + derived Flow).
+ * When compare=true, also fetches the immediately-preceding period of equal
+ * length for the funnel comparison overlay — reuses the shared raw cache.
+ */
+export async function pipelineOverviewSvc(filters, userJwt, userEmail) {
+  const compare = filters.compare === '1' || filters.compare === 'true' || filters.compare === true;
+  return getOrSet(userEmail, 'opportunities/pipeline-overview', { ...filters, compare }, async () => {
+    const { results } = await rawOpportunities(filters, userJwt, userEmail);
+    const overview = pipelineOverview(results, new Date());
+
+    if (compare && filters.dateFrom && filters.dateTo) {
+      const from = new Date(filters.dateFrom);
+      const to = new Date(filters.dateTo);
+      const spanMs = Math.max(to - from, 86_400_000);
+      const prevTo = new Date(from.getTime() - 86_400_000);
+      const prevFrom = new Date(prevTo.getTime() - spanMs);
+      const prevFilters = {
+        ...baseFilters(filters),
+        dateFrom: prevFrom.toISOString().slice(0, 10),
+        dateTo: prevTo.toISOString().slice(0, 10),
+      };
+      const prev = await rawOpportunities(prevFilters, userJwt, userEmail);
+      overview.funnel.previous = funnelSnapshot(prev.results);
+      overview.meta.prevPeriod = { from: prevFilters.dateFrom, to: prevFilters.dateTo };
+    }
+    return overview;
   });
 }
 

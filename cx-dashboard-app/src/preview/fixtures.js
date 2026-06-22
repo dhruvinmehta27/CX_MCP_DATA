@@ -165,17 +165,37 @@ export const FIXTURES = {
   })),
   'opportunities/list': {
     total: 480,
-    rows: Array.from({ length: 60 }, (_, i) => ({
-      id: String(5100 + i),
-      objectId: `00163E09OPPPREV${String(i).padStart(4, '0')}`,
-      name: `Sealing solution ${['hydraulics', 'aerospace', 'food & beverage', 'automotive'][i % 4]} #${i + 1}`,
-      account: QUOTE_ROWS[i % 6].customer,
-      stage: STAGES[i % 5].stage,
-      status: 'Open',
-      expectedValue: Math.round(20000 + (i * 13841) % 480000),
-      expectedClose: iso((i * 5) % 170),
-      owner: ['Dhruvin Mehta', 'Anna Schmidt', 'Luca Rossi', 'Erik Larsen'][i % 4],
-    })),
+    rows: Array.from({ length: 180 }, (_, i) => {
+      // weight stage distribution toward the top of the funnel
+      const stageIdx = i % 11 < 4 ? 0 : i % 11 < 7 ? 1 : i % 11 < 9 ? 2 : i % 11 < 10 ? 3 : 4;
+      const stage = STAGES[stageIdx];
+      const status = i % 9 === 0 ? 'Won' : i % 13 === 0 ? 'Lost' : 'Open';
+      const expectedValue = Math.round(20000 + (i * 13841) % 480000);
+      const probability = [15, 30, 50, 70, 90][stageIdx];
+      return {
+        id: String(5100 + i),
+        objectId: `00163E09OPPPREV${String(i).padStart(4, '0')}`,
+        name: `Sealing solution ${['hydraulics', 'aerospace', 'food & beverage', 'automotive'][i % 4]} #${i + 1}`,
+        account: QUOTE_ROWS[i % 6].customer,
+        stage: stage.stage,
+        stageCode: String(stageIdx + 1),
+        status,
+        expectedValue,
+        probability,
+        weightedValue: Math.round(expectedValue * (probability / 100)),
+        expectedClose: iso((i * 5) % 200),
+        created: iso(-(60 + (i * 7) % 220)),
+        owner: ['Dhruvin Mehta', 'Anna Schmidt', 'Luca Rossi', 'Erik Larsen'][i % 4],
+      };
+    }),
+  },
+  'opportunities/pipeline-overview': {
+    funnel: {
+      previous: {
+        stages: STAGES.map((s, i) => ({ stage: s.stage, count: Math.round(s.count * 0.85), totalValue: Math.round(s.totalValue * 0.9) })),
+        overallWinRate: 29,
+      },
+    },
   },
   'rfqs/by-status': [
     { status: 'Open', count: 52 },

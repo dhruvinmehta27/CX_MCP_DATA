@@ -4,6 +4,7 @@ import Icon from '../ui/Icon';
 const NAV = [
   { to: '/', icon: 'sun', label: 'Daily Briefing', end: true },
   { to: '/quotes', icon: 'file-text', label: 'Quote Analytics' },
+  { to: '/board', icon: 'target', label: 'Pipeline Command' },
   { to: '/pipeline', icon: 'trending-up', label: 'Pipeline Health' },
   { to: '/rfqs', icon: 'inbox', label: 'RFQ Tracker' },
   { to: '/builder', icon: 'sparkles', label: 'AI Report Builder' },

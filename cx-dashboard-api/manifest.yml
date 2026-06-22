@@ -11,7 +11,7 @@ applications:
       - cx-xsuaa-mcp
     env:
       NODE_ENV: production
-      C4C_DESTINATION: C4C_QUA_OBO
+      C4C_DESTINATION: C4C_PROD_OBO
       DASHBOARD_APP_ORIGIN: https://cx-dashboard-app.cfapps.eu10.hana.ondemand.com
 # Secrets — never in this file. Set via:
 #   cf set-env cx-dashboard-api ANTHROPIC_API_KEY <key>

@@ -10,8 +10,8 @@ import { fetchSalesOrgs } from '../c4c-client.js';
 const router = Router();
 
 function pickFilters(query) {
-  const { salesOrgId, ownerId, dateFrom, dateTo, months, limit } = query;
-  return { salesOrgId, ownerId, dateFrom, dateTo, months, limit };
+  const { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare } = query;
+  return { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare };
 }
 
 function handle(serviceFn) {
@@ -33,6 +33,7 @@ router.get('/quotes/by-biz-type', handle(svc.quotesByBizType));
 router.get('/quotes/top-customers', handle(svc.quotesTopCustomers));
 router.get('/quotes/list', handle(svc.quotesList));
 router.get('/opportunities/pipeline', handle(svc.opportunitiesPipeline));
+router.get('/opportunities/pipeline-overview', handle(svc.pipelineOverviewSvc));
 router.get('/opportunities/by-owner', handle(svc.opportunitiesByOwner));
 router.get('/opportunities/close-trend', handle(svc.opportunitiesCloseTrend));
 router.get('/opportunities/list', handle(svc.opportunitiesList));
