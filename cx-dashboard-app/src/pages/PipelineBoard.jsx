@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
@@ -17,11 +17,15 @@ import ForecastView from '../components/pipeline/ForecastView';
 import FlowView from '../components/pipeline/FlowView';
 import OpportunityDrawer from '../components/pipeline/OpportunityDrawer';
 
+// ECharts is heavy — load the bubble matrix (and echarts) only when opened
+const BubbleView = lazy(() => import('../components/pipeline/BubbleView'));
+
 const VIEWS = [
   { id: 'board', label: 'Kanban Board', icon: 'briefcase' },
   { id: 'funnel', label: 'Funnel', icon: 'funnel' },
   { id: 'forecast', label: 'Forecast', icon: 'trending-up' },
   { id: 'flow', label: 'Flow', icon: 'target' },
+  { id: 'bubble', label: 'Bubble Matrix', icon: 'bubble' },
 ];
 
 const EXPORT_COLUMNS = [
@@ -187,6 +191,13 @@ export default function PipelineBoard() {
           {view === 'flow' && (
             <div className="card view-card">
               <FlowView flow={overview.flow} />
+            </div>
+          )}
+          {view === 'bubble' && (
+            <div className="card view-card">
+              <Suspense fallback={<SkeletonCard />}>
+                <BubbleView rows={filteredRows} onSelect={setSelected} />
+              </Suspense>
             </div>
           )}
         </div>

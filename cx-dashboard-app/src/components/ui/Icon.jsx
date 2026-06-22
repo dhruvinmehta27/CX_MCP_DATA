@@ -127,6 +127,13 @@ const PATHS = {
       <path d="M15 3h6v6M10 14L21 3" />
     </>
   ),
+  bubble: (
+    <>
+      <circle cx="7" cy="14.5" r="3" />
+      <circle cx="16" cy="9" r="4" />
+      <circle cx="17.5" cy="17.5" r="2" />
+    </>
+  ),
   'arrow-right': <path d="M5 12h14M12 5l7 7-7 7" />,
   'arrow-left': <path d="M19 12H5M12 19l-7-7 7-7" />,
   users: (

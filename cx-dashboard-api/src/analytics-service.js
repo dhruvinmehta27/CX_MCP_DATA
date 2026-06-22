@@ -172,6 +172,7 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
         weightedValue: oppValue(o) * (toNumber(o.ProbabilityPercent) / 100),
         expectedClose: parseODataDate(o.ExpectedProcessingEndDate)?.toISOString() || null,
         created: parseODataDate(o.CreationDateTime)?.toISOString() || null,
+        lastActivity: parseODataDate(o.EntityLastChangedOn)?.toISOString() || null,
         owner: o.MainEmployeeResponsiblePartyName,
         source: o.OriginTypeCodeText || null,
         oppType: o.OpportunityLevel_KUTText || null,
