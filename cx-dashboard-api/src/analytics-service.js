@@ -155,7 +155,7 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
   // pipelines client-side; the Kanban virtualizes cards per column.
   const limit = Math.min(parseInt(filters.limit || '500', 10), 20000);
   return getOrSet(userEmail, 'opportunities/list', { ...filters, limit }, async () => {
-    const { total, results } = await rawOpportunities(filters, userJwt, userEmail);
+    const { total, results, truncated } = await rawOpportunities(filters, userJwt, userEmail);
     const rows = [...results]
       .sort((a, b) => (parseODataDate(b.CreationDateTime) || 0) - (parseODataDate(a.CreationDateTime) || 0))
       .slice(0, limit)
@@ -180,7 +180,8 @@ export async function opportunitiesList(filters, userJwt, userEmail) {
         segment: o.BUS_SEG_CDE_KUTText || null,
         subSegment: o.MKT_SEG_CODEText || null,
       }));
-    return { total, rows };
+    // truncated = the C4C set exceeded the safety cap; rows are a partial view
+    return { total, rows, truncated: Boolean(truncated) || total > limit };
   });
 }
 

@@ -1,7 +1,7 @@
 ---
 applications:
   - name: cx-dashboard-api
-    memory: 1024M
+    memory: 2048M
     buildpacks:
       - nodejs_buildpack
     path: .
@@ -12,6 +12,7 @@ applications:
     env:
       NODE_ENV: production
       C4C_DESTINATION: C4C_PRD_OBO
+      C4C_MAX_RECORDS: "60000"
       DASHBOARD_APP_ORIGIN: https://cx-dashboard-app.cfapps.eu10.hana.ondemand.com
 # Secrets — never in this file. Set via:
 #   cf set-env cx-dashboard-api ANTHROPIC_API_KEY <key>

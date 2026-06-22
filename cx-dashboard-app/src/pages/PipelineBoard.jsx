@@ -150,7 +150,11 @@ export default function PipelineBoard() {
         </div>
         <div className="board-toolbar-right">
           <span className="board-count">
-            {list.loading ? 'Loading…' : `${fmtNumber(filteredRows.length)} of ${fmtNumber(rows.length)} shown`}
+            {list.loading
+              ? 'Loading…'
+              : list.data?.truncated
+                ? `${fmtNumber(filteredRows.length)} of ${fmtNumber(rows.length)} shown · partial — narrow the date range`
+                : `${fmtNumber(filteredRows.length)} of ${fmtNumber(rows.length)} shown`}
           </span>
           <div className="dropdown">
             <button className="btn btn-ghost btn-sm" onClick={() => setExportOpen((o) => !o)}>

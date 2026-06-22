@@ -17,6 +17,9 @@ const CUSTOM_BASE = '/sap/c4c/odata/cust/v1';
 const PAGE_SIZE = 1000;
 // Promise.all in batches — full parallelism across 199 pages would exhaust sockets
 const PARALLEL_BATCH = 15;
+// Hard ceiling on records pulled per query, so a very wide date range can't
+// exhaust the instance. Override with C4C_MAX_RECORDS.
+const MAX_RECORDS = parseInt(process.env.C4C_MAX_RECORDS || '60000', 10);
 
 function getDestinationServiceCredentials() {
   const vcap = JSON.parse(process.env.VCAP_SERVICES || '{}');
@@ -176,9 +179,14 @@ export async function fetchAllPages(collectionPath, selectFields, filterString, 
 
   if (first.__count !== undefined) {
     const total = parseInt(first.__count, 10);
-    if (total > pageSize) {
+    // Safety cap: never pull more than MAX_RECORDS into memory in one query.
+    // A wide range ("All Time") on a big collection (e.g. 200k+ quotes) would
+    // otherwise exhaust the instance and drop every request. We fetch up to the
+    // cap, report the real total, and flag the result as truncated.
+    const target = Math.min(total, MAX_RECORDS);
+    if (target > pageSize) {
       const skips = [];
-      for (let skip = pageSize; skip < total; skip += pageSize) skips.push(skip);
+      for (let skip = pageSize; skip < target; skip += pageSize) skips.push(skip);
       for (let i = 0; i < skips.length; i += PARALLEL_BATCH) {
         const batch = skips.slice(i, i + PARALLEL_BATCH);
         const pagesData = await Promise.all(
@@ -187,19 +195,19 @@ export async function fetchAllPages(collectionPath, selectFields, filterString, 
         for (const page of pagesData) results = results.concat(page.results || []);
       }
     }
-    return { total, results };
+    return { total, results: results.slice(0, MAX_RECORDS), truncated: total > MAX_RECORDS };
   }
 
   // No inline count — page sequentially until a short page signals the end
   let skip = pageSize;
-  while (true) {
+  while (results.length < MAX_RECORDS) {
     const page = await odataGet(dest, collectionPath, { ...baseParams, $skip: skip });
     const rows = page.results || [];
     results = results.concat(rows);
     if (rows.length < pageSize) break;
     skip += rows.length;
   }
-  return { total: results.length, results };
+  return { total: results.length, results: results.slice(0, MAX_RECORDS), truncated: results.length > MAX_RECORDS };
 }
 
 // ---------------------------------------------------------------------------
