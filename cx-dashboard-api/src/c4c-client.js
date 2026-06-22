@@ -129,6 +129,20 @@ export async function c4cRequest(path, userJwt, params = {}) {
 }
 
 /**
+ * Minimal C4C round trip ($top=1) used by GET /api/analytics/whoami to verify
+ * the signed-in user actually has C4C access via the OBO flow. Throws when the
+ * destination/OBO denies the user (no C4C authorization) so the UI can show a
+ * friendly "no access" screen instead of a shell full of empty widgets.
+ */
+export async function probeC4CAccess(userJwt) {
+  await c4cRequest(`${ODATA_BASE}/OpportunityCollection`, userJwt, {
+    $top: 1,
+    $select: 'ObjectID',
+  });
+  return true;
+}
+
+/**
  * Paginated fetcher — C4C returns max 1000 records per request.
  * 1. First page with $inlinecount=allpages + $select
  * 2. Read __count for the total

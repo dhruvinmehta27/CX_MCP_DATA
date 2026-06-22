@@ -608,6 +608,19 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
   animation: spin 0.8s linear infinite;
 }
 
+/* ---------- Access denied ---------- */
+.auth-splash-card.access-denied { max-width: 440px; padding: 0 24px; }
+.access-denied-icon {
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  display: flex; align-items: center; justify-content: center;
+}
+.access-denied p { line-height: 1.55; }
+.access-denied-hint { font-size: 12.5px !important; color: var(--text-muted); }
+.access-denied-actions { display: flex; gap: 10px; margin-top: 8px; }
+
 /* ---------- Task list ---------- */
 .task-list { display: flex; flex-direction: column; gap: 8px; }
 .task-item {

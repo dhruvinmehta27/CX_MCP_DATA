@@ -4,6 +4,7 @@ import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import FilterBar from './components/layout/FilterBar';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import AccessGate from './auth/AccessGate';
 import { FilterProvider } from './hooks/useFilters';
 import DailyBriefing from './pages/DailyBriefing';
 import QuoteAnalytics from './pages/QuoteAnalytics';
@@ -54,7 +55,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <FilterProvider>
-        <Shell />
+        <AccessGate>
+          <Shell />
+        </AccessGate>
       </FilterProvider>
     </BrowserRouter>
   );

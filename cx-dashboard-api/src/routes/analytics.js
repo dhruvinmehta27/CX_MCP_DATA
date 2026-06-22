@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import * as svc from '../analytics-service.js';
-import { fetchSalesOrgs } from '../c4c-client.js';
+import { fetchSalesOrgs, probeC4CAccess } from '../c4c-client.js';
 
 const router = Router();
 
@@ -41,6 +41,17 @@ router.get('/rfqs/by-status', handle(svc.rfqsByStatus));
 router.get('/rfqs/trend', handle(svc.rfqsTrend));
 router.get('/rfqs/list', handle(svc.rfqsList));
 router.get('/daily-summary', handle(svc.getDailySummary));
+
+// Lightweight access probe: does the signed-in user actually have C4C access?
+// Always 200 with { ok } so the UI gets a clean signal (not an error card).
+router.get('/whoami', async (req, res) => {
+  try {
+    await probeC4CAccess(req.userJwt);
+    res.json({ ok: true, user: req.userEmail });
+  } catch (err) {
+    res.json({ ok: false, user: req.userEmail, message: err.message });
+  }
+});
 
 router.get('/sales-orgs', async (req, res, next) => {
   try {

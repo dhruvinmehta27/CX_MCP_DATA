@@ -35,6 +35,7 @@ const QUOTE_ROWS = Array.from({ length: 137 }, (_, i) => ({
 }));
 
 export const FIXTURES = {
+  'whoami': { ok: true, user: 'preview@trelleborg.com' },
   'dashboard/brief-stats': {
     totalOpportunities: 592,
     totalQuotes: 18400,

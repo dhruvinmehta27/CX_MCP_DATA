@@ -18,4 +18,5 @@ export const getRFQsTrend = (filters) => get('/api/analytics/rfqs/trend', filter
 export const getRFQsList = (filters) => get('/api/analytics/rfqs/list', filters);
 export const getDailySummary = (filters) => get('/api/analytics/daily-summary', filters);
 export const getSalesOrgs = (search) => get('/api/analytics/sales-orgs', { search });
+export const getAccessCheck = () => get('/api/analytics/whoami');
 export const clearCache = () => client.delete('/api/cache/clear').then((r) => r.data);
