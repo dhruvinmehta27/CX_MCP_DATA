@@ -1231,6 +1231,9 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
 .bubble-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .bubble-legend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .bubble-legend-hint { color: var(--text-muted); margin-left: auto; }
+.bubble-table { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
+.bubble-table-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.bubble-table-actions { display: inline-flex; align-items: center; gap: 12px; }
 
 /* ---------- Drill-down drawer ---------- */
 .drawer-backdrop { position: fixed; inset: 0; background: rgba(34, 54, 73, 0.35); z-index: 200; display: flex; justify-content: flex-end; animation: fadeIn 0.15s; }

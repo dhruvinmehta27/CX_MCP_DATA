@@ -3,6 +3,8 @@ import * as echarts from 'echarts';
 import { statusBucket } from '../../utils/pipeline';
 import { fmtCurrency, fmtCurrencyFull, fmtDate, fmtNumber } from '../../utils/formatters';
 import { COLORS } from '../../utils/colors';
+import { c4cObjectUrl } from '../../utils/c4cLinks';
+import DataTable from '../ui/DataTable';
 import Icon from '../ui/Icon';
 
 const GREEN = COLORS.success;
@@ -37,7 +39,8 @@ export default function BubbleView({ rows, onSelect }) {
   const [strategicOnly, setStrategicOnly] = useState(false);
   const [staleOnly, setStaleOnly] = useState(false);
   const [execOnly, setExecOnly] = useState(false);
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState([]); // opportunities lassoed/box-selected
+  const dataRowsRef = useRef([]); // rows in current series order, for brush index lookup
 
   // All open opportunities (tiles summarise these, matching the KPI header)
   const allOpen = useMemo(() => rows.filter((r) => statusBucket(r.status) === 'Open'), [rows]);
@@ -111,8 +114,8 @@ export default function BubbleView({ rows, onSelect }) {
       if (p.data && p.data.raw) onSelectRef.current?.(p.data.raw);
     });
     chart.on('brushSelected', (p) => {
-      const sel = p.batch?.[0]?.selected?.[0]?.dataIndex || [];
-      setSelected(sel.length);
+      const idx = p.batch?.[0]?.selected?.[0]?.dataIndex || [];
+      setSelected(idx.map((i) => dataRowsRef.current[i]).filter(Boolean));
     });
     return () => {
       window.removeEventListener('resize', onResize);
@@ -125,6 +128,7 @@ export default function BubbleView({ rows, onSelect }) {
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
+    dataRowsRef.current = filtered; // keep brush index → row lookup in sync
     const maxValue = filtered.reduce((m, r) => Math.max(m, r.expectedValue || 0), 1);
     const data = filtered.map((r) => ({
       value: [new Date(r.expectedClose).getTime(), r.probability || 0, r.expectedValue || 0],
@@ -227,6 +231,53 @@ export default function BubbleView({ rows, onSelect }) {
     );
   }, [filtered, staleDays]);
 
+  // Selection becomes meaningless once the plotted set changes, so reset it
+  useEffect(() => {
+    setSelected([]);
+  }, [filtered]);
+
+  const tableRows = selected.length ? selected : filtered;
+  const clearSelection = () => {
+    setSelected([]);
+    chartRef.current?.dispatchAction({ type: 'brush', command: 'clear', areas: [] });
+  };
+
+  const columns = [
+    { key: 'id', label: 'ID' },
+    { key: 'name', label: 'Opportunity' },
+    { key: 'account', label: 'Account' },
+    { key: 'stage', label: 'Stage', type: 'status' },
+    { key: 'expectedValue', label: 'Value', type: 'currency', render: (v) => fmtCurrencyFull(v) },
+    { key: 'probability', label: 'Prob', type: 'number', render: (v) => `${v ?? 0}%` },
+    { key: 'expectedClose', label: 'Close', type: 'date', render: (v) => fmtDate(v) },
+    { key: 'owner', label: 'Owner' },
+    {
+      key: 'objectId',
+      label: 'C4C',
+      sortable: false,
+      render: (v) => {
+        const url = c4cObjectUrl('opportunity', v);
+        return url ? (
+          <a className="c4c-link" href={url} target="_blank" rel="noreferrer">
+            Open <Icon name="external" size={12} />
+          </a>
+        ) : (
+          '–'
+        );
+      },
+    },
+    {
+      key: '_view',
+      label: '',
+      sortable: false,
+      render: (_, row) => (
+        <button className="btn-icon" title="Details" onClick={() => onSelect?.(row)}>
+          <Icon name="expand" size={14} />
+        </button>
+      ),
+    },
+  ];
+
   const Tile = ({ label, value, accent }) => (
     <div className={`bubble-metric${accent ? ` kpi-${accent}` : ''}`}>
       <span className="bubble-metric-label">{label}</span>
@@ -264,7 +315,7 @@ export default function BubbleView({ rows, onSelect }) {
         <span className="bubble-count">
           {fmtNumber(filtered.length)} plotted · {fmtNumber(allOpen.length)} open
           {allOpen.length - plottable.length > 0 ? ` · ${fmtNumber(allOpen.length - plottable.length)} no close date` : ''}
-          {selected > 0 ? ` · ${fmtNumber(selected)} selected` : ''}
+          {selected.length > 0 ? ` · ${fmtNumber(selected.length)} selected` : ''}
         </span>
       </div>
 
@@ -278,6 +329,23 @@ export default function BubbleView({ rows, onSelect }) {
       </div>
 
       <div ref={elRef} style={{ width: '100%', height: 560 }} />
+
+      <div className="bubble-table">
+        <div className="bubble-table-head">
+          <div className="chart-card-title">
+            {selected.length ? 'Selected opportunities' : 'All plotted opportunities'}
+          </div>
+          <div className="bubble-table-actions">
+            <span className="chart-card-subtitle">{fmtNumber(tableRows.length)} rows</span>
+            {selected.length > 0 && (
+              <button className="btn btn-ghost btn-sm" onClick={clearSelection}>
+                <Icon name="close" size={13} /> Clear selection
+              </button>
+            )}
+          </div>
+        </div>
+        <DataTable pageSize={25} columns={columns} data={tableRows} />
+      </div>
     </div>
   );
 }
