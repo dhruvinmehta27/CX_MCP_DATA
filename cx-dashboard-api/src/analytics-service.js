@@ -6,6 +6,7 @@
 import {
   fetchQuotes, fetchOpportunities, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
+  countQuotes, countOpportunities, countRFQs,
 } from './c4c-client.js';
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
@@ -339,6 +340,19 @@ export async function getDailySummary(filters, userJwt, userEmail) {
       quotes.results, opps.results, tasks.results,
       rfqs.results, visits.results, appointments.results, today
     );
+
+    // Exact open counts via OData inline count — correct on any range and not
+    // limited by the record cap (the fetched results above are only used for
+    // sums / lists / the stage chart). Best-effort: keep the sampled counts if
+    // a count query fails.
+    const [cQuotes, cOpps, cRfqs] = await Promise.allSettled([
+      countQuotes(filters, userJwt),
+      countOpportunities(filters, userJwt),
+      countRFQs(filters, userJwt),
+    ]);
+    if (cQuotes.status === 'fulfilled') summary.openQuotes = cQuotes.value.open;
+    if (cOpps.status === 'fulfilled') summary.openOpportunities = cOpps.value.open;
+    if (cRfqs.status === 'fulfilled') summary.openRFQs = cRfqs.value.open;
 
     // Extra payloads so the Daily Briefing renders from a single call
     summary.quotesByDay = quotesByDayThisWeek(quotes.results, today);

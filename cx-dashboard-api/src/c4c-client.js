@@ -10,6 +10,7 @@
  *     → C4C OData called as the real logged-in user
  */
 import axios from 'axios';
+import { isOpenStatus, isRfqOpen } from './aggregations.js';
 
 const C4C_DESTINATION = process.env.C4C_DESTINATION || 'C4C_PRD_OBO';
 const ODATA_BASE = '/sap/c4c/odata/v1/c4codataapi';
@@ -226,6 +227,85 @@ function dateFilter(field, dateFrom, dateTo) {
   if (dateFrom) parts.push(`${field} ge datetimeoffset'${dateFrom}T00:00:00Z'`);
   if (dateTo) parts.push(`${field} le datetimeoffset'${dateTo}T23:59:59Z'`);
   return parts;
+}
+
+// ---------------------------------------------------------------------------
+// Exact counts via OData inline count ($inlinecount=allpages) — returns the
+// real __count of a filtered query WITHOUT fetching the records, so counts are
+// exact and immune to the record cap. Used for the headline KPI counts where
+// pulling tens of thousands of rows to count client-side was both slow and
+// (under the cap) wrong.
+// ---------------------------------------------------------------------------
+
+async function odataCountFiltered(dest, collectionPath, filterString, selectField) {
+  const data = await odataGet(dest, collectionPath, {
+    $format: 'json',
+    $select: selectField,
+    $top: 1,
+    $inlinecount: 'allpages',
+    ...(filterString ? { $filter: filterString } : {}),
+  });
+  return parseInt(data.__count, 10) || 0;
+}
+
+/**
+ * Exact { total, open } for a collection by date/owner/org filter.
+ * 1. Sample one page to discover the status codes actually present.
+ * 2. Classify each via isOpen(text), then sum exact inline counts of the open
+ *    codes. Total comes from a single unfiltered-by-status inline count.
+ */
+async function countByStatus(collectionPath, codeField, textField, isOpen, filterString, userJwt) {
+  const dest = await getDestination(userJwt);
+  const sample = await odataGet(dest, collectionPath, {
+    $format: 'json',
+    $select: `${codeField},${textField}`,
+    $top: 1000,
+    $orderby: 'ObjectID',
+    ...(filterString ? { $filter: filterString } : {}),
+  });
+  const statuses = new Map(); // code -> text
+  for (const r of sample.results || []) {
+    const code = r[codeField];
+    if (code != null && code !== '' && !statuses.has(String(code))) statuses.set(String(code), r[textField]);
+  }
+  const total = await odataCountFiltered(dest, collectionPath, filterString, codeField);
+  let open = 0;
+  for (const [code, text] of statuses) {
+    if (!isOpen(text)) continue;
+    const f = filterString ? `${filterString} and ${codeField} eq '${odataEscape(code)}'` : `${codeField} eq '${odataEscape(code)}'`;
+    open += await odataCountFiltered(dest, collectionPath, f, codeField);
+  }
+  return { total, open };
+}
+
+function quoteFilter(filters = {}) {
+  const parts = [];
+  if (filters.salesOrgId) parts.push(`SalesOrganisationID eq '${odataEscape(filters.salesOrgId)}'`);
+  if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
+  parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  return parts.join(' and ');
+}
+function opportunityFilter(filters = {}) {
+  const parts = [];
+  if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
+  parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  return parts.join(' and ');
+}
+function rfqFilter(filters = {}) {
+  const parts = [];
+  if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
+  parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  return parts.join(' and ');
+}
+
+export function countQuotes(filters, userJwt) {
+  return countByStatus(`${ODATA_BASE}/SalesQuoteCollection`, 'LifeCycleStatusCode', 'LifeCycleStatusCodeText', isOpenStatus, quoteFilter(filters), userJwt);
+}
+export function countOpportunities(filters, userJwt) {
+  return countByStatus(`${ODATA_BASE}/OpportunityCollection`, 'LifeCycleStatusCode', 'LifeCycleStatusCodeText', isOpenStatus, opportunityFilter(filters), userJwt);
+}
+export function countRFQs(filters, userJwt) {
+  return countByStatus(`${CUSTOM_BASE}/zrfq/RFQRootCollection`, 'RFQStatus', 'RFQStatusText', isRfqOpen, rfqFilter(filters), userJwt);
 }
 
 // ---------------------------------------------------------------------------
