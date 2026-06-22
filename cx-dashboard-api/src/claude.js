@@ -132,6 +132,26 @@ Return ONLY the HTML, nothing else.`;
   return { html, title: meta.title, summary: meta.summary };
 }
 
+/**
+ * Short title + one-line summary for a chart (used by the Copilot inline-image
+ * endpoint, which builds the chart deterministically and only needs the text).
+ */
+export async function generateChartMeta(data, userRequest) {
+  try {
+    const response = await getClient().messages.create({
+      model: MODEL,
+      max_tokens: 500,
+      messages: [{
+        role: 'user',
+        content: `Return JSON only, no markdown: { "title": string, "summary": string } — a short chart title and one-sentence summary for this analytics request: ${userRequest || 'chart of the data'}\nData sample: ${JSON.stringify(data).slice(0, 2000)}`,
+      }],
+    });
+    return parseJsonResponse(extractText(response));
+  } catch {
+    return { title: 'Analytics Chart', summary: '' };
+  }
+}
+
 const AUDIENCE_TONES = {
   board: 'Board / Executive — strategic overview, revenue focus. Concise, confident, no operational minutiae.',
   regional: 'Regional Manager — operational detail, owner performance, bottlenecks, concrete next actions.',

@@ -18,8 +18,9 @@ export function decodeJwtPayload(jwt) {
 }
 
 export function authMiddleware(req, res, next) {
-  // API-key alternative for the Copilot Studio inline endpoint only
-  if (req.path === '/dashboard/inline' || req.originalUrl.startsWith('/api/dashboard/inline')) {
+  // API-key alternative for the Copilot Studio inline endpoints only
+  // (/dashboard/inline and /dashboard/inline-image)
+  if (req.path.startsWith('/dashboard/inline') || req.originalUrl.startsWith('/api/dashboard/inline')) {
     const apiKey = req.headers['x-api-key'];
     if (apiKey && process.env.INLINE_API_KEY && apiKey === process.env.INLINE_API_KEY) {
       req.apiKeyAuth = true;

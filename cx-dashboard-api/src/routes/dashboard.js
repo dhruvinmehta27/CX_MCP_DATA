@@ -4,8 +4,9 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, sanitizeIntent, generateChartConfig, generateInlineHtml, generateBrief } from '../claude.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateInlineHtml, generateBrief, generateChartMeta } from '../claude.js';
 import { ENDPOINT_HANDLERS, briefStats, briefData } from '../analytics-service.js';
+import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
 const router = Router();
 
@@ -110,6 +111,39 @@ router.post('/inline', async (req, res, next) => {
     }
     const result = await generateInlineHtml(data, userRequest, chartType);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Copilot-friendly: render the data to a PNG that drops straight into an
+ * Adaptive Card image. The chart is built deterministically (no LLM JS); only
+ * the title/summary come from Claude. Returns a data URI by default; pass
+ * ?format=binary (or Accept: image/png) for the raw PNG.
+ */
+router.post('/inline-image', async (req, res, next) => {
+  try {
+    const { userRequest, data, chartType, width, height } = req.body || {};
+    if (data === undefined) {
+      return res.status(400).json({ error: 'data is required' });
+    }
+    const meta = await generateChartMeta(data, userRequest);
+    const option = buildEChartsOption(data, chartType, meta.title);
+    const png = renderChartPng(option, { width: Number(width) || 900, height: Number(height) || 520 });
+
+    const wantsBinary = req.query.format === 'binary' || (req.headers.accept || '').includes('image/png');
+    if (wantsBinary) {
+      res.set('Content-Type', 'image/png');
+      res.set('X-Chart-Title', encodeURIComponent(meta.title || ''));
+      return res.send(png);
+    }
+    res.json({
+      image: `data:image/png;base64,${png.toString('base64')}`,
+      title: meta.title,
+      summary: meta.summary,
+      contentType: 'image/png',
+    });
   } catch (err) {
     next(err);
   }
