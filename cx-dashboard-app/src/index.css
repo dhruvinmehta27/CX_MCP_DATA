@@ -413,6 +413,8 @@ button { font-family: inherit; }
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
+.metric-value-muted { color: var(--text-muted); }
+.metric-inexact { border-color: var(--warning); }
 .metric-sub {
   font-size: 12px; color: var(--text-muted);
   display: flex; gap: 8px; align-items: center; flex-wrap: wrap;

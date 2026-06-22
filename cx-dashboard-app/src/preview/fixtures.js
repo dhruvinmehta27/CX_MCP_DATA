@@ -93,6 +93,7 @@ export const FIXTURES = {
     },
   },
   'daily-summary': {
+    exact: { openQuotes: true, openOpportunities: true, openRFQs: true, pipelineValue: true, pipelineByStage: true, overdueTasks: true, meetings: true },
     openQuotes: 1284,
     openOpportunities: 480,
     overdueTasksCount: 7,

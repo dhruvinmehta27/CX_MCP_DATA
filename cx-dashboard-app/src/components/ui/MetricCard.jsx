@@ -13,7 +13,7 @@ const ACCENTS = {
 
 export default function MetricCard({
   title, value, subtitle, trend, trendDirection, accent = 'primary',
-  colorValue = false, icon, onClick, loading,
+  colorValue = false, icon, onClick, loading, exact = true,
 }) {
   if (loading) {
     return (
@@ -28,6 +28,26 @@ export default function MetricCard({
     );
   }
   const a = ACCENTS[accent] || ACCENTS.primary;
+
+  // Fail-closed guardrail: when a figure can't be guaranteed exact we never show
+  // a (possibly wrong) number — we show a dash and ask the user to narrow range.
+  if (!exact) {
+    return (
+      <div className="card metric-card metric-inexact" title="This date range exceeds the live record limit, so an exact figure can't be guaranteed. Narrow the date range for an exact value.">
+        <div className="metric-head">
+          <div className="metric-title">{title}</div>
+          {icon && (
+            <div className="metric-icon" style={{ background: 'var(--warning-bg)', color: 'var(--warning)' }}>
+              <Icon name="alert-triangle" size={18} />
+            </div>
+          )}
+        </div>
+        <div className="metric-value metric-value-muted">—</div>
+        <div className="metric-sub">Narrow the date range for an exact figure</div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`card metric-card${onClick ? ' clickable' : ''}`}

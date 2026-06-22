@@ -135,6 +135,23 @@ export default function PipelineBoard() {
     );
   }
 
+  // Fail-closed: every KPI and view here is computed client-side over the loaded
+  // rows, so if that set was capped we can't guarantee any figure — show one
+  // clear notice instead of approximate numbers.
+  if (!list.loading && list.data?.truncated) {
+    return (
+      <div className="page pipeline-board">
+        <div className="card" style={{ padding: 40 }}>
+          <EmptyState
+            icon="alert-triangle"
+            title="Date range too large for exact figures"
+            message={`This range returns ${fmtNumber(list.data.total)} opportunities — more than can be summarised exactly in the live view. Narrow the date range in the filter above for exact KPIs, charts and the bubble matrix.`}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page pipeline-board">
       <KpiHeader kpis={overview.kpis} loading={list.loading} />

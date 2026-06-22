@@ -354,6 +354,20 @@ export async function getDailySummary(filters, userJwt, userEmail) {
     if (cOpps.status === 'fulfilled') summary.openOpportunities = cOpps.value.open;
     if (cRfqs.status === 'fulfilled') summary.openRFQs = cRfqs.value.open;
 
+    // Per-figure exactness for the fail-closed UI. Counts are exact only if
+    // their inline-count query succeeded; record-derived figures (sums, the
+    // stage distribution) are exact only if the underlying fetch wasn't capped.
+    summary.exact = {
+      openQuotes: cQuotes.status === 'fulfilled',
+      openOpportunities: cOpps.status === 'fulfilled',
+      openRFQs: cRfqs.status === 'fulfilled',
+      pipelineValue: !opps.truncated,
+      pipelineByStage: !opps.truncated,
+      overdueTasks: !tasks.truncated,
+      // visits/appointments use a 7-day window — always within the cap
+      meetings: true,
+    };
+
     // Extra payloads so the Daily Briefing renders from a single call
     summary.quotesByDay = quotesByDayThisWeek(quotes.results, today);
     summary.pipeline = pipelineStages(opps.results.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText)));

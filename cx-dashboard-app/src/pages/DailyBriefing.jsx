@@ -20,18 +20,22 @@ export default function DailyBriefing() {
     [version]
   );
 
+  // exactness defaults to true when the API doesn't supply a flag (older builds)
+  const ex = (key) => data?.exact?.[key] !== false;
+
   const metrics = [
-    { title: 'Open Quotes', value: fmtNumber(data?.openQuotes), icon: 'file-text', onClick: () => navigate('/quotes') },
-    { title: 'Pipeline Value', value: fmtCurrency(data?.totalPipelineValue), icon: 'banknote', onClick: () => navigate('/pipeline') },
-    { title: 'Open Opportunities', value: fmtNumber(data?.openOpportunities), icon: 'target', onClick: () => navigate('/pipeline') },
+    { title: 'Open Quotes', value: fmtNumber(data?.openQuotes), icon: 'file-text', onClick: () => navigate('/quotes'), exact: ex('openQuotes') },
+    { title: 'Pipeline Value', value: fmtCurrency(data?.totalPipelineValue), icon: 'banknote', onClick: () => navigate('/pipeline'), exact: ex('pipelineValue') },
+    { title: 'Open Opportunities', value: fmtNumber(data?.openOpportunities), icon: 'target', onClick: () => navigate('/pipeline'), exact: ex('openOpportunities') },
     {
       title: 'Overdue Tasks',
       value: fmtNumber(data?.overdueTasksCount),
       icon: 'clock',
       accent: data?.overdueTasksCount > 0 ? 'danger' : 'primary',
       colorValue: data?.overdueTasksCount > 0,
+      exact: ex('overdueTasks'),
     },
-    { title: 'Open RFQs', value: fmtNumber(data?.openRFQs), icon: 'inbox', onClick: () => navigate('/rfqs') },
+    { title: 'Open RFQs', value: fmtNumber(data?.openRFQs), icon: 'inbox', onClick: () => navigate('/rfqs'), exact: ex('openRFQs') },
     {
       title: "Today's Meetings",
       value: fmtNumber((data?.visitsToday || 0) + (data?.appointmentsToday || 0)),
@@ -59,7 +63,13 @@ export default function DailyBriefing() {
           )}
         </ChartCard>
         <ChartCard title="Pipeline by Stage" subtitle="Open opportunities" loading={loading} error={error} onRefresh={refetch}>
-          {data?.pipeline?.length ? (
+          {data && !ex('pipelineByStage') ? (
+            <EmptyState
+              icon="alert-triangle"
+              title="Exact breakdown unavailable"
+              message="This date range exceeds the live record limit. Narrow the range for an exact stage breakdown."
+            />
+          ) : data?.pipeline?.length ? (
             <BarChart
               data={data.pipeline}
               xKey="stage"

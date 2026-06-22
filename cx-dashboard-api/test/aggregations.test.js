@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {
   parseODataDate, groupBy, countBy, sumBy, trendByMonth,
   pipelineStages, dailySummary, isOpenStatus, isRfqOpen, quotesByDayThisWeek,
+  pipelineOverview,
 } from '../src/aggregations.js';
 
 const NOW = new Date('2026-06-10T12:00:00Z');
@@ -95,5 +96,40 @@ assert.equal(byDay.length, 7);
 assert.equal(byDay[6].day, '2026-06-10');
 assert.equal(byDay[6].count, 1);
 assert.equal(byDay[4].count, 1); // 2026-06-08
+
+// ---------------------------------------------------------------------------
+// Correctness invariants — guardrails against silently-wrong numbers
+// ---------------------------------------------------------------------------
+const mkOpp = (stageCode, stage, status, val, prob, closeISO) => ({
+  SalesCyclePhaseCode: stageCode, SalesCyclePhaseCodeText: stage,
+  LifeCycleStatusCodeText: status, ExpectedRevenueAmount: val, ProbabilityPercent: prob,
+  ExpectedProcessingEndDate: closeISO, CreationDateTime: '2025-01-01T00:00:00Z',
+  EntityLastChangedOn: '2025-06-01T00:00:00Z',
+});
+const baseOpps = [
+  mkOpp('1', 'Identify', 'Open', 10000, 20, '2026-09-01T00:00:00Z'),
+  mkOpp('2', 'Qualify', 'In Process', 20000, 50, '2026-10-01T00:00:00Z'),
+  mkOpp('3', 'Quotation', 'Won', 30000, 100, '2026-05-01T00:00:00Z'),
+  mkOpp('2', 'Qualify', 'Lost', 5000, 0, '2026-04-01T00:00:00Z'),
+];
+const ov = pipelineOverview(baseOpps, NOW);
+
+// open count never exceeds total
+assert.ok(ov.kpis.openOpportunities <= ov.meta.total, 'openOpportunities <= total');
+// won + lost + open == total (every record classified exactly once)
+assert.equal(ov.meta.openCount + ov.meta.wonCount + ov.meta.lostCount, ov.meta.total, 'parts sum to whole');
+// sum of stage counts == open count
+assert.equal(ov.stages.reduce((s, x) => s + x.count, 0), ov.kpis.openOpportunities, 'stage counts sum to open');
+// weighted pipeline never exceeds gross pipeline
+assert.ok(ov.kpis.weightedPipelineValue <= ov.kpis.totalPipelineValue, 'weighted <= gross');
+// win rate within 0..100
+assert.ok(ov.funnel.overallWinRate >= 0 && ov.funnel.overallWinRate <= 100, 'win rate in range');
+
+// MONOTONICITY: a superset date range must never report fewer opens than a
+// subset (the exact invariant that "2Y > 5Y" violated).
+const moreOpps = [...baseOpps, mkOpp('1', 'Identify', 'Open', 1000, 10, '2026-11-01T00:00:00Z')];
+const ovMore = pipelineOverview(moreOpps, NOW);
+assert.ok(ovMore.kpis.openOpportunities >= ov.kpis.openOpportunities, 'superset open >= subset open');
+assert.ok(ovMore.kpis.totalPipelineValue >= ov.kpis.totalPipelineValue, 'superset value >= subset value');
 
 console.log('✓ all aggregation tests passed');
