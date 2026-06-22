@@ -158,6 +158,10 @@ export async function fetchAllPages(collectionPath, selectFields, filterString, 
     $format: 'json',
     $select: selectFields.join(','),
     $top: PAGE_SIZE,
+    // Stable sort on the entity key so $skip pages never overlap or skip rows.
+    // Without this, collections with no default order return duplicate records
+    // across pages (seen on the custom RFQ collection).
+    $orderby: 'ObjectID',
   };
   if (filterString) baseParams.$filter = filterString;
 

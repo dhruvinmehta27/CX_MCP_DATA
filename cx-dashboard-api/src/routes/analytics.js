@@ -10,8 +10,8 @@ import { fetchSalesOrgs, probeC4CAccess } from '../c4c-client.js';
 const router = Router();
 
 function pickFilters(query) {
-  const { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare } = query;
-  return { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare };
+  const { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare, scope } = query;
+  return { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare, scope };
 }
 
 function handle(serviceFn) {

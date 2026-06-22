@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { addDays } from 'date-fns';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
@@ -25,15 +25,12 @@ export default function RFQTracker() {
 
   const byStatus = useAnalytics(() => getRFQsByStatus(api), [version]);
   const trend = useAnalytics(() => getRFQsTrend({ ...api, months: 6 }), [version]);
-  const list = useAnalytics(() => getRFQsList({ ...api, limit: 2000 }), [version]);
+  // Scope is filtered server-side so the table reflects the true Open/Closed set
+  // (not whatever fell into a capped sample); refetch when the scope changes.
+  const list = useAnalytics(() => getRFQsList({ ...api, limit: 2000, scope }), [version, scope]);
 
   const d = list.data;
-  const rows = useMemo(() => {
-    const all = d?.rows || [];
-    if (scope === 'open') return all.filter((r) => r.open);
-    if (scope === 'closed') return all.filter((r) => !r.open);
-    return all;
-  }, [d, scope]);
+  const rows = d?.rows || [];
 
   const rowClassName = (row) => {
     if (!row.open || !row.dueDate) return undefined;
@@ -93,7 +90,7 @@ export default function RFQTracker() {
         title={`${SCOPES.find((s) => s.id === scope).label} RFQs`}
         subtitle={
           d
-            ? `${fmtNumber(rows.length)} shown · ${fmtNumber(d.total)} total · red = overdue, yellow = due within 7 days`
+            ? `${fmtNumber(rows.length)} shown of ${fmtNumber(d.matching ?? d.total)} ${scope === 'all' ? 'total' : scope} · red = overdue, yellow = due within 7 days`
             : undefined
         }
         loading={list.loading}

@@ -236,18 +236,30 @@ export async function rfqsTrend(filters, userJwt, userEmail) {
 
 export async function rfqsList(filters, userJwt, userEmail) {
   const limit = Math.min(parseInt(filters.limit || '500', 10), 2000);
-  return getOrSet(userEmail, 'rfqs/list', { ...filters, limit }, async () => {
-    const { total, results } = await rawRFQs(filters, userJwt, userEmail);
+  const scope = filters.scope === 'open' || filters.scope === 'closed' ? filters.scope : 'all';
+  return getOrSet(userEmail, 'rfqs/list', { ...filters, limit, scope }, async () => {
+    const { results } = await rawRFQs(filters, userJwt, userEmail);
 
-    // Accurate open/closed + due counts over the FULL result set (not the
-    // capped rows below) so the KPIs are correct even on large RFQ volumes.
+    // De-dupe by ObjectID — backstop against any pagination overlap so counts
+    // and the table never double-count the same RFQ.
+    const seen = new Set();
+    const unique = [];
+    for (const r of results) {
+      const key = r.ObjectID || `${r.ID}|${r.RFQStatusText}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(r);
+    }
+
+    // Accurate open/closed + due counts over the FULL de-duped set so the KPIs
+    // are correct regardless of the per-scope row cap.
     const now = new Date();
     const weekEnd = new Date(now.getTime() + 7 * 86_400_000);
     let openCount = 0;
     let closedCount = 0;
     let overdueCount = 0;
     let dueThisWeekCount = 0;
-    for (const r of results) {
+    for (const r of unique) {
       if (isRfqOpen(r.RFQStatusText)) {
         openCount += 1;
         const due = parseODataDate(r.RFQDueDate);
@@ -260,7 +272,16 @@ export async function rfqsList(filters, userJwt, userEmail) {
       }
     }
 
-    const rows = [...results]
+    // Filter to the requested scope BEFORE capping, so "Open" returns open rows
+    // (up to the cap) rather than whatever open rows fell into a mixed sample.
+    const scoped =
+      scope === 'open'
+        ? unique.filter((r) => isRfqOpen(r.RFQStatusText))
+        : scope === 'closed'
+          ? unique.filter((r) => !isRfqOpen(r.RFQStatusText))
+          : unique;
+
+    const rows = [...scoped]
       .sort((a, b) => (parseODataDate(a.RFQDueDate) || Infinity) - (parseODataDate(b.RFQDueDate) || Infinity))
       .slice(0, limit)
       .map((r) => ({
@@ -274,7 +295,16 @@ export async function rfqsList(filters, userJwt, userEmail) {
         created: parseODataDate(r.CreationDateTime)?.toISOString() || null,
         open: isRfqOpen(r.RFQStatusText),
       }));
-    return { total, openCount, closedCount, overdueCount, dueThisWeekCount, rows };
+    return {
+      total: unique.length,
+      matching: scoped.length,
+      scope,
+      openCount,
+      closedCount,
+      overdueCount,
+      dueThisWeekCount,
+      rows,
+    };
   });
 }
 
