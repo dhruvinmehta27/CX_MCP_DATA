@@ -39,22 +39,21 @@ export default function BubbleView({ rows, onSelect }) {
   const [execOnly, setExecOnly] = useState(false);
   const [selected, setSelected] = useState(0);
 
-  // Pipeline matrix = open opportunities that have a close date and a value
-  const openRows = useMemo(
-    () => rows.filter((r) => statusBucket(r.status) === 'Open' && r.expectedClose && (r.expectedValue || 0) > 0),
-    [rows]
-  );
+  // All open opportunities (tiles summarise these, matching the KPI header)
+  const allOpen = useMemo(() => rows.filter((r) => statusBucket(r.status) === 'Open'), [rows]);
+  // Only deals with a close date + value can be placed on the time axis
+  const plottable = useMemo(() => allOpen.filter((r) => r.expectedClose && (r.expectedValue || 0) > 0), [allOpen]);
 
   // "Large" deal = top quartile by value (data-adaptive)
   const largeThreshold = useMemo(() => {
-    const vals = openRows.map((r) => r.expectedValue || 0).sort((a, b) => a - b);
+    const vals = allOpen.map((r) => r.expectedValue || 0).sort((a, b) => a - b);
     return vals.length ? vals[Math.floor(vals.length * 0.75)] : Infinity;
-  }, [openRows]);
+  }, [allOpen]);
 
   const enrich = (r) => {
     const dsa = daysSince(r.lastActivity);
     const stale = dsa != null && dsa > staleDays;
-    const pastDue = new Date(r.expectedClose) < new Date();
+    const pastDue = r.expectedClose ? new Date(r.expectedClose) < new Date() : false;
     const large = (r.expectedValue || 0) >= largeThreshold;
     const exec = large && ((r.probability || 0) < 40 || pastDue);
     return { dsa, stale, pastDue, large, exec, strat: isStrategic(r) };
@@ -62,7 +61,7 @@ export default function BubbleView({ rows, onSelect }) {
 
   const filtered = useMemo(
     () =>
-      openRows.filter((r) => {
+      plottable.filter((r) => {
         if ((r.expectedValue || 0) < minValue) return false;
         if ((r.probability || 0) < probThreshold) return false;
         const e = enrich(r);
@@ -71,7 +70,7 @@ export default function BubbleView({ rows, onSelect }) {
         if (execOnly && !e.exec) return false;
         return true;
       }),
-    [openRows, minValue, probThreshold, strategicOnly, staleOnly, execOnly, staleDays, largeThreshold]
+    [plottable, minValue, probThreshold, strategicOnly, staleOnly, execOnly, staleDays, largeThreshold]
   );
 
   const metrics = useMemo(() => {
@@ -81,24 +80,26 @@ export default function BubbleView({ rows, onSelect }) {
     let atRisk = 0;
     let strategic = 0;
     let stale = 0;
-    for (const r of openRows) {
+    for (const r of allOpen) {
       const v = r.expectedValue || 0;
       total += v;
       const e = enrich(r);
       if (e.strat) strategic += 1;
       if (e.stale) stale += 1;
-      const cd = new Date(r.expectedClose);
-      if (cd.getUTCFullYear() === now.getUTCFullYear() && cd.getUTCMonth() === now.getUTCMonth())
-        revThisMonth += v * ((r.probability || 0) / 100);
+      if (r.expectedClose) {
+        const cd = new Date(r.expectedClose);
+        if (cd.getUTCFullYear() === now.getUTCFullYear() && cd.getUTCMonth() === now.getUTCMonth())
+          revThisMonth += v * ((r.probability || 0) / 100);
+      }
       if (e.exec || e.pastDue) atRisk += v;
     }
-    const top10 = [...openRows]
+    const top10 = [...allOpen]
       .sort((a, b) => (b.expectedValue || 0) - (a.expectedValue || 0))
       .slice(0, 10)
       .reduce((s, r) => s + (r.expectedValue || 0), 0);
-    return { total, top10, revThisMonth, atRisk, strategic, stale, count: openRows.length };
+    return { total, top10, revThisMonth, atRisk, strategic, stale, count: allOpen.length };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openRows, staleDays, largeThreshold]);
+  }, [allOpen, staleDays, largeThreshold]);
 
   // init once
   useEffect(() => {
@@ -203,9 +204,9 @@ export default function BubbleView({ rows, onSelect }) {
         series: [
           {
             type: 'scatter',
-            large: true,
-            largeThreshold: 2000,
-            progressive: 4000,
+            // NOTE: do NOT enable `large` mode — it ignores per-point itemStyle
+            // and a function symbolSize (our colour + size), rendering blank.
+            large: false,
             symbolSize: (val) => 8 + 44 * Math.sqrt((val[2] || 0) / maxValue),
             data,
             markLine: {
@@ -260,7 +261,11 @@ export default function BubbleView({ rows, onSelect }) {
         <button className={`chip${strategicOnly ? ' chip-on' : ''}`} onClick={() => setStrategicOnly((v) => !v)}>Strategic only</button>
         <button className={`chip${staleOnly ? ' chip-on' : ''}`} onClick={() => setStaleOnly((v) => !v)}>Stale only</button>
         <button className={`chip${execOnly ? ' chip-on' : ''}`} onClick={() => setExecOnly((v) => !v)}>Executive attention only</button>
-        <span className="bubble-count">{fmtNumber(filtered.length)} of {fmtNumber(openRows.length)} open{selected > 0 ? ` · ${fmtNumber(selected)} selected` : ''}</span>
+        <span className="bubble-count">
+          {fmtNumber(filtered.length)} plotted · {fmtNumber(allOpen.length)} open
+          {allOpen.length - plottable.length > 0 ? ` · ${fmtNumber(allOpen.length - plottable.length)} no close date` : ''}
+          {selected > 0 ? ` · ${fmtNumber(selected)} selected` : ''}
+        </span>
       </div>
 
       <div className="bubble-legend">

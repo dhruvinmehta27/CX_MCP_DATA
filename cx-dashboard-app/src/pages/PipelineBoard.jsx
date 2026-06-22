@@ -71,7 +71,7 @@ export default function PipelineBoard() {
   const [prevFunnel, setPrevFunnel] = useState(null);
   const [loadingCompare, setLoadingCompare] = useState(false);
 
-  const list = useAnalytics(() => getOpportunitiesList({ ...api, limit: 10000 }), [version]);
+  const list = useAnalytics(() => getOpportunitiesList({ ...api, limit: 20000 }), [version]);
   const rows = list.data?.rows || [];
 
   // Keep view + filters in the URL so a filtered view is bookmarkable/shareable
