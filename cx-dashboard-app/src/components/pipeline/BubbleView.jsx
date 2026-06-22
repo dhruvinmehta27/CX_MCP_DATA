@@ -130,6 +130,21 @@ export default function BubbleView({ rows, onSelect }) {
     if (!chart) return;
     dataRowsRef.current = filtered; // keep brush index → row lookup in sync
     const maxValue = filtered.reduce((m, r) => Math.max(m, r.expectedValue || 0), 1);
+
+    // Anchor the time axis to the FULL plottable set (not the filtered subset)
+    // so selecting a segment/sub-segment doesn't rescale and "move" the
+    // timeline. Always include today so the Today marker stays visible.
+    let domainMin = Date.now();
+    let domainMax = Date.now();
+    for (const r of plottable) {
+      const t = new Date(r.expectedClose).getTime();
+      if (Number.isNaN(t)) continue;
+      if (t < domainMin) domainMin = t;
+      if (t > domainMax) domainMax = t;
+    }
+    const pad = Math.max((domainMax - domainMin) * 0.02, 3 * 86_400_000);
+    domainMin -= pad;
+    domainMax += pad;
     const data = filtered.map((r) => ({
       value: [new Date(r.expectedClose).getTime(), r.probability || 0, r.expectedValue || 0],
       raw: r,
@@ -187,6 +202,8 @@ export default function BubbleView({ rows, onSelect }) {
           name: 'Expected close',
           nameLocation: 'middle',
           nameGap: 34,
+          min: domainMin,
+          max: domainMax,
           axisLine: { lineStyle: { color: '#C2CCD8' } },
           axisLabel: { color: '#8396A8', fontSize: 11 },
           splitLine: { show: false },
