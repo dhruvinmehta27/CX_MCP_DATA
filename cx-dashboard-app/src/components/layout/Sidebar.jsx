@@ -3,7 +3,6 @@ import Icon from '../ui/Icon';
 
 const NAV = [
   { to: '/', icon: 'grid', label: 'Dashboard', end: true },
-  { to: '/briefing', icon: 'sun', label: 'Daily Briefing' },
   { to: '/quotes', icon: 'file-text', label: 'Quote Analytics' },
   { to: '/board', icon: 'target', label: 'Pipeline Command' },
   { to: '/pipeline', icon: 'trending-up', label: 'Pipeline Health' },

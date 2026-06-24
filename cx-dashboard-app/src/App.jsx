@@ -36,7 +36,7 @@ function Shell() {
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <div className={`main-area${collapsed ? ' sidebar-collapsed' : ''}`}>
         <Header title={title} subtitle={subtitle} />
-        <FilterBar />
+        {location.pathname !== '/' && <FilterBar />}
         <ErrorBoundary key={location.pathname}>
           <Routes>
             <Route path="/" element={<Dashboard />} />

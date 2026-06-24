@@ -53,6 +53,8 @@ router.get('/whoami', async (req, res) => {
   }
 });
 
+router.get('/owners', handle(svc.ownersList));
+
 router.get('/sales-orgs', async (req, res, next) => {
   try {
     const orgs = await fetchSalesOrgs(req.query.search, req.userJwt);

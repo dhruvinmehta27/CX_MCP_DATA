@@ -139,6 +139,18 @@ export async function opportunitiesByOwner(filters, userJwt, userEmail) {
   });
 }
 
+export async function ownersList(filters, userJwt, userEmail) {
+  return getOrSet(userEmail, 'owners/list', {}, async () => {
+    const { results } = await rawOpportunities({}, userJwt, userEmail);
+    const seen = new Set();
+    return results
+      .map((r) => r.MainEmployeeResponsiblePartyName)
+      .filter((n) => n && !seen.has(n) && seen.add(n))
+      .sort()
+      .map((name) => ({ name }));
+  });
+}
+
 export async function opportunitiesCloseTrend(filters, userJwt, userEmail) {
   const months = parseInt(filters.months || '6', 10);
   return getOrSet(userEmail, 'opportunities/close-trend', { ...filters, months }, async () => {

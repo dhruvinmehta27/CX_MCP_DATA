@@ -66,7 +66,7 @@ export default function Dashboard() {
             onClick={() => navigate(tile.path)}
           >
             <div className="dashboard-tile-icon">
-              <Icon name={tile.icon} size={28} />
+              <Icon name={tile.icon} size={32} />
             </div>
             <div className="dashboard-tile-body">
               <span className="dashboard-tile-title">{tile.title}</span>
