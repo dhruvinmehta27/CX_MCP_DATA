@@ -2,7 +2,8 @@ import { NavLink } from 'react-router-dom';
 import Icon from '../ui/Icon';
 
 const NAV = [
-  { to: '/', icon: 'sun', label: 'Daily Briefing', end: true },
+  { to: '/', icon: 'grid', label: 'Dashboard', end: true },
+  { to: '/briefing', icon: 'sun', label: 'Daily Briefing' },
   { to: '/quotes', icon: 'file-text', label: 'Quote Analytics' },
   { to: '/board', icon: 'target', label: 'Pipeline Command' },
   { to: '/pipeline', icon: 'trending-up', label: 'Pipeline Health' },
