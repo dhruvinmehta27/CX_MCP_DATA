@@ -9,10 +9,26 @@ const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-8';
 let client = null;
 function getClient() {
   if (!client) {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
       throw new Error('ANTHROPIC_API_KEY is not set (cf set-env cx-dashboard-api ANTHROPIC_API_KEY ...)');
     }
-    client = new Anthropic();
+    const options = { apiKey };
+    // Optional custom endpoint — e.g. the Azure AI Foundry Anthropic passthrough.
+    // Point ANTHROPIC_BASE_URL at the prefix the SDK appends `/v1/messages` to,
+    // e.g. https://<resource>.services.ai.azure.com/anthropic
+    if (process.env.ANTHROPIC_BASE_URL) {
+      options.baseURL = process.env.ANTHROPIC_BASE_URL;
+    }
+    // Some gateways (Azure AI Foundry) authenticate with the `api-key` header
+    // rather than Anthropic's default `x-api-key`. Set ANTHROPIC_AUTH_HEADER=api-key
+    // to send the key under that header (it is sent in addition to x-api-key, so
+    // whichever the gateway reads will match).
+    const authHeader = process.env.ANTHROPIC_AUTH_HEADER;
+    if (authHeader && authHeader.toLowerCase() !== 'x-api-key') {
+      options.defaultHeaders = { [authHeader]: apiKey };
+    }
+    client = new Anthropic(options);
   }
   return client;
 }
