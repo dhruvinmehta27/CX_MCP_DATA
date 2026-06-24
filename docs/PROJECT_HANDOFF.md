@@ -4,6 +4,14 @@
 
 ---
 
+## ⭐ START HERE — paste this into a new chat to load context
+
+> I'm continuing work on the **TSS C4C Dashboard** — a sales analytics app over SAP Cloud for Customer (C4C). Monorepo `dhruvinmehta27/CX_MCP_DATA`: `cx-dashboard-api` (Node/Express, C4C analytics + Claude AI) and `cx-dashboard-app` (React/Vite + Azure AD MSAL). Deployed on SAP BTP Cloud Foundry (eu10), Prod C4C via **Azure AD OBO** through the BTP Destination Service `C4C_PRD_OBO` (per-user scoped — no XSUAA exchange). Active branch: **`claude/keen-newton-4z77kc`**.
+>
+> **Read `docs/PROJECT_HANDOFF.md` first** — it has the full architecture, API endpoints, confirmed C4C field mappings, deployment steps, and known issues. The non-negotiable data rules: value uses base currency `ZBaseCurrency_KUTContent_KUT`; "pipeline = OPEN only" everywhere (Stopped/Won/Lost are closed); server `isOpenStatus` and client `statusBucket` must stay in sync; counts use OData `$inlinecount` (exact); figures are **fail-closed** (show "—" if not provably exact). Deploy = `cf push` from each app dir (frontend needs `npm run build` first); re-set `INLINE_API_KEY` after each API push if Copilot is used. Run `npm run test:aggregations` for the invariant tests.
+
+---
+
 ## 1. What this is
 
 A web dashboard + analytics app over **SAP Cloud for Customer (C4C)** sales data (opportunities, quotes, RFQs, tasks, visits, appointments). It gives Sales Reps and Sales Managers fast, decision-grade views of the pipeline, plus an AI report builder, an audience-tailored Sales Brief, and a Copilot Studio chart integration.
