@@ -10,7 +10,7 @@ import {
 } from './c4c-client.js';
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
-  quotesByDayThisWeek, isOpenStatus, isRfqOpen, parseODataDate, toNumber,
+  quotesByDayThisWeek, isOpenStatus, isWonStatus, isRfqOpen, parseODataDate, toNumber,
   pipelineOverview, funnelSnapshot, oppValue,
 } from './aggregations.js';
 import { getOrSet } from './cache.js';
@@ -431,8 +431,12 @@ export async function briefStats(filters, userJwt, userEmail) {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
 
     const open = opps.results.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
-    const won = quotes.results.filter((q) => /won|accept/i.test(q.LifeCycleStatusCodeText || ''));
-    const lost = quotes.results.filter((q) => /lost|reject/i.test(q.LifeCycleStatusCodeText || ''));
+    // Win rate is an OPPORTUNITY outcome (Won/Lost lifecycle) — SalesQuotes have
+    // no Won/Lost status, so deriving it from quotes always yielded 0 / "–".
+    const won = opps.results.filter((o) => isWonStatus(o.LifeCycleStatusCodeText));
+    const lost = opps.results.filter(
+      (o) => !isOpenStatus(o.LifeCycleStatusCodeText) && !isWonStatus(o.LifeCycleStatusCodeText)
+    );
     const closed = won.length + lost.length;
 
     return {
@@ -454,6 +458,21 @@ export async function briefStats(filters, userJwt, userEmail) {
       }).length,
       orgCount: new Set(quotes.results.map((q) => q.SalesOrganisationName).filter(Boolean)).size,
       ownerCount: new Set(opps.results.map((o) => o.MainEmployeeResponsiblePartyName).filter(Boolean)).size,
+      // Fail-closed guardrail: the two totals are exact (C4C __count); the rest
+      // are derived from fetched records, so exact only if the fetch wasn't
+      // capped. The UI shows "–" for any figure flagged inexact.
+      exact: {
+        totalOpportunities: true,
+        totalQuotes: true,
+        openDeals: !opps.truncated,
+        openPipelineValue: !opps.truncated,
+        winRate: !opps.truncated,
+        wonCount: !opps.truncated,
+        sopNext12MValue: !opps.truncated,
+        staleCount: !opps.truncated,
+        orgCount: !quotes.truncated,
+        ownerCount: !opps.truncated,
+      },
     };
   });
 }

@@ -16,7 +16,16 @@ const AUDIENCES = [
   { id: 'investor', icon: 'trending-up', label: 'Investor / Stakeholder', desc: 'Growth story, pipeline momentum' },
 ];
 
-function StatTile({ value, label }) {
+function StatTile({ value, label, exact = true }) {
+  // Fail-closed: never show a figure we can't guarantee is exact.
+  if (!exact) {
+    return (
+      <div className="brief-stat" title="This date range exceeds the live record limit — narrow it for an exact figure.">
+        <div className="brief-stat-value" style={{ color: 'var(--text-muted)' }}>–</div>
+        <div className="brief-stat-label">{label}</div>
+      </div>
+    );
+  }
   return (
     <div className="brief-stat">
       <div className="brief-stat-value">{value}</div>
@@ -36,6 +45,8 @@ export default function SalesBrief() {
 
   const stats = useAnalytics(() => getBriefStats(toApiFilters(filters)), [version]);
   const s = stats.data;
+  // exactness defaults to true when the API doesn't supply a flag (older builds)
+  const ex = (key) => s?.exact?.[key] !== false;
 
   const generate = async () => {
     setGenerating(true);
@@ -182,14 +193,14 @@ export default function SalesBrief() {
           <EmptyState title="Could not load data" message={stats.error.message} error />
         ) : (
           <div className="brief-stats">
-            <StatTile value={fmtNumber(s?.totalOpportunities)} label="Total opportunities" />
-            <StatTile value={fmtCurrency(s?.openPipelineValue)} label="Open pipeline" />
-            <StatTile value={s?.winRate != null ? `${s.winRate}%` : '–'} label="Win rate" />
-            <StatTile value={fmtCurrency(s?.sopNext12MValue)} label="SOP next 12 months" />
-            <StatTile value={fmtNumber(s?.openDeals)} label="Open deals" />
-            <StatTile value={fmtNumber(s?.wonCount)} label="Won" />
-            <StatTile value={fmtNumber(s?.staleCount)} label="Stale >90 days" />
-            <StatTile value={`${fmtNumber(s?.orgCount)} orgs · ${fmtNumber(s?.ownerCount)} owners`} label="Coverage" />
+            <StatTile value={fmtNumber(s?.totalOpportunities)} label="Total opportunities" exact={ex('totalOpportunities')} />
+            <StatTile value={fmtCurrency(s?.openPipelineValue)} label="Open pipeline" exact={ex('openPipelineValue')} />
+            <StatTile value={s?.winRate != null ? `${s.winRate}%` : '–'} label="Win rate" exact={ex('winRate')} />
+            <StatTile value={fmtCurrency(s?.sopNext12MValue)} label="SOP next 12 months" exact={ex('sopNext12MValue')} />
+            <StatTile value={fmtNumber(s?.openDeals)} label="Open deals" exact={ex('openDeals')} />
+            <StatTile value={fmtNumber(s?.wonCount)} label="Won" exact={ex('wonCount')} />
+            <StatTile value={fmtNumber(s?.staleCount)} label="Stale >90 days" exact={ex('staleCount')} />
+            <StatTile value={`${fmtNumber(s?.orgCount)} orgs · ${fmtNumber(s?.ownerCount)} owners`} label="Coverage" exact={ex('orgCount') && ex('ownerCount')} />
           </div>
         )}
 
