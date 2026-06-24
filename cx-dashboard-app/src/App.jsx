@@ -6,6 +6,7 @@ import FilterBar from './components/layout/FilterBar';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import AccessGate from './auth/AccessGate';
 import { FilterProvider } from './hooks/useFilters';
+import Dashboard from './pages/Dashboard';
 import DailyBriefing from './pages/DailyBriefing';
 import QuoteAnalytics from './pages/QuoteAnalytics';
 import PipelineBoard from './pages/PipelineBoard';
@@ -15,7 +16,8 @@ import CustomBuilder from './pages/CustomBuilder';
 import SalesBrief from './pages/SalesBrief';
 
 const PAGE_TITLES = {
-  '/': ['Daily Briefing', "Today's snapshot across quotes, pipeline, RFQs and tasks"],
+  '/': ['Dashboard', 'Select a section to get started'],
+  '/briefing': ['Daily Briefing', "Today's snapshot across quotes, pipeline, RFQs and tasks"],
   '/quotes': ['Quote Analytics', 'Full quote analysis'],
   '/board': ['Pipeline Command Center', 'Kanban, funnel, forecast and flow — one shared filter set'],
   '/pipeline': ['Pipeline Health', 'Opportunity pipeline analysis'],
@@ -37,7 +39,8 @@ function Shell() {
         <FilterBar />
         <ErrorBoundary key={location.pathname}>
           <Routes>
-            <Route path="/" element={<DailyBriefing />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/briefing" element={<DailyBriefing />} />
             <Route path="/quotes" element={<QuoteAnalytics />} />
             <Route path="/board" element={<PipelineBoard />} />
             <Route path="/pipeline" element={<PipelineHealth />} />

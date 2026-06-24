@@ -98,6 +98,9 @@ const PATHS = {
       <path d="M22 4L12 14.01l-3-3" />
     </>
   ),
+  'grid': <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></>,
+  'zap': <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></>,
+  'clipboard': <><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></>,
   'chevron-left': <path d="M15 18l-6-6 6-6" />,
   'chevron-right': <path d="M9 18l6-6-6-6" />,
   'chevrons-left': <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />,

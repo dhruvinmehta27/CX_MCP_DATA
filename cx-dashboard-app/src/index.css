@@ -1253,3 +1253,15 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
 .drawer-field-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); }
 .drawer-field-value { font-size: 13.5px; color: var(--text); font-weight: 600; }
 .drawer-c4c { width: 100%; justify-content: center; margin-top: 24px; }
+
+/* ---------- Dashboard tile grid ---------- */
+.dashboard-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 4px 0; }
+.dashboard-tile { display: flex; align-items: center; gap: 16px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 18px; cursor: pointer; text-align: left; transition: box-shadow 0.15s var(--ease), transform 0.15s var(--ease), border-color 0.15s; }
+.dashboard-tile:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--accent); }
+.dashboard-tile:active { transform: translateY(0); box-shadow: var(--shadow); }
+.dashboard-tile-icon { flex-shrink: 0; width: 52px; height: 52px; border-radius: var(--radius); background: var(--accent-muted, rgba(14,165,233,0.10)); color: var(--accent); display: flex; align-items: center; justify-content: center; }
+.dashboard-tile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dashboard-tile-title { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.dashboard-tile-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+.dashboard-tile-arrow { flex-shrink: 0; color: var(--text-muted); transition: transform 0.15s; }
+.dashboard-tile:hover .dashboard-tile-arrow { transform: translateX(3px); color: var(--accent); }
