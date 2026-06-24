@@ -123,7 +123,10 @@ export function pipelineStages(opportunities) {
     }));
 }
 
-const CLOSED_STATUS_RE = /won|lost|completed|cancel|closed|rejected|finished/i;
+// Must stay in sync with the client's statusBucket (utils/pipeline.js): a
+// "Stopped" opportunity is CLOSED (abandoned), not open. Leaving it out here
+// made the server count ~hundreds more "open" deals than the board.
+const CLOSED_STATUS_RE = /won|lost|completed|cancel|closed|reject|finished|stopped/i;
 const WON_STATUS_RE = /won/i;
 const LOST_STATUS_RE = /lost|cancel|reject|stopped/i;
 

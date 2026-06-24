@@ -87,7 +87,13 @@ export default function PipelineBoard() {
 
   const stageOptions = useMemo(() => orderedStages(rows), [rows]);
   const filteredRows = useMemo(() => applyBoardFilters(rows, board), [rows, board]);
-  const overview = useMemo(() => computeOverview(filteredRows), [filteredRows]);
+  // The KPI header + funnel/forecast/flow are analytical and must see EVERY
+  // status — win rate, closed won/lost and avg cycle need closed deals. The
+  // STATUS chip only scopes the Kanban display, not these metrics.
+  const overview = useMemo(
+    () => computeOverview(applyBoardFilters(rows, { ...board, statuses: [] })),
+    [rows, board]
+  );
 
   const toggleCompare = useCallback(async () => {
     if (comparing) {

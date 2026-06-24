@@ -61,6 +61,7 @@ assert.equal(isOpenStatus('Open'), true);
 assert.equal(isOpenStatus('In Process'), true);
 assert.equal(isOpenStatus('Won'), false);
 assert.equal(isOpenStatus('Completed'), false);
+assert.equal(isOpenStatus('Stopped'), false); // closed/abandoned, not pipeline
 
 // isRfqOpen — RFQ is closed ONLY when Confirmed or Rejected
 assert.equal(isRfqOpen('Open'), true);
