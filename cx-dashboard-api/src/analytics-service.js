@@ -126,14 +126,18 @@ export async function quotesList(filters, userJwt, userEmail) {
 export async function opportunitiesPipeline(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'opportunities/pipeline', filters, async () => {
     const { results } = await rawOpportunities(filters, userJwt, userEmail);
-    return pipelineStages(results);
+    // "Pipeline" = OPEN opportunities only. Won/Lost deals are not pipeline, so
+    // they must be excluded — keeps this consistent with the Daily Briefing and
+    // the Pipeline Command Center KPIs (which already filter to open).
+    return pipelineStages(results.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText)));
   });
 }
 
 export async function opportunitiesByOwner(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'opportunities/by-owner', filters, async () => {
     const { results } = await rawOpportunities(filters, userJwt, userEmail);
-    return sumBy(results, 'MainEmployeeResponsiblePartyName', oppValue)
+    const open = results.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
+    return sumBy(open, 'MainEmployeeResponsiblePartyName', oppValue)
       .slice(0, 20)
       .map(({ label, count, total }) => ({ owner: label, count, totalValue: total }));
   });
@@ -143,10 +147,11 @@ export async function opportunitiesCloseTrend(filters, userJwt, userEmail) {
   const months = parseInt(filters.months || '6', 10);
   return getOrSet(userEmail, 'opportunities/close-trend', { ...filters, months }, async () => {
     const { results } = await rawOpportunities(filters, userJwt, userEmail);
+    const open = results.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
     const now = new Date();
     // Expected closes look forward, not back
     const future = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months - 1, 1));
-    return trendByMonth(results, 'ExpectedProcessingEndDate', oppValue, months, future)
+    return trendByMonth(open, 'ExpectedProcessingEndDate', oppValue, months, future)
       .map(({ month, count, total }) => ({ month, count, totalValue: total }));
   });
 }

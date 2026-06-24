@@ -241,7 +241,9 @@ export function emptyBoardFilters() {
   return {
     search: '',
     stages: [],
-    statuses: [],
+    // Default to OPEN so the board (Kanban + counts) shows the live pipeline and
+    // matches the KPI header / Pipeline Health. Users can add Won/Lost.
+    statuses: ['Open'],
     valueRange: [null, null],
     probRange: [0, 100],
     sources: [],
