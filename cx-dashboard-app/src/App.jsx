@@ -29,6 +29,13 @@ const PAGE_TITLES = {
 function Shell() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+
+  // The welcome / launchpad is a full-screen page with NO app chrome — the
+  // sidebar + filter bar only appear once the user picks a section.
+  if (location.pathname === '/') {
+    return <Dashboard />;
+  }
+
   const [title, subtitle] = PAGE_TITLES[location.pathname] || ['Dashboard', ''];
 
   return (
@@ -39,7 +46,6 @@ function Shell() {
         <FilterBar />
         <ErrorBoundary key={location.pathname}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
             <Route path="/briefing" element={<DailyBriefing />} />
             <Route path="/quotes" element={<QuoteAnalytics />} />
             <Route path="/board" element={<PipelineBoard />} />
