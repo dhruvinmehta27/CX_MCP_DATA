@@ -277,6 +277,58 @@ button { font-family: inherit; }
 }
 .chip:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Date-range dual-handle slider (shared FilterBar) */
+.dr-group { flex: 1 1 380px; min-width: 300px; max-width: 580px; }
+.dr-slider { padding: 26px 9px 20px; }
+.dr-track {
+  position: relative;
+  height: 4px;
+  background: var(--border);
+  border-radius: 999px;
+  touch-action: none;
+}
+.dr-range {
+  position: absolute; top: 0; bottom: 0;
+  background: var(--primary);
+  border-radius: 999px;
+}
+.dr-tick { position: absolute; top: 0; transform: translateX(-50%); pointer-events: none; }
+.dr-tick i { position: absolute; top: -3px; left: 0; width: 1px; height: 10px; background: var(--field-border); }
+.dr-tick em {
+  position: absolute; top: 11px; left: 0; transform: translateX(-50%);
+  font-size: 10px; font-style: normal; color: var(--text-muted); white-space: nowrap;
+}
+.dr-handle {
+  position: absolute; top: 50%;
+  width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  -webkit-appearance: none; appearance: none;
+  background: var(--card);
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  padding: 0; cursor: grab;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, transform 0.15s;
+  touch-action: none;
+  z-index: 2;
+}
+.dr-handle:hover { transform: scale(1.08); }
+.dr-handle:active { cursor: grabbing; }
+.dr-handle:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(0, 112, 242, 0.22); }
+.dr-bubble {
+  position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: #fff;
+  font-size: 11px; font-weight: 600; line-height: 1;
+  padding: 4px 7px; border-radius: var(--radius-sm);
+  white-space: nowrap; pointer-events: none;
+}
+@media (max-width: 720px) {
+  .dr-group { flex-basis: 100%; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dr-handle { transition: none; }
+  .dr-handle:hover { transform: none; }
+}
+
 .btn {
   display: inline-flex; align-items: center; gap: 7px;
   background: var(--primary);
