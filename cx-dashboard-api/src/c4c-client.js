@@ -280,7 +280,9 @@ async function countByStatus(collectionPath, codeField, textField, isOpen, filte
 
 function quoteFilter(filters = {}) {
   const parts = [];
-  if (filters.salesOrgId) parts.push(`SalesOrganisationID eq '${odataEscape(filters.salesOrgId)}'`);
+  // NOTE: SalesOrganisationID is readable but NOT filterable on this tenant
+  // (C4C: "Expression can not converted into ABAP select options"). Sales-org
+  // scoping is applied in-process in analytics-service (rawQuotes), not here.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
@@ -314,7 +316,8 @@ export function countRFQs(filters, userJwt) {
 
 export async function fetchQuotes(filters = {}, userJwt) {
   const parts = [];
-  if (filters.salesOrgId) parts.push(`SalesOrganisationID eq '${odataEscape(filters.salesOrgId)}'`);
+  // SalesOrganisationID is not filterable server-side (see quoteFilter) — org
+  // scoping happens in-process in rawQuotes.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return fetchAllPages(

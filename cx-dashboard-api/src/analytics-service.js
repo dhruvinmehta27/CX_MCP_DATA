@@ -31,8 +31,14 @@ function baseFilters(filters = {}) {
 
 async function rawQuotes(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
-  const { data } = await getOrSet(userEmail, 'raw:quotes', base, () => fetchQuotes(base, userJwt));
-  return data;
+  // SalesOrganisationID isn't filterable in C4C, so fetch the date/owner set
+  // once (all orgs, cached) and scope to the chosen org in-process. Quotes
+  // carry a populated SalesOrganisationID that matches the org-unit ID.
+  const fetchKey = { ...base, salesOrgId: undefined };
+  const { data } = await getOrSet(userEmail, 'raw:quotes', fetchKey, () => fetchQuotes(fetchKey, userJwt));
+  if (!base.salesOrgId) return data;
+  const results = data.results.filter((q) => q.SalesOrganisationID === base.salesOrgId);
+  return { ...data, results, total: results.length };
 }
 
 async function rawOpportunities(filters, userJwt, userEmail) {
@@ -350,20 +356,32 @@ export async function getDailySummary(filters, userJwt, userEmail) {
     // limited by the record cap (the fetched results above are only used for
     // sums / lists / the stage chart). Best-effort: keep the sampled counts if
     // a count query fails.
-    const [cQuotes, cOpps, cRfqs] = await Promise.allSettled([
-      countQuotes(filters, userJwt),
+    const [cOpps, cRfqs] = await Promise.allSettled([
       countOpportunities(filters, userJwt),
       countRFQs(filters, userJwt),
     ]);
-    if (cQuotes.status === 'fulfilled') summary.openQuotes = cQuotes.value.open;
     if (cOpps.status === 'fulfilled') summary.openOpportunities = cOpps.value.open;
     if (cRfqs.status === 'fulfilled') summary.openRFQs = cRfqs.value.open;
+
+    // Quotes: SalesOrganisationID isn't filterable in C4C, so the cheap inline
+    // count can't be scoped to a chosen org. With an org selected, derive the
+    // open-quote count from the in-process org-filtered fetch (exact unless that
+    // fetch was capped); otherwise use the exact inline count.
+    let quotesCountExact;
+    if (filters.salesOrgId) {
+      summary.openQuotes = quotes.results.filter((q) => isOpenStatus(q.LifeCycleStatusCodeText)).length;
+      quotesCountExact = !quotes.truncated;
+    } else {
+      const cQuotes = await countQuotes(filters, userJwt).then((v) => v, () => null);
+      if (cQuotes) summary.openQuotes = cQuotes.open;
+      quotesCountExact = !!cQuotes;
+    }
 
     // Per-figure exactness for the fail-closed UI. Counts are exact only if
     // their inline-count query succeeded; record-derived figures (sums, the
     // stage distribution) are exact only if the underlying fetch wasn't capped.
     summary.exact = {
-      openQuotes: cQuotes.status === 'fulfilled',
+      openQuotes: quotesCountExact,
       openOpportunities: cOpps.status === 'fulfilled',
       openRFQs: cRfqs.status === 'fulfilled',
       pipelineValue: !opps.truncated,
