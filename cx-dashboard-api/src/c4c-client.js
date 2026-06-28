@@ -416,18 +416,53 @@ export async function fetchAppointments(filters = {}, userJwt) {
  * Sales org lookup for the FilterBar — custom OData service
  * cust/v1/orgidnamesandfunc, filtered server-side on SalesIndicator + name.
  */
+/**
+ * Sales-org list for the filter dropdown, from the standard c4codataapi:
+ *   1. OrganisationalUnitFunctionsCollection — org units flagged as a Company
+ *      (CompanyIndicator eq true) give us the set of keys we want.
+ *   2. OrganisationalUnitNameAndAddressCollection — name + ID for those keys.
+ * The two collections join on ParentObjectID (both point at the parent
+ * OrganisationalUnit's ObjectID). `search` is applied in-process (the dropdown
+ * also filters client-side), so we never substringof a field whose exact name
+ * could vary by tenant.
+ */
 export async function fetchSalesOrgs(search, userJwt) {
-  const parts = ['SalesIndicator eq true'];
-  if (search) parts.push(`substringof('${odataEscape(search)}',Name)`);
-  const data = await c4cRequest(
-    `${CUSTOM_BASE}/orgidnamesandfunc/OrganisationalUnitCollection`,
+  const fns = await c4cRequest(
+    `${ODATA_BASE}/OrganisationalUnitFunctionsCollection`,
     userJwt,
-    {
-      $select: 'ObjectID,ID,Name,SalesIndicator',
-      $filter: parts.join(' and '),
-      $top: 50,
-      $inlinecount: 'allpages',
-    }
+    { $select: 'ParentObjectID,CompanyIndicator', $filter: 'CompanyIndicator eq true', $top: 2000 }
   );
-  return (data.results || []).map((o) => ({ id: o.ID, name: o.Name }));
+  const companyKeys = new Set(
+    (fns.results || []).map((r) => r.ParentObjectID).filter(Boolean)
+  );
+  if (companyKeys.size === 0) return [];
+
+  const names = await c4cRequest(
+    `${ODATA_BASE}/OrganisationalUnitNameAndAddressCollection`,
+    userJwt,
+    { $top: 2000 }
+  );
+
+  const term = (search || '').trim().toLowerCase();
+  const seen = new Set();
+  const orgs = [];
+  for (const r of names.results || []) {
+    if (!companyKeys.has(r.ParentObjectID)) continue;
+    const id = r.OrganisationalUnitID || r.ID || r.ParentObjectID;
+    // Field name for the display name varies by tenant config — try the common ones.
+    const name =
+      r.OrganisationalUnitName ||
+      r.FormattedOrganisationalUnitName ||
+      r.OrganisationalCentreName ||
+      r.Name ||
+      id;
+    if (!id || seen.has(id)) continue;
+    if (term && !(`${name}`.toLowerCase().includes(term) || `${id}`.toLowerCase().includes(term))) {
+      continue;
+    }
+    seen.add(id);
+    orgs.push({ id, name });
+  }
+  orgs.sort((a, b) => `${a.name}`.localeCompare(`${b.name}`));
+  return orgs;
 }
