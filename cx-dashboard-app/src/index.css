@@ -397,6 +397,39 @@ button { font-family: inherit; }
 }
 .dropdown-item:hover { background: var(--primary-tint); color: var(--text); }
 
+/* Sales-org dropdown (shared FilterBar) */
+.org-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-width: 200px;
+  background: var(--card);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 13px; font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.org-trigger:hover { border-color: var(--primary); }
+.org-trigger:focus-visible {
+  outline: none; border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 112, 242, 0.15);
+}
+.org-trigger-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-trigger:not(.has-value) .org-trigger-label { color: var(--text-muted); }
+.org-caret { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+.org-list { min-width: 260px; padding-top: 0; }
+.org-filter {
+  position: sticky; top: 0;
+  width: 100%; min-width: 0;
+  border: none; border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+.org-filter:focus { box-shadow: none; border-color: var(--border); border-bottom-color: var(--primary); }
+.dropdown-item.is-selected { background: var(--primary-tint); color: var(--text); font-weight: 600; }
+.dropdown-item:focus-visible { outline: none; background: var(--primary-tint); color: var(--text); }
+.org-id { color: var(--text-muted); }
+
 /* ---------- Page content ---------- */
 .page {
   padding: 24px;

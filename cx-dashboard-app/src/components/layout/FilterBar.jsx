@@ -188,10 +188,14 @@ function DateRangeSlider({ value, onChange, domainMin, domainMax }) {
 export default function FilterBar() {
   const { filters, apply, reset } = useFilters();
   const [draft, setDraft] = useState(filters);
-  const [orgSearch, setOrgSearch] = useState(filters.salesOrgName || '');
-  const [orgOptions, setOrgOptions] = useState([]);
   const [orgOpen, setOrgOpen] = useState(false);
+  const [orgQuery, setOrgQuery] = useState(''); // in-dropdown filter text
+  const [orgBase, setOrgBase] = useState([]); // full list, loaded once
+  const [orgResults, setOrgResults] = useState([]); // server search hits for the query
+  const [orgLoading, setOrgLoading] = useState(false);
   const orgBoxRef = useRef(null);
+  const orgFilterRef = useRef(null);
+  const orgLoadedRef = useRef(false);
   const searchTimer = useRef(null);
 
   // Anchored once so the timeline domain and preset matching stay stable for
@@ -225,7 +229,6 @@ export default function FilterBar() {
 
   useEffect(() => {
     setDraft(filters);
-    setOrgSearch(filters.salesOrgName || '');
   }, [filters]);
 
   // close the sales-org dropdown on outside click
@@ -237,30 +240,71 @@ export default function FilterBar() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  const searchOrgs = (value) => {
-    setOrgSearch(value);
-    setDraft((d) => ({ ...d, salesOrgId: '', salesOrgName: '' }));
+  // Open the dropdown; load the full org list once (lazily), then focus the filter.
+  const openOrg = async () => {
+    setOrgOpen(true);
+    setTimeout(() => orgFilterRef.current?.focus(), 0);
+    if (orgLoadedRef.current) return;
+    orgLoadedRef.current = true;
+    setOrgLoading(true);
+    try {
+      const orgs = await getSalesOrgs(); // no search → full list (server-capped)
+      setOrgBase(orgs);
+    } catch (err) {
+      console.error('Load sales orgs failed', err);
+      orgLoadedRef.current = false; // allow a retry on next open
+    } finally {
+      setOrgLoading(false);
+    }
+  };
+
+  // Filter the loaded list client-side; also hit the server so orgs beyond the
+  // base list stay findable (substring match), debounced.
+  const onOrgQuery = (value) => {
+    setOrgQuery(value);
     clearTimeout(searchTimer.current);
-    if (!value) {
-      setOrgOptions([]);
-      setOrgOpen(false);
+    if (!value.trim()) {
+      setOrgResults([]);
       return;
     }
     searchTimer.current = setTimeout(async () => {
       try {
-        const orgs = await getSalesOrgs(value);
-        setOrgOptions(orgs.slice(0, 30));
-        setOrgOpen(true);
+        setOrgResults(await getSalesOrgs(value.trim()));
       } catch (err) {
         console.error('Sales org search failed', err);
       }
     }, 300);
   };
 
+  const orgOptions = useMemo(() => {
+    const q = orgQuery.trim().toLowerCase();
+    if (!q) return orgBase;
+    const local = orgBase.filter(
+      (o) => o.name.toLowerCase().includes(q) || String(o.id).toLowerCase().includes(q)
+    );
+    const seen = new Set();
+    const merged = [];
+    for (const o of [...orgResults, ...local]) {
+      if (!seen.has(o.id)) {
+        seen.add(o.id);
+        merged.push(o);
+      }
+    }
+    return merged;
+  }, [orgQuery, orgBase, orgResults]);
+
+  const closeOrg = () => {
+    setOrgOpen(false);
+    setOrgQuery('');
+    setOrgResults([]);
+  };
   const pickOrg = (org) => {
     setDraft((d) => ({ ...d, salesOrgId: org.id, salesOrgName: org.name }));
-    setOrgSearch(org.name);
-    setOrgOpen(false);
+    closeOrg();
+  };
+  const clearOrg = () => {
+    setDraft((d) => ({ ...d, salesOrgId: '', salesOrgName: '' }));
+    closeOrg();
   };
 
   const applyPreset = (preset) => {
@@ -297,18 +341,51 @@ export default function FilterBar() {
       <div className="filter-group" ref={orgBoxRef}>
         <label>Sales org</label>
         <div className="dropdown">
-          <input
-            className="input"
-            placeholder="Search sales orgs…"
-            value={orgSearch}
-            onChange={(e) => searchOrgs(e.target.value)}
-            onFocus={() => orgOptions.length > 0 && setOrgOpen(true)}
-          />
-          {orgOpen && orgOptions.length > 0 && (
-            <div className="dropdown-list">
+          <button
+            type="button"
+            className={`org-trigger${draft.salesOrgId ? ' has-value' : ''}`}
+            aria-haspopup="listbox"
+            aria-expanded={orgOpen}
+            onClick={() => (orgOpen ? closeOrg() : openOrg())}
+          >
+            <span className="org-trigger-label">{draft.salesOrgName || 'All sales orgs'}</span>
+            <span className="org-caret" aria-hidden="true">▾</span>
+          </button>
+          {orgOpen && (
+            <div className="dropdown-list org-list" role="listbox">
+              <input
+                ref={orgFilterRef}
+                className="input org-filter"
+                placeholder="Filter sales orgs…"
+                value={orgQuery}
+                onChange={(e) => onOrgQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setOrgOpen(false)}
+              />
+              <div
+                className={`dropdown-item${!draft.salesOrgId ? ' is-selected' : ''}`}
+                role="option"
+                aria-selected={!draft.salesOrgId}
+                tabIndex={0}
+                onClick={clearOrg}
+                onKeyDown={(e) => e.key === 'Enter' && clearOrg()}
+              >
+                All sales orgs
+              </div>
+              {orgLoading && <div className="dropdown-empty">Loading…</div>}
+              {!orgLoading && orgOptions.length === 0 && (
+                <div className="dropdown-empty">No matches</div>
+              )}
               {orgOptions.map((org) => (
-                <div key={org.id} className="dropdown-item" onClick={() => pickOrg(org)}>
-                  {org.name} <span style={{ color: 'var(--text-muted)' }}>({org.id})</span>
+                <div
+                  key={org.id}
+                  className={`dropdown-item${draft.salesOrgId === org.id ? ' is-selected' : ''}`}
+                  role="option"
+                  aria-selected={draft.salesOrgId === org.id}
+                  tabIndex={0}
+                  onClick={() => pickOrg(org)}
+                  onKeyDown={(e) => e.key === 'Enter' && pickOrg(org)}
+                >
+                  {org.name} <span className="org-id">({org.id})</span>
                 </div>
               ))}
             </div>
