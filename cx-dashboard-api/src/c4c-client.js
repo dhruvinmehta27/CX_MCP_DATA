@@ -418,39 +418,41 @@ export async function fetchAppointments(filters = {}, userJwt) {
  */
 /**
  * Sales-org list for the filter dropdown, from the standard c4codataapi:
- *   1. OrganisationalUnitFunctionsCollection — org units flagged as a Company
- *      (CompanyIndicator eq true) give us the set of keys we want.
- *   2. OrganisationalUnitNameAndAddressCollection — Name + OrganisationalUnitID
- *      for those keys.
- * The two collections join on ParentObjectID (both point at the parent
- * OrganisationalUnit's ObjectID). `search` is applied in-process (the dropdown
- * also filters client-side).
+ *   1. OrganisationalUnitFunctionsCollection — keep org units whose
+ *      CompanyIndicator is true. Filtered in-process (not via $filter): C4C
+ *      indicator properties are often not filterable server-side, which 500s.
+ *   2. OrganisationalUnitNameAndAddressCollection — Name for those org units.
+ * Joined on OrganisationalUnitID (the human key, e.g. "TSSGERMANY"), present in
+ * both collections — no GUID/ParentObjectID needed. `search` is applied
+ * in-process (the dropdown also filters client-side).
  */
 export async function fetchSalesOrgs(search, userJwt) {
   const fns = await c4cRequest(
     `${ODATA_BASE}/OrganisationalUnitFunctionsCollection`,
     userJwt,
-    { $select: 'ParentObjectID,CompanyIndicator', $filter: 'CompanyIndicator eq true', $top: 2000 }
+    { $select: 'OrganisationalUnitID,CompanyIndicator', $top: 1000 }
   );
-  const companyKeys = new Set(
-    (fns.results || []).map((r) => r.ParentObjectID).filter(Boolean)
+  const companyIds = new Set(
+    (fns.results || [])
+      .filter((r) => r.CompanyIndicator === true)
+      .map((r) => r.OrganisationalUnitID)
+      .filter(Boolean)
   );
-  if (companyKeys.size === 0) return [];
+  if (companyIds.size === 0) return [];
 
   const names = await c4cRequest(
     `${ODATA_BASE}/OrganisationalUnitNameAndAddressCollection`,
     userJwt,
-    { $select: 'ParentObjectID,OrganisationalUnitID,Name', $top: 2000 }
+    { $select: 'OrganisationalUnitID,Name', $top: 1000 }
   );
 
   const term = (search || '').trim().toLowerCase();
   const seen = new Set();
   const orgs = [];
   for (const r of names.results || []) {
-    if (!companyKeys.has(r.ParentObjectID)) continue;
-    const id = r.OrganisationalUnitID || r.ParentObjectID;
+    const id = r.OrganisationalUnitID;
+    if (!id || !companyIds.has(id) || seen.has(id)) continue;
     const name = r.Name || id;
-    if (!id || seen.has(id)) continue;
     if (term && !(`${name}`.toLowerCase().includes(term) || `${id}`.toLowerCase().includes(term))) {
       continue;
     }
