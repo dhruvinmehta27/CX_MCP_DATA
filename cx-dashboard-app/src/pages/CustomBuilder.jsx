@@ -1,11 +1,26 @@
 import { useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
+import { subMonths, subYears } from 'date-fns';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import { planReport, generateDashboard } from '../api/dashboard';
+import { isoDate } from '../utils/formatters';
 import DynamicChart from '../components/charts/DynamicChart';
 import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
+
+const DATE_PRESETS = [
+  { label: 'Last 1M', months: 1 },
+  { label: 'Last 3M', months: 3 },
+  { label: 'Last 6M', months: 6, default: true },
+  { label: 'Last 1Y', months: 12 },
+  { label: 'Last 2Y', months: 24 },
+];
+
+function builderDateRange(months) {
+  const now = new Date();
+  return { dateFrom: isoDate(subMonths(now, months)), dateTo: isoDate(now) };
+}
 
 const STEPS = ['Define', 'Confirm', 'Build', 'Report'];
 
@@ -68,7 +83,8 @@ function flattenForTable(rawData) {
 }
 
 export default function CustomBuilder() {
-  const { filters } = useFilters();
+  const { filters: globalFilters } = useFilters();
+  const [selectedMonths, setSelectedMonths] = useState(6);
   const [step, setStep] = useState(0);
   const [request, setRequest] = useState('');
   const [intent, setIntent] = useState(null);
@@ -77,6 +93,9 @@ export default function CustomBuilder() {
   const [busy, setBusy] = useState(false);
   const [showData, setShowData] = useState(false);
   const chartRef = useRef(null);
+
+  // Builder uses its own fixed date range, not the global FilterBar
+  const filters = { ...globalFilters, ...builderDateRange(selectedMonths) };
 
   const plan = async (text) => {
     const userRequest = (text ?? request).trim();
@@ -131,6 +150,23 @@ export default function CustomBuilder() {
 
   return (
     <div className="page builder-page">
+      <div className="builder-range-bar">
+        <Icon name="calendar" size={14} style={{ color: 'var(--text-secondary)' }} />
+        <span className="builder-range-label">Data range:</span>
+        {DATE_PRESETS.map((p) => (
+          <button
+            key={p.months}
+            className={`builder-range-chip${selectedMonths === p.months ? ' active' : ''}`}
+            onClick={() => setSelectedMonths(p.months)}
+            disabled={step > 0}
+          >
+            {p.label}
+          </button>
+        ))}
+        <span className="builder-range-hint">
+          {filters.dateFrom} → {filters.dateTo}
+        </span>
+      </div>
       <Stepper current={step} />
 
       {/* ---------- Step 1: DEFINE ---------- */}
