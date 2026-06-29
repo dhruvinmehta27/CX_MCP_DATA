@@ -80,9 +80,10 @@ export default function SalesBrief() {
     try {
       const res = await planBrief(audience, intent.trim() || undefined, toApiFilters(filters));
       setPlan(res.plan);
-      // If AI detected an org keyword, search for matching orgs automatically
-      if (res.plan.detectedOrgKeyword) {
-        const orgs = await getSalesOrgs(res.plan.detectedOrgKeyword);
+      // Search for orgs whenever AI detected a keyword OR raised a scope warning
+      const keyword = res.plan.detectedOrgKeyword || (res.plan.scopeWarning ? intent.trim() : null);
+      if (keyword) {
+        const orgs = await getSalesOrgs(keyword);
         setOrgMatches(orgs || []);
       }
     } catch (err) {
@@ -278,8 +279,8 @@ export default function SalesBrief() {
             </div>
             <p style={{ marginBottom: 8 }}>{plan.understanding}</p>
 
-            {/* Org picker — shown when AI detected an org keyword */}
-            {plan.detectedOrgKeyword && (
+            {/* Org picker — shown when AI detected an org mention or raised a scope warning */}
+            {(plan.detectedOrgKeyword || plan.scopeWarning) && (
               <div style={{ marginTop: 10, padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
                   <Icon name="target" size={12} style={{ marginRight: 5 }} />
@@ -316,11 +317,6 @@ export default function SalesBrief() {
               </div>
             )}
 
-            {!plan.detectedOrgKeyword && plan.scopeWarning && (
-              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(231,101,0,0.08)', border: '1px solid rgba(231,101,0,0.2)', borderRadius: 8, color: 'var(--warning)', fontSize: 13, marginBottom: 0 }}>
-                <strong>Scope note:</strong> {plan.scopeWarning}
-              </p>
-            )}
             {plan.clarificationNeeded && plan.clarificationQuestion && (
               <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(0,112,242,0.06)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8, fontSize: 13, marginBottom: 0 }}>
                 <strong>Clarification needed:</strong> {plan.clarificationQuestion}
