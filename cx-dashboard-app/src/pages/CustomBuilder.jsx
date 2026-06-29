@@ -14,7 +14,6 @@ const DATE_PRESETS = [
   { label: 'Last 3M', months: 3 },
   { label: 'Last 6M', months: 6, default: true },
   { label: 'Last 1Y', months: 12 },
-  { label: 'Last 2Y', months: 24 },
 ];
 
 function builderDateRange(months) {
