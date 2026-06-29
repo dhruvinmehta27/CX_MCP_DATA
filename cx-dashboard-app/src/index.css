@@ -1458,3 +1458,7 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
 .builder-range-chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .builder-range-chip:disabled { opacity: 0.5; cursor: not-allowed; }
 .builder-range-hint { margin-left: auto; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* Trelleborg logo replacements */
+.brand-logo-img { height: 32px; width: auto; flex-shrink: 0; object-fit: contain; }
+.auth-splash-logo-img { height: 72px; width: auto; object-fit: contain; margin-bottom: 8px; }

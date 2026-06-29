@@ -129,7 +129,7 @@ export default function SalesBrief() {
 
         <div className="brief-doc" id="brief-doc">
           <div className="brief-doc-header">
-            <div className="brand-logo">TSS</div>
+            <img src="/Company_Logo.png" alt="Trelleborg" style={{ height: 48, width: 'auto' }} />
             <div className="brief-doc-meta">
               <span>Trelleborg Sealing Solutions</span>
               <span>
