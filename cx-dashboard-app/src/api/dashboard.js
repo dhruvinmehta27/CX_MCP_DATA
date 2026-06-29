@@ -1,8 +1,5 @@
 import client from './client';
 
-export const searchSalesOrgs = (search) =>
-  client.get('/api/analytics/sales-orgs', { params: { search } }).then((r) => r.data);
-
 export const planReport = (userRequest, filters) =>
   client.post('/api/dashboard/plan', { userRequest, filters }).then((r) => r.data);
 

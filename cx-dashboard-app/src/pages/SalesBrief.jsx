@@ -3,7 +3,8 @@ import { subMonths } from 'date-fns';
 import useAuth from '../auth/useAuth';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
-import { getBriefStats, planBrief, generateBrief, searchSalesOrgs } from '../api/dashboard';
+import { getBriefStats, planBrief, generateBrief } from '../api/dashboard';
+import { getSalesOrgs } from '../api/analytics';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
 import { fmtNumber, fmtCurrency, fmtDate, isoDate } from '../utils/formatters';
@@ -81,7 +82,7 @@ export default function SalesBrief() {
       setPlan(res.plan);
       // If AI detected an org keyword, search for matching orgs automatically
       if (res.plan.detectedOrgKeyword) {
-        const orgs = await searchSalesOrgs(res.plan.detectedOrgKeyword);
+        const orgs = await getSalesOrgs(res.plan.detectedOrgKeyword);
         setOrgMatches(orgs || []);
       }
     } catch (err) {
