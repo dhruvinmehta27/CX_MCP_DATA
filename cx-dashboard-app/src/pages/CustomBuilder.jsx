@@ -25,16 +25,24 @@ function builderDateRange(months) {
 const STEPS = ['Define', 'Confirm', 'Build', 'Report'];
 
 const SUGGESTIONS = [
-  'Executive summary of pipeline performance',
-  'Win rate analysis by sales org',
-  'Top 10 customers by quote value',
-  'Quote volume trend by month',
-  'Pipeline value by stage',
+  // Management
+  'Executive pipeline summary across all sales orgs',
+  'Compare this month vs last month across all metrics',
+  'Pipeline value by stage and sales org',
+  'Win rate and lost deal analysis by sales org',
   'Revenue breakdown by business type',
-  'Quotes by sales org',
-  'RFQ status breakdown',
-  'Compare this month vs last month',
+  'Top 10 customers by quote value',
+  'Opportunity pipeline health and conversion funnel',
+  'Sales forecast based on current pipeline stages',
+  // Sales
+  'My open quotes and RFQs status',
+  'Quote volume trend by month',
+  'RFQ status breakdown and overdue items',
   'Daily operations summary',
+  'Quotes by sales org',
+  'New opportunities created this period',
+  'Stale opportunities with no recent activity',
+  'Quotes pending customer response',
 ];
 
 const ENDPOINT_LABELS = {
