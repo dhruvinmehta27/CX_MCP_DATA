@@ -30,7 +30,7 @@ export default function Dashboard() {
 
       <header className="welcome-topbar">
         <div className="welcome-brand">
-          <div className="brand-logo">TSS</div>
+          <img src="/Company_Logo.png" alt="Trelleborg" className="brand-logo-img" />
           <span className="welcome-brand-name">
             Trelleborg <b>Sales Intelligence</b>
           </span>
