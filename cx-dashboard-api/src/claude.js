@@ -68,9 +68,12 @@ export async function parseIntent(userRequest, filters = {}) {
   "title": string,
   "xKey": string,
   "yKeys": [string],
+  "explanation": string,
   "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null }
 }
-Current filters from the UI (merge into your filters unless the request overrides them): ${JSON.stringify(filters)}
+The "explanation" field must be 2-3 sentences in plain English describing what the user asked for, which data sources will be used, and what the report will show. Write it as "I'll..." e.g. "I'll pull your quote pipeline grouped by status..."
+IMPORTANT: The user has already selected a date range in the UI (shown in filters below). Do NOT set dateFrom or dateTo in your filters output — always set them to null so the UI range is respected. Only set salesOrgId, ownerId, months, or limit if the request explicitly mentions them.
+Current filters from the UI (date range is fixed): ${JSON.stringify(filters)}
 Today's date: ${new Date().toISOString().slice(0, 10)}
 Request: ${userRequest}`;
 
@@ -101,6 +104,44 @@ Data: ${JSON.stringify(data).slice(0, 30_000)}
 Colors available: ["#E4002B","#FF6B6B","#FFB347","#4ECDC4","#45B7D1","#96CEB4"]
 User request: ${userRequest}
 Rules: keep "data" suitable for direct rendering (flat objects, numeric values as numbers). Provide 2-4 concise business insights.`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return parseJsonResponse(extractText(response));
+}
+
+/**
+ * Generate 4 complementary chart configs from the same dataset.
+ */
+export async function generateMultiCharts(data, userRequest) {
+  const prompt = `You are a business analytics expert. Given the data below, generate exactly 4 complementary chart configs that together give a complete picture of the analytics request.
+Return JSON only, no markdown:
+{
+  "charts": [
+    {
+      "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel",
+      "data": [...],
+      "xKey": string,
+      "yKeys": [{ "key": string, "color": string, "label": string }],
+      "title": string,
+      "summary": string
+    }
+  ],
+  "insights": [string],
+  "overallTitle": string,
+  "overallSummary": string
+}
+Rules:
+- Each chart must show a DIFFERENT angle/dimension of the data (e.g. volume, value, trend, breakdown).
+- Use varied chart types across the 4 (not all bars).
+- Keep "data" as flat objects with numeric values as numbers.
+- Provide 3-5 concise business insights in the "insights" array.
+- Colors: ["#E4002B","#FF6B6B","#FFB347","#4ECDC4","#45B7D1","#96CEB4","#A29BFE","#FD79A8"]
+Data: ${JSON.stringify(data).slice(0, 30_000)}
+User request: ${userRequest}`;
 
   const response = await getClient().messages.create({
     model: MODEL,
@@ -166,6 +207,43 @@ export async function generateChartMeta(data, userRequest) {
   } catch {
     return { title: 'Analytics Chart', summary: '' };
   }
+}
+
+/**
+ * Parse a Sales Brief intent to surface AI understanding and flag ambiguities
+ * (e.g. user mentions a specific org/region but no salesOrgId filter is set).
+ */
+export async function parseBriefIntent({ audience, intent, availableFilters = {} }) {
+  const prompt = `A user is generating a sales brief for Trelleborg Sealing Solutions.
+Audience: ${audience}
+User message (optional intent/focus): "${intent || ''}"
+Current data filters applied: ${JSON.stringify(availableFilters)}
+
+Analyze the user's message and return JSON only, no markdown:
+{
+  "understanding": string,
+  "detectedOrgKeyword": string|null,
+  "detectedOwnerKeyword": string|null,
+  "scopeWarning": string|null,
+  "clarificationNeeded": boolean,
+  "clarificationQuestion": string|null
+}
+
+Rules:
+- "understanding": 1-2 sentences starting with "I'll..." describing what brief will be created and for whom.
+- "detectedOrgKeyword": if the user mentions a specific org, region, country or division name (e.g. "TSS Germany", "Germany", "DACH", "North America"), extract the keyword to search with (e.g. "Germany"). Otherwise null.
+- "detectedOwnerKeyword": if the user mentions a specific person/owner name, extract it. Otherwise null.
+- "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter (salesOrgId/ownerId) is active yet, warn the user clearly. Otherwise null.
+- "clarificationNeeded": true only if the request is genuinely ambiguous and needs clarification before proceeding.
+- "clarificationQuestion": if clarificationNeeded, a single clear question to ask the user. Otherwise null.
+`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 600,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return parseJsonResponse(extractText(response));
 }
 
 const AUDIENCE_TONES = {

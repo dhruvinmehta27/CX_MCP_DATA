@@ -4,7 +4,7 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, sanitizeIntent, generateChartConfig, generateInlineHtml, generateBrief, generateChartMeta } from '../claude.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent } from '../claude.js';
 import { ENDPOINT_HANDLERS, briefStats, briefData } from '../analytics-service.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -21,6 +21,18 @@ router.get('/brief-stats', async (req, res, next) => {
     const { data, cached } = await briefStats(pickFilters(req.query), req.userJwt, req.userEmail);
     res.set('X-Cache', cached ? 'HIT' : 'MISS');
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Parse brief intent — returns AI understanding + scope warnings before generating
+router.post('/brief-plan', async (req, res, next) => {
+  try {
+    const { audience, intent, filters = {} } = req.body || {};
+    if (!audience) return res.status(400).json({ error: 'audience is required' });
+    const plan = await parseBriefIntent({ audience, intent, availableFilters: filters });
+    res.json({ plan });
   } catch (err) {
     next(err);
   }
@@ -74,7 +86,8 @@ router.post('/generate', async (req, res, next) => {
     const intent = req.body.intent
       ? sanitizeIntent(req.body.intent)
       : await parseIntent(userRequest, filters);
-    const mergedFilters = { ...filters, ...(intent.filters || {}) };
+    // UI-supplied dates (builder range chips) always win over AI-parsed dates
+    const mergedFilters = { ...(intent.filters || {}), ...filters };
 
     // 2. Call the identified analytics endpoints (in-process, same caching)
     const rawData = {};
@@ -87,16 +100,15 @@ router.post('/generate', async (req, res, next) => {
       })
     );
 
-    // 3. Generate the Recharts config from the data
-    const chartConfig = await generateChartConfig(intent.chartType, rawData, userRequest);
+    // 3. Generate 4 complementary charts from the data
+    const multi = await generateMultiCharts(rawData, userRequest);
 
     res.json({
-      chartConfig,
+      charts: multi.charts || [],
       rawData,
-      title: chartConfig.title || intent.title,
-      summary: chartConfig.summary || '',
-      insights: chartConfig.insights || [],
-      suggestedChartType: chartConfig.chartType || intent.chartType,
+      title: multi.overallTitle || intent.title,
+      summary: multi.overallSummary || '',
+      insights: multi.insights || [],
     });
   } catch (err) {
     next(err);

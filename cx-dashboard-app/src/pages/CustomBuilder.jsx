@@ -1,25 +1,47 @@
 import { useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
+import { subMonths, subYears } from 'date-fns';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import { planReport, generateDashboard } from '../api/dashboard';
+import { isoDate } from '../utils/formatters';
 import DynamicChart from '../components/charts/DynamicChart';
 import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
 
+const DATE_PRESETS = [
+  { label: 'Last 1M', months: 1 },
+  { label: 'Last 3M', months: 3 },
+  { label: 'Last 6M', months: 6, default: true },
+  { label: 'Last 1Y', months: 12 },
+];
+
+function builderDateRange(months) {
+  const now = new Date();
+  return { dateFrom: isoDate(subMonths(now, months)), dateTo: isoDate(now) };
+}
+
 const STEPS = ['Define', 'Confirm', 'Build', 'Report'];
 
 const SUGGESTIONS = [
-  'Executive summary of last 12 months pipeline',
-  'Win rate analysis by sales org',
-  'Top 10 customers by quote value this year',
-  'Quote volume trend — last 12 months',
-  'Pipeline value by stage',
+  // Management
+  'Executive pipeline summary across all sales orgs',
+  'Compare this month vs last month across all metrics',
+  'Pipeline value by stage and sales org',
+  'Win rate and lost deal analysis by sales org',
   'Revenue breakdown by business type',
-  'Quotes by sales org last quarter',
-  'RFQ status breakdown',
-  'Compare this month vs last month',
+  'Top 10 customers by quote value',
+  'Opportunity pipeline health and conversion funnel',
+  'Sales forecast based on current pipeline stages',
+  // Sales
+  'My open quotes and RFQs status',
+  'Quote volume trend by month',
+  'RFQ status breakdown and overdue items',
   'Daily operations summary',
+  'Quotes by sales org',
+  'New opportunities created this period',
+  'Stale opportunities with no recent activity',
+  'Quotes pending customer response',
 ];
 
 const ENDPOINT_LABELS = {
@@ -68,14 +90,19 @@ function flattenForTable(rawData) {
 }
 
 export default function CustomBuilder() {
-  const { filters } = useFilters();
+  const { filters: globalFilters } = useFilters();
+  const [selectedMonths, setSelectedMonths] = useState(6);
   const [step, setStep] = useState(0);
   const [request, setRequest] = useState('');
   const [intent, setIntent] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showData, setShowData] = useState(false);
   const chartRef = useRef(null);
+
+  // Builder uses its own fixed date range, not the global FilterBar
+  const filters = { ...globalFilters, ...builderDateRange(selectedMonths) };
 
   const plan = async (text) => {
     const userRequest = (text ?? request).trim();
@@ -130,6 +157,23 @@ export default function CustomBuilder() {
 
   return (
     <div className="page builder-page">
+      <div className="builder-range-bar">
+        <Icon name="calendar" size={14} style={{ color: 'var(--text-secondary)' }} />
+        <span className="builder-range-label">Data range:</span>
+        {DATE_PRESETS.map((p) => (
+          <button
+            key={p.months}
+            className={`builder-range-chip${selectedMonths === p.months ? ' active' : ''}`}
+            onClick={() => setSelectedMonths(p.months)}
+            disabled={step > 0}
+          >
+            {p.label}
+          </button>
+        ))}
+        <span className="builder-range-hint">
+          {filters.dateFrom} → {filters.dateTo}
+        </span>
+      </div>
       <Stepper current={step} />
 
       {/* ---------- Step 1: DEFINE ---------- */}
@@ -180,7 +224,18 @@ export default function CustomBuilder() {
       {step === 1 && intent && (
         <div className="confirm-wrap">
           <div className="card plan-card">
-            <div className="plan-request">“{request}”</div>
+            <div className="plan-request">&ldquo;{request}&rdquo;</div>
+
+            {intent.explanation && (
+              <div className="plan-explanation">
+                <div className="plan-explanation-label">
+                  <Icon name="sparkles" size={13} />
+                  AI understood this as
+                </div>
+                <p>{intent.explanation}</p>
+              </div>
+            )}
+
             <div className="plan-grid">
               <div className="plan-item">
                 <label>Report title</label>
@@ -212,8 +267,8 @@ export default function CustomBuilder() {
             )}
             <div className="plan-actions">
               <button className="btn btn-ghost" onClick={restart}>
-                <Icon name="arrow-left" size={15} />
-                Back
+                <Icon name="edit" size={15} />
+                Refine request
               </button>
               <button className="btn" onClick={build}>
                 Build report
@@ -243,6 +298,12 @@ export default function CustomBuilder() {
                 {result.summary && <div className="chart-card-subtitle">{result.summary}</div>}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
+                {table.rows.length > 0 && (
+                  <button className="btn btn-ghost" onClick={() => setShowData((v) => !v)}>
+                    <Icon name={showData ? 'eye-off' : 'eye'} size={15} />
+                    {showData ? 'Hide data' : 'Show data'}
+                  </button>
+                )}
                 <button className="btn btn-ghost" onClick={exportPng}>
                   <Icon name="download" size={15} />
                   Export PNG
@@ -253,8 +314,18 @@ export default function CustomBuilder() {
                 </button>
               </div>
             </div>
-            <div ref={chartRef} style={{ padding: 8 }}>
-              <DynamicChart config={result.chartConfig} height={400} />
+            <div ref={chartRef} className="report-charts-grid" style={{ padding: 8 }}>
+              {(result.charts || []).map((chart, i) => (
+                <div key={i} className="card" style={{ margin: 0 }}>
+                  {chart.title && (
+                    <div className="chart-card-title" style={{ marginBottom: 8, fontSize: 13 }}>{chart.title}</div>
+                  )}
+                  <DynamicChart config={chart} height={280} />
+                  {chart.summary && (
+                    <div className="chart-card-subtitle" style={{ marginTop: 6 }}>{chart.summary}</div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -272,7 +343,7 @@ export default function CustomBuilder() {
             </div>
           )}
 
-          {table.rows.length > 0 && (
+          {showData && table.rows.length > 0 && (
             <div className="card">
               <div className="chart-card-title" style={{ marginBottom: 10 }}>Data</div>
               <DataTable columns={table.columns} data={table.rows} pageSize={50} />

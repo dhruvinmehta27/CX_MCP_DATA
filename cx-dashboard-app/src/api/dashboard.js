@@ -12,5 +12,8 @@ export const generateInline = (userRequest, data, chartType) =>
 export const getBriefStats = (filters) =>
   client.get('/api/dashboard/brief-stats', { params: filters }).then((r) => r.data);
 
+export const planBrief = (audience, intent, filters) =>
+  client.post('/api/dashboard/brief-plan', { audience, intent, filters }).then((r) => r.data);
+
 export const generateBrief = (audience, intent, filters) =>
   client.post('/api/dashboard/brief', { audience, intent, filters }).then((r) => r.data);
