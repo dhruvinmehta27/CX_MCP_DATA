@@ -3,7 +3,7 @@ import { subMonths } from 'date-fns';
 import useAuth from '../auth/useAuth';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
-import { getBriefStats, planBrief, generateBrief } from '../api/dashboard';
+import { getBriefStats, planBrief, generateBrief, searchSalesOrgs } from '../api/dashboard';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
 import { fmtNumber, fmtCurrency, fmtDate, isoDate } from '../utils/formatters';
@@ -50,6 +50,9 @@ export default function SalesBrief() {
   const [intent, setIntent] = useState('');
   const [planning, setPlanning] = useState(false);
   const [plan, setPlan] = useState(null);
+  const [orgMatches, setOrgMatches] = useState([]);
+  const [selectedOrgId, setSelectedOrgId] = useState('');
+  const [selectedOrgName, setSelectedOrgName] = useState('');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -70,9 +73,17 @@ export default function SalesBrief() {
     setPlanning(true);
     setError(null);
     setPlan(null);
+    setOrgMatches([]);
+    setSelectedOrgId('');
+    setSelectedOrgName('');
     try {
       const res = await planBrief(audience, intent.trim() || undefined, toApiFilters(filters));
       setPlan(res.plan);
+      // If AI detected an org keyword, search for matching orgs automatically
+      if (res.plan.detectedOrgKeyword) {
+        const orgs = await searchSalesOrgs(res.plan.detectedOrgKeyword);
+        setOrgMatches(orgs || []);
+      }
     } catch (err) {
       setError(err);
     } finally {
@@ -84,7 +95,11 @@ export default function SalesBrief() {
     setGenerating(true);
     setError(null);
     try {
-      const res = await generateBrief(audience, intent.trim() || undefined, toApiFilters(filters));
+      const activeFilters = {
+        ...toApiFilters(filters),
+        ...(selectedOrgId ? { salesOrgId: selectedOrgId } : {}),
+      };
+      const res = await generateBrief(audience, intent.trim() || undefined, activeFilters);
       setResult(res);
     } catch (err) {
       setError(err);
@@ -260,14 +275,53 @@ export default function SalesBrief() {
               <Icon name="sparkles" size={13} />
               AI understood this as
             </div>
-            <p style={{ marginBottom: plan.scopeWarning ? 10 : 0 }}>{plan.understanding}</p>
-            {plan.scopeWarning && (
-              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(231,101,0,0.08)', border: '1px solid rgba(231,101,0,0.2)', borderRadius: 8, color: 'var(--warning)', fontSize: 13 }}>
+            <p style={{ marginBottom: 8 }}>{plan.understanding}</p>
+
+            {/* Org picker — shown when AI detected an org keyword */}
+            {plan.detectedOrgKeyword && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+                  <Icon name="target" size={12} style={{ marginRight: 5 }} />
+                  Select matching sales org to filter data
+                </div>
+                {orgMatches.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+                    No orgs found matching &ldquo;{plan.detectedOrgKeyword}&rdquo; — brief will cover all orgs.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button
+                      className={`builder-range-chip${!selectedOrgId ? ' active' : ''}`}
+                      onClick={() => { setSelectedOrgId(''); setSelectedOrgName(''); }}
+                    >
+                      All orgs
+                    </button>
+                    {orgMatches.map((org) => (
+                      <button
+                        key={org.id}
+                        className={`builder-range-chip${selectedOrgId === org.id ? ' active' : ''}`}
+                        onClick={() => { setSelectedOrgId(org.id); setSelectedOrgName(org.name); }}
+                      >
+                        {org.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedOrgId && (
+                  <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 8, marginBottom: 0 }}>
+                    Brief will be filtered to: <strong>{selectedOrgName}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!plan.detectedOrgKeyword && plan.scopeWarning && (
+              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(231,101,0,0.08)', border: '1px solid rgba(231,101,0,0.2)', borderRadius: 8, color: 'var(--warning)', fontSize: 13, marginBottom: 0 }}>
                 <strong>Scope note:</strong> {plan.scopeWarning}
               </p>
             )}
             {plan.clarificationNeeded && plan.clarificationQuestion && (
-              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(0,112,242,0.06)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8, fontSize: 13 }}>
+              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(0,112,242,0.06)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8, fontSize: 13, marginBottom: 0 }}>
                 <strong>Clarification needed:</strong> {plan.clarificationQuestion}
               </p>
             )}
@@ -282,7 +336,7 @@ export default function SalesBrief() {
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             {plan && (
-              <button className="btn btn-ghost" onClick={() => setPlan(null)} disabled={generating}>
+              <button className="btn btn-ghost" onClick={() => { setPlan(null); setOrgMatches([]); setSelectedOrgId(''); setSelectedOrgName(''); }} disabled={generating}>
                 <Icon name="edit" size={15} />
                 Refine
               </button>

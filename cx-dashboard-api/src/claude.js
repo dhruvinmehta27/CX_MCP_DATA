@@ -222,6 +222,8 @@ Current data filters applied: ${JSON.stringify(availableFilters)}
 Analyze the user's message and return JSON only, no markdown:
 {
   "understanding": string,
+  "detectedOrgKeyword": string|null,
+  "detectedOwnerKeyword": string|null,
   "scopeWarning": string|null,
   "clarificationNeeded": boolean,
   "clarificationQuestion": string|null
@@ -229,7 +231,9 @@ Analyze the user's message and return JSON only, no markdown:
 
 Rules:
 - "understanding": 1-2 sentences starting with "I'll..." describing what brief will be created and for whom.
-- "scopeWarning": if the user mentions a specific org, region, country, division, or owner name BUT no salesOrgId/ownerId filter is set, set this to a warning like "You mentioned 'TSS Germany' but no org filter is active — the brief will cover ALL 59 sales orgs. I'll include Germany-specific commentary where the data allows." Otherwise null.
+- "detectedOrgKeyword": if the user mentions a specific org, region, country or division name (e.g. "TSS Germany", "Germany", "DACH", "North America"), extract the keyword to search with (e.g. "Germany"). Otherwise null.
+- "detectedOwnerKeyword": if the user mentions a specific person/owner name, extract it. Otherwise null.
+- "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter (salesOrgId/ownerId) is active yet, warn the user clearly. Otherwise null.
 - "clarificationNeeded": true only if the request is genuinely ambiguous and needs clarification before proceeding.
 - "clarificationQuestion": if clarificationNeeded, a single clear question to ask the user. Otherwise null.
 `;
