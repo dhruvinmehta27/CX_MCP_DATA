@@ -71,8 +71,9 @@ export async function parseIntent(userRequest, filters = {}) {
   "explanation": string,
   "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null }
 }
-The "explanation" field must be 2-3 sentences in plain English describing what the user asked for, which data sources will be used, and what the report will show. Write it as "I'll..." e.g. "I'll pull your quote pipeline grouped by status for the last 6 months..."
-Current filters from the UI (merge into your filters unless the request overrides them): ${JSON.stringify(filters)}
+The "explanation" field must be 2-3 sentences in plain English describing what the user asked for, which data sources will be used, and what the report will show. Write it as "I'll..." e.g. "I'll pull your quote pipeline grouped by status..."
+IMPORTANT: The user has already selected a date range in the UI (shown in filters below). Do NOT set dateFrom or dateTo in your filters output — always set them to null so the UI range is respected. Only set salesOrgId, ownerId, months, or limit if the request explicitly mentions them.
+Current filters from the UI (date range is fixed): ${JSON.stringify(filters)}
 Today's date: ${new Date().toISOString().slice(0, 10)}
 Request: ${userRequest}`;
 

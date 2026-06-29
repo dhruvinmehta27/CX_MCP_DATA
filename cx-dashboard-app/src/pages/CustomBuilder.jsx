@@ -25,13 +25,13 @@ function builderDateRange(months) {
 const STEPS = ['Define', 'Confirm', 'Build', 'Report'];
 
 const SUGGESTIONS = [
-  'Executive summary of last 12 months pipeline',
+  'Executive summary of pipeline performance',
   'Win rate analysis by sales org',
-  'Top 10 customers by quote value this year',
-  'Quote volume trend — last 12 months',
+  'Top 10 customers by quote value',
+  'Quote volume trend by month',
   'Pipeline value by stage',
   'Revenue breakdown by business type',
-  'Quotes by sales org last quarter',
+  'Quotes by sales org',
   'RFQ status breakdown',
   'Compare this month vs last month',
   'Daily operations summary',

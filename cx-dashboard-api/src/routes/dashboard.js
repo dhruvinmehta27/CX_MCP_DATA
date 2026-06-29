@@ -74,7 +74,8 @@ router.post('/generate', async (req, res, next) => {
     const intent = req.body.intent
       ? sanitizeIntent(req.body.intent)
       : await parseIntent(userRequest, filters);
-    const mergedFilters = { ...filters, ...(intent.filters || {}) };
+    // UI-supplied dates (builder range chips) always win over AI-parsed dates
+    const mergedFilters = { ...(intent.filters || {}), ...filters };
 
     // 2. Call the identified analytics endpoints (in-process, same caching)
     const rawData = {};
