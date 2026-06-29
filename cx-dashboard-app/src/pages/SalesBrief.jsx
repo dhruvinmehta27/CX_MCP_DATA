@@ -1,11 +1,19 @@
 import { useState } from 'react';
+import { subMonths } from 'date-fns';
 import useAuth from '../auth/useAuth';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
 import { getBriefStats, generateBrief } from '../api/dashboard';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
-import { fmtNumber, fmtCurrency, fmtDate } from '../utils/formatters';
+import { fmtNumber, fmtCurrency, fmtDate, isoDate } from '../utils/formatters';
+
+const BRIEF_DATE_PRESETS = [
+  { label: 'Last 1M', months: 1 },
+  { label: 'Last 3M', months: 3 },
+  { label: 'Last 6M', months: 6, default: true },
+  { label: 'Last 1Y', months: 12 },
+];
 
 const AUDIENCES = [
   { id: 'board', icon: 'briefcase', label: 'Board / Executive', desc: 'Strategic overview, revenue focus' },
@@ -36,14 +44,22 @@ function StatTile({ value, label, exact = true }) {
 
 export default function SalesBrief() {
   const { user } = useAuth();
-  const { filters, version } = useFilters();
+  const { filters: globalFilters } = useFilters();
+  const [selectedMonths, setSelectedMonths] = useState(6);
   const [audience, setAudience] = useState('board');
   const [intent, setIntent] = useState('');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
 
-  const stats = useAnalytics(() => getBriefStats(toApiFilters(filters)), [version]);
+  const now = new Date();
+  const filters = {
+    ...globalFilters,
+    dateFrom: isoDate(subMonths(now, selectedMonths)),
+    dateTo: isoDate(now),
+  };
+
+  const stats = useAnalytics(() => getBriefStats(toApiFilters(filters)), [selectedMonths]);
   const s = stats.data;
   // exactness defaults to true when the API doesn't supply a flag (older builds)
   const ex = (key) => s?.exact?.[key] !== false;
@@ -138,6 +154,23 @@ export default function SalesBrief() {
   // ---------- Setup screen ----------
   return (
     <div className="page builder-page">
+      <div className="builder-range-bar">
+        <Icon name="calendar" size={14} style={{ color: 'var(--text-secondary)' }} />
+        <span className="builder-range-label">Data range:</span>
+        {BRIEF_DATE_PRESETS.map((p) => (
+          <button
+            key={p.months}
+            className={`builder-range-chip${selectedMonths === p.months ? ' active' : ''}`}
+            onClick={() => setSelectedMonths(p.months)}
+            disabled={generating}
+          >
+            {p.label}
+          </button>
+        ))}
+        <span className="builder-range-hint">
+          {filters.dateFrom} → {filters.dateTo}
+        </span>
+      </div>
       <div className="builder-hero" style={{ paddingBottom: 0 }}>
         <div className="builder-badge">
           <Icon name="file-text" size={13} />
