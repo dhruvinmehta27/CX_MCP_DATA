@@ -209,6 +209,39 @@ export async function generateChartMeta(data, userRequest) {
   }
 }
 
+/**
+ * Parse a Sales Brief intent to surface AI understanding and flag ambiguities
+ * (e.g. user mentions a specific org/region but no salesOrgId filter is set).
+ */
+export async function parseBriefIntent({ audience, intent, availableFilters = {} }) {
+  const prompt = `A user is generating a sales brief for Trelleborg Sealing Solutions.
+Audience: ${audience}
+User message (optional intent/focus): "${intent || ''}"
+Current data filters applied: ${JSON.stringify(availableFilters)}
+
+Analyze the user's message and return JSON only, no markdown:
+{
+  "understanding": string,
+  "scopeWarning": string|null,
+  "clarificationNeeded": boolean,
+  "clarificationQuestion": string|null
+}
+
+Rules:
+- "understanding": 1-2 sentences starting with "I'll..." describing what brief will be created and for whom.
+- "scopeWarning": if the user mentions a specific org, region, country, division, or owner name BUT no salesOrgId/ownerId filter is set, set this to a warning like "You mentioned 'TSS Germany' but no org filter is active — the brief will cover ALL 59 sales orgs. I'll include Germany-specific commentary where the data allows." Otherwise null.
+- "clarificationNeeded": true only if the request is genuinely ambiguous and needs clarification before proceeding.
+- "clarificationQuestion": if clarificationNeeded, a single clear question to ask the user. Otherwise null.
+`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 600,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return parseJsonResponse(extractText(response));
+}
+
 const AUDIENCE_TONES = {
   board: 'Board / Executive — strategic overview, revenue focus. Concise, confident, no operational minutiae.',
   regional: 'Regional Manager — operational detail, owner performance, bottlenecks, concrete next actions.',

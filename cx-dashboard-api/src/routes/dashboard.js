@@ -4,7 +4,7 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta } from '../claude.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent } from '../claude.js';
 import { ENDPOINT_HANDLERS, briefStats, briefData } from '../analytics-service.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -21,6 +21,18 @@ router.get('/brief-stats', async (req, res, next) => {
     const { data, cached } = await briefStats(pickFilters(req.query), req.userJwt, req.userEmail);
     res.set('X-Cache', cached ? 'HIT' : 'MISS');
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Parse brief intent — returns AI understanding + scope warnings before generating
+router.post('/brief-plan', async (req, res, next) => {
+  try {
+    const { audience, intent, filters = {} } = req.body || {};
+    if (!audience) return res.status(400).json({ error: 'audience is required' });
+    const plan = await parseBriefIntent({ audience, intent, availableFilters: filters });
+    res.json({ plan });
   } catch (err) {
     next(err);
   }

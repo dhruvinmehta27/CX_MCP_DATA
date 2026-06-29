@@ -3,7 +3,7 @@ import { subMonths } from 'date-fns';
 import useAuth from '../auth/useAuth';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import useAnalytics from '../hooks/useAnalytics';
-import { getBriefStats, generateBrief } from '../api/dashboard';
+import { getBriefStats, planBrief, generateBrief } from '../api/dashboard';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
 import { fmtNumber, fmtCurrency, fmtDate, isoDate } from '../utils/formatters';
@@ -48,6 +48,8 @@ export default function SalesBrief() {
   const [selectedMonths, setSelectedMonths] = useState(6);
   const [audience, setAudience] = useState('board');
   const [intent, setIntent] = useState('');
+  const [planning, setPlanning] = useState(false);
+  const [plan, setPlan] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -63,6 +65,20 @@ export default function SalesBrief() {
   const s = stats.data;
   // exactness defaults to true when the API doesn't supply a flag (older builds)
   const ex = (key) => s?.exact?.[key] !== false;
+
+  const analyze = async () => {
+    setPlanning(true);
+    setError(null);
+    setPlan(null);
+    try {
+      const res = await planBrief(audience, intent.trim() || undefined, toApiFilters(filters));
+      setPlan(res.plan);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setPlanning(false);
+    }
+  };
 
   const generate = async () => {
     setGenerating(true);
@@ -190,7 +206,7 @@ export default function SalesBrief() {
             <button
               key={a.id}
               className={`audience-card${audience === a.id ? ' selected' : ''}`}
-              onClick={() => setAudience(a.id)}
+              onClick={() => { setAudience(a.id); setPlan(null); }}
             >
               <div className="audience-icon">
                 <Icon name={a.icon} size={20} />
@@ -209,7 +225,7 @@ export default function SalesBrief() {
           style={{ border: '1px solid var(--field-border)', borderRadius: 10, minHeight: 80 }}
           placeholder={'e.g. "Highlight our strong Q3 pipeline and address the stale deals risk" or leave blank for a full overview'}
           value={intent}
-          onChange={(e) => setIntent(e.target.value)}
+          onChange={(e) => { setIntent(e.target.value); setPlan(null); }}
         />
 
         <label className="brief-setup-label">Data included in this brief</label>
@@ -237,16 +253,52 @@ export default function SalesBrief() {
           </div>
         )}
 
+        {/* AI understanding panel — shown after Analyze */}
+        {plan && (
+          <div className="plan-explanation" style={{ marginTop: 16 }}>
+            <div className="plan-explanation-label">
+              <Icon name="sparkles" size={13} />
+              AI understood this as
+            </div>
+            <p style={{ marginBottom: plan.scopeWarning ? 10 : 0 }}>{plan.understanding}</p>
+            {plan.scopeWarning && (
+              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(231,101,0,0.08)', border: '1px solid rgba(231,101,0,0.2)', borderRadius: 8, color: 'var(--warning)', fontSize: 13 }}>
+                <strong>Scope note:</strong> {plan.scopeWarning}
+              </p>
+            )}
+            {plan.clarificationNeeded && plan.clarificationQuestion && (
+              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(0,112,242,0.06)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8, fontSize: 13 }}>
+                <strong>Clarification needed:</strong> {plan.clarificationQuestion}
+              </p>
+            )}
+          </div>
+        )}
+
         {error && <EmptyState title="Brief generation failed" message={error.message} error />}
 
         <div className="brief-setup-footer">
           <span className="builder-hint">
             {stats.loading ? 'Loading data…' : `${fmtNumber(s?.totalOpportunities)} records loaded from C4C`}
           </span>
-          <button className="btn" onClick={generate} disabled={generating || stats.loading}>
-            <Icon name="file-text" size={15} className={generating ? 'spinning' : undefined} />
-            {generating ? 'Writing brief…' : 'Generate Brief'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {plan && (
+              <button className="btn btn-ghost" onClick={() => setPlan(null)} disabled={generating}>
+                <Icon name="edit" size={15} />
+                Refine
+              </button>
+            )}
+            {!plan ? (
+              <button className="btn" onClick={analyze} disabled={planning || stats.loading}>
+                <Icon name="sparkles" size={15} className={planning ? 'spinning' : undefined} />
+                {planning ? 'Analyzing…' : 'Analyze & Review'}
+              </button>
+            ) : (
+              <button className="btn" onClick={generate} disabled={generating || plan.clarificationNeeded}>
+                <Icon name="file-text" size={15} className={generating ? 'spinning' : undefined} />
+                {generating ? 'Writing brief…' : 'Generate Brief'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
