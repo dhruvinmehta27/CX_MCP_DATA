@@ -4,7 +4,7 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, sanitizeIntent, generateChartConfig, generateInlineHtml, generateBrief, generateChartMeta } from '../claude.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta } from '../claude.js';
 import { ENDPOINT_HANDLERS, briefStats, briefData } from '../analytics-service.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -87,16 +87,15 @@ router.post('/generate', async (req, res, next) => {
       })
     );
 
-    // 3. Generate the Recharts config from the data
-    const chartConfig = await generateChartConfig(intent.chartType, rawData, userRequest);
+    // 3. Generate 4 complementary charts from the data
+    const multi = await generateMultiCharts(rawData, userRequest);
 
     res.json({
-      chartConfig,
+      charts: multi.charts || [],
       rawData,
-      title: chartConfig.title || intent.title,
-      summary: chartConfig.summary || '',
-      insights: chartConfig.insights || [],
-      suggestedChartType: chartConfig.chartType || intent.chartType,
+      title: multi.overallTitle || intent.title,
+      summary: multi.overallSummary || '',
+      insights: multi.insights || [],
     });
   } catch (err) {
     next(err);

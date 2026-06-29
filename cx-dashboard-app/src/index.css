@@ -1440,3 +1440,12 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
 .welcome-tile.accent-orange { --ta: #E76500; --tabg: rgba(231, 101, 0, 0.10); }
 .welcome-tile.accent-purple { --ta: #925ACE; --tabg: rgba(146, 90, 206, 0.10); }
 .welcome-tile.accent-pink   { --ta: #FA4F96; --tabg: rgba(250, 79, 150, 0.10); }
+
+/* AI Report Builder — plan explanation box */
+.plan-explanation { background: var(--primary-tint, rgba(0,112,242,0.08)); border: 1px solid rgba(0,112,242,0.2); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 18px; }
+.plan-explanation-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary); margin-bottom: 8px; }
+.plan-explanation p { font-size: 14px; color: var(--text); line-height: 1.6; margin: 0; }
+
+/* AI Report Builder — 4-chart grid */
+.report-charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+@media (max-width: 900px) { .report-charts-grid { grid-template-columns: 1fr; } }

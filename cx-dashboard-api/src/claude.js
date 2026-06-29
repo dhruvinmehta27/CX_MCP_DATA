@@ -68,8 +68,10 @@ export async function parseIntent(userRequest, filters = {}) {
   "title": string,
   "xKey": string,
   "yKeys": [string],
+  "explanation": string,
   "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null }
 }
+The "explanation" field must be 2-3 sentences in plain English describing what the user asked for, which data sources will be used, and what the report will show. Write it as "I'll..." e.g. "I'll pull your quote pipeline grouped by status for the last 6 months..."
 Current filters from the UI (merge into your filters unless the request overrides them): ${JSON.stringify(filters)}
 Today's date: ${new Date().toISOString().slice(0, 10)}
 Request: ${userRequest}`;
@@ -101,6 +103,44 @@ Data: ${JSON.stringify(data).slice(0, 30_000)}
 Colors available: ["#E4002B","#FF6B6B","#FFB347","#4ECDC4","#45B7D1","#96CEB4"]
 User request: ${userRequest}
 Rules: keep "data" suitable for direct rendering (flat objects, numeric values as numbers). Provide 2-4 concise business insights.`;
+
+  const response = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return parseJsonResponse(extractText(response));
+}
+
+/**
+ * Generate 4 complementary chart configs from the same dataset.
+ */
+export async function generateMultiCharts(data, userRequest) {
+  const prompt = `You are a business analytics expert. Given the data below, generate exactly 4 complementary chart configs that together give a complete picture of the analytics request.
+Return JSON only, no markdown:
+{
+  "charts": [
+    {
+      "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel",
+      "data": [...],
+      "xKey": string,
+      "yKeys": [{ "key": string, "color": string, "label": string }],
+      "title": string,
+      "summary": string
+    }
+  ],
+  "insights": [string],
+  "overallTitle": string,
+  "overallSummary": string
+}
+Rules:
+- Each chart must show a DIFFERENT angle/dimension of the data (e.g. volume, value, trend, breakdown).
+- Use varied chart types across the 4 (not all bars).
+- Keep "data" as flat objects with numeric values as numbers.
+- Provide 3-5 concise business insights in the "insights" array.
+- Colors: ["#E4002B","#FF6B6B","#FFB347","#4ECDC4","#45B7D1","#96CEB4","#A29BFE","#FD79A8"]
+Data: ${JSON.stringify(data).slice(0, 30_000)}
+User request: ${userRequest}`;
 
   const response = await getClient().messages.create({
     model: MODEL,

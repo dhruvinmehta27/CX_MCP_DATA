@@ -12,12 +12,18 @@ const DEFAULT_TYPES = {
   opportunity: 'COD_OPPORTUNITY',
 };
 
+const RFQ_WOC_ID = '/Y1WQ4AMSY_MAIN/SRC/Custom/BO/RFQ/RFQ_WCF.WCF.uiwoc';
+
 export function c4cObjectUrl(type, objectId) {
   if (!objectId) return null;
   const template = (cfg.C4C_LINK_TEMPLATES || {})[type];
   if (template) return template.replace('{id}', objectId);
   const base = cfg.C4C_UI_BASE;
+  if (!base) return null;
+  if (type === 'rfq') {
+    return `${base}/sap/ap/ui/clogin?woc-id=${encodeURIComponent(RFQ_WOC_ID)}&object-action=DISPLAY&object-value=${objectId}`;
+  }
   const boType = DEFAULT_TYPES[type];
-  if (!base || !boType) return null;
+  if (!boType) return null;
   return `${base}/sap/ap/ui/clogin?object-type=${boType}&object-action=DISPLAY&object-value=${objectId}`;
 }

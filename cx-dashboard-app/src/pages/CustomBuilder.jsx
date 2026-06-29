@@ -75,6 +75,7 @@ export default function CustomBuilder() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showData, setShowData] = useState(false);
   const chartRef = useRef(null);
 
   const plan = async (text) => {
@@ -178,27 +179,38 @@ export default function CustomBuilder() {
 
       {/* ---------- Step 2: CONFIRM ---------- */}
       {step === 1 && intent && (
-        <div className="confirm-wrap">
-          <div className="card plan-card">
-            <div className="plan-request">“{request}”</div>
-            <div className="plan-grid">
-              <div className="plan-item">
+        <div className=”confirm-wrap”>
+          <div className=”card plan-card”>
+            <div className=”plan-request”>”{request}”</div>
+
+            {intent.explanation && (
+              <div className=”plan-explanation”>
+                <div className=”plan-explanation-label”>
+                  <Icon name=”sparkles” size={13} />
+                  AI understood this as
+                </div>
+                <p>{intent.explanation}</p>
+              </div>
+            )}
+
+            <div className=”plan-grid”>
+              <div className=”plan-item”>
                 <label>Report title</label>
                 <div>{intent.title || 'Untitled report'}</div>
               </div>
-              <div className="plan-item">
+              <div className=”plan-item”>
                 <label>Chart type</label>
                 <div style={{ textTransform: 'capitalize' }}>{intent.chartType || 'bar'}</div>
               </div>
-              <div className="plan-item">
+              <div className=”plan-item”>
                 <label>Data sources</label>
-                <div className="plan-chips">
+                <div className=”plan-chips”>
                   {intent.endpoints.map((e) => (
-                    <span key={e} className="plan-chip">{ENDPOINT_LABELS[e] || e}</span>
+                    <span key={e} className=”plan-chip”>{ENDPOINT_LABELS[e] || e}</span>
                   ))}
                 </div>
               </div>
-              <div className="plan-item">
+              <div className=”plan-item”>
                 <label>Period</label>
                 <div>
                   {(intent.filters?.dateFrom || filters.dateFrom)} → {(intent.filters?.dateTo || filters.dateTo)}
@@ -208,16 +220,16 @@ export default function CustomBuilder() {
               </div>
             </div>
             {error && (
-              <EmptyState title="Build failed" message={error.message} error />
+              <EmptyState title=”Build failed” message={error.message} error />
             )}
-            <div className="plan-actions">
-              <button className="btn btn-ghost" onClick={restart}>
-                <Icon name="arrow-left" size={15} />
-                Back
+            <div className=”plan-actions”>
+              <button className=”btn btn-ghost” onClick={restart}>
+                <Icon name=”edit” size={15} />
+                Refine request
               </button>
-              <button className="btn" onClick={build}>
+              <button className=”btn” onClick={build}>
                 Build report
-                <Icon name="arrow-right" size={15} />
+                <Icon name=”arrow-right” size={15} />
               </button>
             </div>
           </div>
@@ -243,6 +255,12 @@ export default function CustomBuilder() {
                 {result.summary && <div className="chart-card-subtitle">{result.summary}</div>}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
+                {table.rows.length > 0 && (
+                  <button className="btn btn-ghost" onClick={() => setShowData((v) => !v)}>
+                    <Icon name={showData ? 'eye-off' : 'eye'} size={15} />
+                    {showData ? 'Hide data' : 'Show data'}
+                  </button>
+                )}
                 <button className="btn btn-ghost" onClick={exportPng}>
                   <Icon name="download" size={15} />
                   Export PNG
@@ -253,8 +271,18 @@ export default function CustomBuilder() {
                 </button>
               </div>
             </div>
-            <div ref={chartRef} style={{ padding: 8 }}>
-              <DynamicChart config={result.chartConfig} height={400} />
+            <div ref={chartRef} className="report-charts-grid" style={{ padding: 8 }}>
+              {(result.charts || []).map((chart, i) => (
+                <div key={i} className="card" style={{ margin: 0 }}>
+                  {chart.title && (
+                    <div className="chart-card-title" style={{ marginBottom: 8, fontSize: 13 }}>{chart.title}</div>
+                  )}
+                  <DynamicChart config={chart} height={280} />
+                  {chart.summary && (
+                    <div className="chart-card-subtitle" style={{ marginTop: 6 }}>{chart.summary}</div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -272,7 +300,7 @@ export default function CustomBuilder() {
             </div>
           )}
 
-          {table.rows.length > 0 && (
+          {showData && table.rows.length > 0 && (
             <div className="card">
               <div className="chart-card-title" style={{ marginBottom: 10 }}>Data</div>
               <DataTable columns={table.columns} data={table.rows} pageSize={50} />
