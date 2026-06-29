@@ -181,7 +181,7 @@ export default function CustomBuilder() {
       {step === 1 && intent && (
         <div className=”confirm-wrap”>
           <div className=”card plan-card”>
-            <div className=”plan-request”>”{request}”</div>
+            <div className=”plan-request”>&ldquo;{request}&rdquo;</div>
 
             {intent.explanation && (
               <div className=”plan-explanation”>
