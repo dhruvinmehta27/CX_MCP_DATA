@@ -179,38 +179,38 @@ export default function CustomBuilder() {
 
       {/* ---------- Step 2: CONFIRM ---------- */}
       {step === 1 && intent && (
-        <div className=”confirm-wrap”>
-          <div className=”card plan-card”>
-            <div className=”plan-request”>&ldquo;{request}&rdquo;</div>
+        <div className="confirm-wrap">
+          <div className="card plan-card">
+            <div className="plan-request">&ldquo;{request}&rdquo;</div>
 
             {intent.explanation && (
-              <div className=”plan-explanation”>
-                <div className=”plan-explanation-label”>
-                  <Icon name=”sparkles” size={13} />
+              <div className="plan-explanation">
+                <div className="plan-explanation-label">
+                  <Icon name="sparkles" size={13} />
                   AI understood this as
                 </div>
                 <p>{intent.explanation}</p>
               </div>
             )}
 
-            <div className=”plan-grid”>
-              <div className=”plan-item”>
+            <div className="plan-grid">
+              <div className="plan-item">
                 <label>Report title</label>
                 <div>{intent.title || 'Untitled report'}</div>
               </div>
-              <div className=”plan-item”>
+              <div className="plan-item">
                 <label>Chart type</label>
                 <div style={{ textTransform: 'capitalize' }}>{intent.chartType || 'bar'}</div>
               </div>
-              <div className=”plan-item”>
+              <div className="plan-item">
                 <label>Data sources</label>
-                <div className=”plan-chips”>
+                <div className="plan-chips">
                   {intent.endpoints.map((e) => (
-                    <span key={e} className=”plan-chip”>{ENDPOINT_LABELS[e] || e}</span>
+                    <span key={e} className="plan-chip">{ENDPOINT_LABELS[e] || e}</span>
                   ))}
                 </div>
               </div>
-              <div className=”plan-item”>
+              <div className="plan-item">
                 <label>Period</label>
                 <div>
                   {(intent.filters?.dateFrom || filters.dateFrom)} → {(intent.filters?.dateTo || filters.dateTo)}
@@ -220,16 +220,16 @@ export default function CustomBuilder() {
               </div>
             </div>
             {error && (
-              <EmptyState title=”Build failed” message={error.message} error />
+              <EmptyState title="Build failed" message={error.message} error />
             )}
-            <div className=”plan-actions”>
-              <button className=”btn btn-ghost” onClick={restart}>
-                <Icon name=”edit” size={15} />
+            <div className="plan-actions">
+              <button className="btn btn-ghost" onClick={restart}>
+                <Icon name="edit" size={15} />
                 Refine request
               </button>
-              <button className=”btn” onClick={build}>
+              <button className="btn" onClick={build}>
                 Build report
-                <Icon name=”arrow-right” size={15} />
+                <Icon name="arrow-right" size={15} />
               </button>
             </div>
           </div>
