@@ -46,8 +46,8 @@ function AuthGate({ children }) {
     return (
       <div className="auth-splash">
         <div className="auth-splash-card">
-          <div className="auth-splash-logo">TSS</div>
-          <h1>Dashboard &amp; Analytics</h1>
+          <img src="/Company_Logo.png" alt="Trelleborg" className="auth-splash-logo-img" />
+          <h1>Sales Intelligence</h1>
           <p>Signing you in with Microsoft…</p>
           <div className="auth-spinner" />
         </div>
