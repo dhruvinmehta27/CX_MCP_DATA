@@ -32,7 +32,7 @@ export default function AccessGate({ children }) {
       <div className="auth-splash">
         <div className="auth-splash-card">
           <img src="/Company_Logo.png" alt="Trelleborg" className="auth-splash-logo-img" />
-          <h1>Sales Intelligence</h1>
+          <h1>CX AI Intelligence</h1>
           <p>Checking your access…</p>
           <div className="auth-spinner" />
         </div>
