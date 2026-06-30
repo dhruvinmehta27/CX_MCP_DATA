@@ -32,7 +32,7 @@ export default function Dashboard() {
         <div className="welcome-brand">
           <img src="/Company_Logo.png" alt="Trelleborg" className="brand-logo-img" />
           <span className="welcome-brand-name">
-            Trelleborg <b>Sales Intelligence</b>
+            Trelleborg <b>CX AI Intelligence</b>
           </span>
         </div>
         {name && (
@@ -47,7 +47,7 @@ export default function Dashboard() {
 
       <main className="welcome-main">
         <div className="welcome-hero">
-          <span className="welcome-eyebrow">Sales Dashboard &amp; Analytics</span>
+          <span className="welcome-eyebrow">CX AI Intelligence</span>
           <h1>
             {greeting}, <span className="welcome-name">{firstName}</span>.
           </h1>
