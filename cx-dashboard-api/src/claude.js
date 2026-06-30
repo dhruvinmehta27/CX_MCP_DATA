@@ -72,6 +72,8 @@ export async function parseIntent(userRequest, filters = {}) {
   "explanation": string,
   "detectedPeriod": string|null,
   "detectedMonths": number|null,
+  "detectedDateFrom": "YYYY-MM-DD"|null,
+  "detectedDateTo": "YYYY-MM-DD"|null,
   "detectedOrgName": string|null,
   "detectedOwnerName": string|null,
   "clarificationNeeded": boolean,
@@ -91,8 +93,11 @@ ENDPOINT SELECTION RULES — pick the most specific match:
 - For broad requests mentioning both quotes and pipeline → use multiple endpoints
 
 DATE PERIOD RULES:
-- If the user explicitly mentions a time period (e.g. "last 1 month", "last 30 days", "this quarter"), set detectedPeriod to that exact phrase and detectedMonths to equivalent months (1=month/30days, 3=quarter, 6=half-year, 12=year). Otherwise both null.
+- If user mentions a time period, set detectedPeriod to the human label (e.g. "Q4 2025", "last month").
+- detectedMonths: for relative periods only (1=month/30days, 3=quarter, 6=half-year, 12=year). null for specific calendar periods.
+- detectedDateFrom / detectedDateTo: for specific calendar periods calculate exact ISO dates. Examples: "Q4 2025" → 2025-10-01/2025-12-31, "Q1 2026" → 2026-01-01/2026-03-31, "H1 2025" → 2025-01-01/2025-06-30, "January 2026" → 2026-01-01/2026-01-31. Set to null if only a relative period (e.g. "last month").
 - Do NOT set dateFrom or dateTo in filters — always null. The UI will resolve the conflict.
+Today's date for relative period calculation: ${new Date().toISOString().slice(0, 10)}
 
 ORG & OWNER RULES:
 - detectedOrgName: if user mentions a specific org/region/country (e.g. "CSC Germany", "Germany", "DACH"), set to the name as mentioned. Also set filters.salesOrgId to the same value.
@@ -254,21 +259,22 @@ Analyze the user's message and return JSON only, no markdown:
   "detectedOrgKeyword": string|null,
   "detectedOwnerKeyword": string|null,
   "detectedPeriod": string|null,
-  "detectedMonths": number|null,
+  "detectedDateFrom": "YYYY-MM-DD"|null,
+  "detectedDateTo": "YYYY-MM-DD"|null,
   "scopeWarning": string|null,
   "clarificationNeeded": boolean,
   "clarificationQuestion": string|null
 }
 
 Rules:
-- "understanding": 2-3 sentences starting with "I'll..." describing what brief will cover, which filters/org apply, and audience tone.
+- "understanding": 2-3 sentences starting with "I'll..." describing what brief will cover, which filters/org apply, and audience tone. Do NOT mention a data period — the user will confirm that separately.
 - "detectedOrgKeyword": if user mentions a specific org, region, country or division (e.g. "TSS Germany", "Germany", "DACH"), extract the search keyword. Otherwise null.
 - "detectedOwnerKeyword": if user mentions a specific person/owner name, extract it. Otherwise null.
-- "detectedPeriod": if user explicitly mentions a time period (e.g. "last month", "Q3", "last 30 days"), set to that phrase. Otherwise null.
-- "detectedMonths": equivalent months (1=month/30days, 3=quarter, 6=half-year, 12=year). Otherwise null.
-- "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter (salesOrgId/ownerId) is active yet, warn clearly. Otherwise null.
-- "clarificationNeeded": true only if the request is genuinely ambiguous and needs clarification before proceeding.
-- "clarificationQuestion": if clarificationNeeded, a single clear question to ask the user. Otherwise null.
+- "detectedPeriod": if user explicitly mentions a time period (e.g. "Q4 2025", "last month", "H1 2026"), set to the human label. Otherwise null.
+- "detectedDateFrom" / "detectedDateTo": if user mentions a specific calendar period, calculate the exact ISO dates. Examples: "Q4 2025" → 2025-10-01 / 2025-12-31, "Q1 2026" → 2026-01-01 / 2026-03-31, "last month" from today (${new Date().toISOString().slice(0,10)}) → first/last of previous month, "H1 2025" → 2025-01-01 / 2025-06-30. Set both to null if no specific period mentioned.
+- "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter is active yet, warn clearly. Otherwise null.
+- "clarificationNeeded": true only if genuinely ambiguous.
+- "clarificationQuestion": single clear question if clarificationNeeded.
 `;
 
   const response = await getClient().messages.create({
@@ -310,6 +316,7 @@ Rules:
 - 3-5 keyTakeaways, each a single punchy sentence.
 - Every number must come from the data below — never invent figures.
 - Currency is EUR unless the data says otherwise.
+- IMPORTANT: The official data period is "${period}". Use ONLY this label in the subtitle and anywhere you reference the time range. Do NOT calculate or invent an alternative period label from the data.
 Data: ${JSON.stringify(data).slice(0, 40_000)}`;
 
   const response = await getClient().messages.create({

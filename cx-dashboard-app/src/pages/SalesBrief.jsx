@@ -56,15 +56,19 @@ export default function SalesBrief() {
   const [selectedOrgName, setSelectedOrgName] = useState('');
   const [generating, setGenerating] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
+  const [overrideDateFrom, setOverrideDateFrom] = useState(null);
+  const [overrideDateTo, setOverrideDateTo] = useState(null);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
 
   const now = new Date();
+  // When user accepts the AI-detected period, use its exact dates (for specific quarters)
+  // or fall back to relative months (for "last 3 months" style).
   const effectiveMonths = (useRequestPeriod && plan?.detectedMonths) ? plan.detectedMonths : selectedMonths;
   const filters = {
     ...globalFilters,
-    dateFrom: isoDate(subMonths(now, effectiveMonths)),
-    dateTo: isoDate(now),
+    dateFrom: (useRequestPeriod && overrideDateFrom) ? overrideDateFrom : isoDate(subMonths(now, effectiveMonths)),
+    dateTo: (useRequestPeriod && overrideDateTo) ? overrideDateTo : isoDate(now),
   };
 
   const stats = useAnalytics(() => getBriefStats(toApiFilters(filters)), [selectedMonths]);
@@ -80,6 +84,8 @@ export default function SalesBrief() {
     setSelectedOrgId('');
     setSelectedOrgName('');
     setUseRequestPeriod(false);
+    setOverrideDateFrom(null);
+    setOverrideDateTo(null);
     try {
       const res = await planBrief(audience, intent.trim() || undefined, toApiFilters(filters));
       setPlan(res.plan);
@@ -105,7 +111,8 @@ export default function SalesBrief() {
         ...(selectedOrgId ? { salesOrgId: selectedOrgId } : {}),
       };
       const res = await generateBrief(audience, intent.trim() || undefined, activeFilters);
-      setResult(res);
+      // Store the period actually used so the document header is authoritative
+      setResult({ ...res, usedDateFrom: filters.dateFrom, usedDateTo: filters.dateTo });
     } catch (err) {
       setError(err);
     } finally {
@@ -115,8 +122,9 @@ export default function SalesBrief() {
 
   // ---------- Generated brief (print-ready document) ----------
   if (result) {
-    const { brief } = result;
+    const { brief, usedDateFrom, usedDateTo } = result;
     const audienceLabel = AUDIENCES.find((a) => a.id === audience)?.label || audience;
+    const periodLabel = usedDateFrom && usedDateTo ? `${usedDateFrom} → ${usedDateTo}` : filters.dateFrom + ' → ' + filters.dateTo;
     return (
       <div className="page">
         <div className="brief-toolbar no-print">
@@ -138,7 +146,7 @@ export default function SalesBrief() {
               <span>
                 {audienceLabel} · Prepared by {user?.name || user?.username} · {fmtDate(new Date())}
               </span>
-              <span>Period: {filters.dateFrom} → {filters.dateTo}</span>
+              <span>Period: {periodLabel}</span>
             </div>
           </div>
 
@@ -283,7 +291,7 @@ export default function SalesBrief() {
             <p style={{ marginBottom: 8 }}>{plan.understanding}</p>
 
             {/* Date conflict */}
-            {plan.detectedMonths && plan.detectedMonths !== effectiveMonths && (
+            {plan.detectedPeriod && (
               <div className="date-conflict-banner" style={{ marginTop: 10 }}>
                 <Icon name="alert-triangle" size={15} />
                 <span>
@@ -292,13 +300,18 @@ export default function SalesBrief() {
                 <div className="date-conflict-actions">
                   <button
                     className={`builder-range-chip${useRequestPeriod ? ' active' : ''}`}
-                    onClick={() => setUseRequestPeriod(true)}
+                    onClick={() => {
+                      setUseRequestPeriod(true);
+                      if (plan.detectedDateFrom) setOverrideDateFrom(plan.detectedDateFrom);
+                      if (plan.detectedDateTo) setOverrideDateTo(plan.detectedDateTo);
+                    }}
                   >
                     Use &ldquo;{plan.detectedPeriod}&rdquo;
+                    {plan.detectedDateFrom ? ` (${plan.detectedDateFrom} → ${plan.detectedDateTo})` : ''}
                   </button>
                   <button
                     className={`builder-range-chip${!useRequestPeriod ? ' active' : ''}`}
-                    onClick={() => setUseRequestPeriod(false)}
+                    onClick={() => { setUseRequestPeriod(false); setOverrideDateFrom(null); setOverrideDateTo(null); }}
                   >
                     Keep Last {selectedMonths}M
                   </button>

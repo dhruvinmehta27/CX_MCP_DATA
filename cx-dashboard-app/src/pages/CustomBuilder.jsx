@@ -103,6 +103,8 @@ export default function CustomBuilder() {
   const [busy, setBusy] = useState(false);
   const [showData, setShowData] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
+  const [overrideDateFrom, setOverrideDateFrom] = useState(null);
+  const [overrideDateTo, setOverrideDateTo] = useState(null);
   const [editedTitle, setEditedTitle] = useState('');
   const [orgMatches, setOrgMatches] = useState([]);
   const [selectedOrgId, setSelectedOrgId] = useState('');
@@ -110,9 +112,14 @@ export default function CustomBuilder() {
   const chartRef = useRef(null);
 
   // Builder uses its own fixed date range, not the global FilterBar.
-  // If user accepted the AI-detected period, use that instead of the chip selection.
+  // If user accepted the AI-detected period use exact dates (for quarters) or relative months.
   const effectiveMonths = (useRequestPeriod && intent?.detectedMonths) ? intent.detectedMonths : selectedMonths;
-  const filters = { ...globalFilters, ...builderDateRange(effectiveMonths) };
+  const baseRange = builderDateRange(effectiveMonths);
+  const filters = {
+    ...globalFilters,
+    dateFrom: (useRequestPeriod && overrideDateFrom) ? overrideDateFrom : baseRange.dateFrom,
+    dateTo: (useRequestPeriod && overrideDateTo) ? overrideDateTo : baseRange.dateTo,
+  };
 
   const plan = async (text) => {
     const userRequest = (text ?? request).trim();
@@ -169,6 +176,8 @@ export default function CustomBuilder() {
     setResult(null);
     setError(null);
     setUseRequestPeriod(false);
+    setOverrideDateFrom(null);
+    setOverrideDateTo(null);
     setEditedTitle('');
     setOrgMatches([]);
     setSelectedOrgId('');
@@ -270,7 +279,7 @@ export default function CustomBuilder() {
               </div>
             )}
 
-            {intent.detectedMonths && intent.detectedMonths !== effectiveMonths && (
+            {intent.detectedPeriod && (
               <div className="date-conflict-banner">
                 <Icon name="alert-triangle" size={15} />
                 <span>
@@ -279,13 +288,18 @@ export default function CustomBuilder() {
                 <div className="date-conflict-actions">
                   <button
                     className={`builder-range-chip${useRequestPeriod ? ' active' : ''}`}
-                    onClick={() => setUseRequestPeriod(true)}
+                    onClick={() => {
+                      setUseRequestPeriod(true);
+                      if (intent.detectedDateFrom) setOverrideDateFrom(intent.detectedDateFrom);
+                      if (intent.detectedDateTo) setOverrideDateTo(intent.detectedDateTo);
+                    }}
                   >
                     Use &ldquo;{intent.detectedPeriod}&rdquo;
+                    {intent.detectedDateFrom ? ` (${intent.detectedDateFrom} → ${intent.detectedDateTo})` : ''}
                   </button>
                   <button
                     className={`builder-range-chip${!useRequestPeriod ? ' active' : ''}`}
-                    onClick={() => setUseRequestPeriod(false)}
+                    onClick={() => { setUseRequestPeriod(false); setOverrideDateFrom(null); setOverrideDateTo(null); }}
                   >
                     Keep Last {selectedMonths}M
                   </button>
