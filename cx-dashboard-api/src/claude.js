@@ -48,7 +48,8 @@ function parseJsonResponse(text) {
 
 const VALID_ENDPOINTS = [
   'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
-  'opportunities/pipeline', 'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
+  'opportunities/pipeline', 'opportunities/created-trend', 'opportunities/by-sales-org',
+  'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
 ];
 
 export function sanitizeIntent(intent = {}) {
@@ -63,18 +64,32 @@ export function sanitizeIntent(intent = {}) {
 export async function parseIntent(userRequest, filters = {}) {
   const prompt = `Parse this analytics request and return JSON only, no markdown:
 {
-  "endpoints": ["quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
+  "endpoints": [one or more from: "quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"opportunities/created-trend"|"opportunities/by-sales-org"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
   "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel",
   "title": string,
   "xKey": string,
   "yKeys": [string],
   "explanation": string,
+  "detectedPeriod": string|null,
+  "detectedMonths": number|null,
   "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null }
 }
-The "explanation" field must be 2-3 sentences in plain English describing what the user asked for, which data sources will be used, and what the report will show. Write it as "I'll..." e.g. "I'll pull your quote pipeline grouped by status..."
-IMPORTANT: The user has already selected a date range in the UI (shown in filters below). Do NOT set dateFrom or dateTo in your filters output — always set them to null so the UI range is respected. Only set salesOrgId, ownerId, months, or limit if the request explicitly mentions them.
-For salesOrgId: set it to the sales org name exactly as the user mentioned it (e.g. "CSC Germany", "TSS Germany"). The backend will match it by name. Do not invent or guess org codes.
-Current filters from the UI (date range is fixed): ${JSON.stringify(filters)}
+
+ENDPOINT SELECTION RULES — pick the most specific match:
+- "how many opportunities created", "opportunities created in last X" → use "opportunities/created-trend" (counts by month of creation)
+- "pipeline by stage", "pipeline health", "stage breakdown", "open pipeline" → use "opportunities/pipeline"
+- "opportunities by sales org", "which org has most opportunities" → use "opportunities/by-sales-org"
+- "quote count", "quote status", "quote value" → use "quotes/by-status" or "quotes/by-sales-org"
+- "trend", "over time", "monthly" for quotes → use "quotes/trend"
+
+DATE PERIOD RULES:
+- If the user explicitly mentions a time period (e.g. "last 1 month", "last 30 days", "this quarter", "last week"), set detectedPeriod to that exact phrase and detectedMonths to the equivalent number of months (1 for last month/30 days, 3 for quarter, 6 for half year, 12 for year). Otherwise set both to null.
+- The UI has a date range already selected. Do NOT set dateFrom or dateTo in filters — always null. The frontend will ask the user which period to use if there is a conflict.
+
+For salesOrgId: set it to the sales org name as the user said it (e.g. "CSC Germany"). Backend matches by name.
+The "explanation" must be 2-3 sentences starting with "I'll..." describing what data and chart will be shown.
+
+Current UI filters (date range): ${JSON.stringify(filters)}
 Today's date: ${new Date().toISOString().slice(0, 10)}
 Request: ${userRequest}`;
 

@@ -443,6 +443,33 @@ export async function getDailySummary(filters, userJwt, userEmail) {
 }
 
 /**
+ * Opportunities created over time (monthly count by CreationDateTime).
+ * Use this when users ask "how many opportunities were created", not pipeline/stage breakdown.
+ */
+export async function opportunitiesCreatedTrend(filters, userJwt, userEmail) {
+  const months = parseInt(filters.months || '6', 10);
+  return getOrSet(userEmail, 'opportunities/created-trend', { ...filters, months }, async () => {
+    const { results } = await rawOpportunities(filters, userJwt, userEmail);
+    return trendByMonth(results, 'CreationDateTime', oppValue, months)
+      .map(({ month, count, total }) => ({ month, count, totalValue: total }));
+  });
+}
+
+/**
+ * Opportunities grouped by sales organisation (count + value).
+ * Use when users ask about performance per sales org / region.
+ */
+export async function opportunitiesBySalesOrg(filters, userJwt, userEmail) {
+  const limit = parseInt(filters.limit || '20', 10);
+  return getOrSet(userEmail, 'opportunities/by-sales-org', { ...filters, limit }, async () => {
+    const { results } = await rawOpportunities(filters, userJwt, userEmail);
+    return sumBy(results, 'SalesOrganisationName', oppValue)
+      .slice(0, limit)
+      .map(({ label, count, total }) => ({ salesOrg: label, count, totalValue: total }));
+  });
+}
+
+/**
  * Dispatch table for the Claude-powered dashboard generator.
  */
 export const ENDPOINT_HANDLERS = {
@@ -452,6 +479,8 @@ export const ENDPOINT_HANDLERS = {
   'quotes/by-biz-type': quotesByBizType,
   'quotes/top-customers': quotesTopCustomers,
   'opportunities/pipeline': opportunitiesPipeline,
+  'opportunities/created-trend': opportunitiesCreatedTrend,
+  'opportunities/by-sales-org': opportunitiesBySalesOrg,
   'rfqs/by-status': rfqsByStatus,
   'daily-summary': getDailySummary,
 };
