@@ -451,15 +451,32 @@ export async function fetchSalesOrgs(search, userJwt) {
   );
 
   const term = (search || '').trim().toLowerCase();
+  // Also try space-stripped variant: "tss germany" → "tssgermany" matches ID "TSSGERMANY"
+  const termNoSpace = term.replace(/\s+/g, '');
+  // Split into meaningful words (>2 chars) for word-by-word matching
+  // e.g. "TSS Germany" → ["tss", "germany"] — both must appear somewhere in name or id
+  const words = term.split(/\s+/).filter((w) => w.length > 2);
+
+  function matches(name, id) {
+    if (!term) return true;
+    const n = `${name}`.toLowerCase();
+    const i = `${id}`.toLowerCase();
+    // Exact substring match
+    if (n.includes(term) || i.includes(term)) return true;
+    // Space-stripped match (handles "TSS Germany" → "TSSGERMANY")
+    if (termNoSpace && (n.includes(termNoSpace) || i.includes(termNoSpace))) return true;
+    // All words must appear somewhere (handles "TSS Germany" matching "Trelleborg...Germany" + "TSS...")
+    if (words.length > 1 && words.every((w) => n.includes(w) || i.includes(w))) return true;
+    return false;
+  }
+
   const seen = new Set();
   const orgs = [];
   for (const r of names.results || []) {
     const id = r.OrganisationalUnitID;
     if (!id || !companyIds.has(id) || seen.has(id)) continue;
     const name = r.Name || id;
-    if (term && !(`${name}`.toLowerCase().includes(term) || `${id}`.toLowerCase().includes(term))) {
-      continue;
-    }
+    if (!matches(name, id)) continue;
     seen.add(id);
     orgs.push({ id, name });
   }
