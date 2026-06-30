@@ -29,22 +29,40 @@ function baseFilters(filters = {}) {
   return { salesOrgId, ownerId, dateFrom, dateTo };
 }
 
+// Match org by exact ID code (e.g. "TSSGERMANY") OR by name substring (e.g. "CSC Germany").
+// The AI Report Builder returns a human name while the FilterBar returns the C4C org code.
+function matchesOrg(orgId, orgName, filterValue) {
+  if (!filterValue) return true;
+  const v = filterValue.toLowerCase();
+  return (orgId && orgId.toLowerCase() === v) ||
+         (orgName && orgName.toLowerCase().includes(v)) ||
+         (orgId && orgId.toLowerCase().includes(v));
+}
+
 async function rawQuotes(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
   // SalesOrganisationID isn't filterable in C4C, so fetch the date/owner set
-  // once (all orgs, cached) and scope to the chosen org in-process. Quotes
-  // carry a populated SalesOrganisationID that matches the org-unit ID.
+  // once (all orgs, cached) and scope to the chosen org in-process.
   const fetchKey = { ...base, salesOrgId: undefined };
   const { data } = await getOrSet(userEmail, 'raw:quotes', fetchKey, () => fetchQuotes(fetchKey, userJwt));
   if (!base.salesOrgId) return data;
-  const results = data.results.filter((q) => q.SalesOrganisationID === base.salesOrgId);
+  const results = data.results.filter((q) =>
+    matchesOrg(q.SalesOrganisationID, q.SalesOrganisationName, base.salesOrgId)
+  );
   return { ...data, results, total: results.length };
 }
 
 async function rawOpportunities(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
-  const { data } = await getOrSet(userEmail, 'raw:opportunities', base, () => fetchOpportunities(base, userJwt));
-  return data;
+  // SalesOrganisationID isn't filterable in C4C — fetch without org filter (cached),
+  // then scope in-process. Same pattern as rawQuotes.
+  const fetchKey = { ...base, salesOrgId: undefined };
+  const { data } = await getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt));
+  if (!base.salesOrgId) return data;
+  const results = data.results.filter((o) =>
+    matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId)
+  );
+  return { ...data, results, total: results.length };
 }
 
 async function rawRFQs(filters, userJwt, userEmail) {

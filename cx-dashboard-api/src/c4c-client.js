@@ -352,6 +352,7 @@ export async function fetchOpportunities(filters = {}, userJwt) {
       'SalesTerritoryID', 'SalesTerritoryName',          // Sales Region / Team
       'BUS_SEG_CDE_KUT', 'BUS_SEG_CDE_KUTText',          // Industry — business segment
       'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
+      'SalesOrganisationID', 'SalesOrganisationName',    // Sales org (for in-process filtering)
     ],
     parts.join(' and '),
     userJwt
