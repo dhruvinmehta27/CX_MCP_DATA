@@ -72,22 +72,35 @@ export async function parseIntent(userRequest, filters = {}) {
   "explanation": string,
   "detectedPeriod": string|null,
   "detectedMonths": number|null,
+  "detectedOrgName": string|null,
+  "detectedOwnerName": string|null,
+  "clarificationNeeded": boolean,
+  "clarificationQuestion": string|null,
   "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null }
 }
 
 ENDPOINT SELECTION RULES — pick the most specific match:
-- "how many opportunities created", "opportunities created in last X" → use "opportunities/created-trend" (counts by month of creation)
-- "pipeline by stage", "pipeline health", "stage breakdown", "open pipeline" → use "opportunities/pipeline"
-- "opportunities by sales org", "which org has most opportunities" → use "opportunities/by-sales-org"
-- "quote count", "quote status", "quote value" → use "quotes/by-status" or "quotes/by-sales-org"
-- "trend", "over time", "monthly" for quotes → use "quotes/trend"
+- "how many opportunities created", "count of opportunities", "opportunities created in last X" → use "opportunities/created-trend"
+- "pipeline by stage", "pipeline health", "stage breakdown", "open pipeline", "weighted pipeline" → use "opportunities/pipeline"
+- "opportunities by sales org", "which org has most opportunities", "org performance" → use "opportunities/by-sales-org"
+- "quote count", "quote status", "quote value", "open quotes" → use "quotes/by-status"
+- "quotes by org", "quote volume by org" → use "quotes/by-sales-org"
+- "quote trend", "monthly quotes", "quotes over time" → use "quotes/trend"
+- "RFQ", "request for quote" → use "rfqs/by-status"
+- "daily", "today", "this week summary" → use "daily-summary"
+- For broad requests mentioning both quotes and pipeline → use multiple endpoints
 
 DATE PERIOD RULES:
-- If the user explicitly mentions a time period (e.g. "last 1 month", "last 30 days", "this quarter", "last week"), set detectedPeriod to that exact phrase and detectedMonths to the equivalent number of months (1 for last month/30 days, 3 for quarter, 6 for half year, 12 for year). Otherwise set both to null.
-- The UI has a date range already selected. Do NOT set dateFrom or dateTo in filters — always null. The frontend will ask the user which period to use if there is a conflict.
+- If the user explicitly mentions a time period (e.g. "last 1 month", "last 30 days", "this quarter"), set detectedPeriod to that exact phrase and detectedMonths to equivalent months (1=month/30days, 3=quarter, 6=half-year, 12=year). Otherwise both null.
+- Do NOT set dateFrom or dateTo in filters — always null. The UI will resolve the conflict.
 
-For salesOrgId: set it to the sales org name as the user said it (e.g. "CSC Germany"). Backend matches by name.
-The "explanation" must be 2-3 sentences starting with "I'll..." describing what data and chart will be shown.
+ORG & OWNER RULES:
+- detectedOrgName: if user mentions a specific org/region/country (e.g. "CSC Germany", "Germany", "DACH"), set to the name as mentioned. Also set filters.salesOrgId to the same value.
+- detectedOwnerName: if user mentions a specific person, set to their name. Also set filters.ownerId.
+- clarificationNeeded: true only if the request is genuinely ambiguous (e.g. "show me data" with no context).
+- clarificationQuestion: a single specific question to resolve the ambiguity.
+
+The "explanation" must be 2-3 sentences starting with "I'll..." describing exactly what will be shown, which filters apply, and which data source will be used.
 
 Current UI filters (date range): ${JSON.stringify(filters)}
 Today's date: ${new Date().toISOString().slice(0, 10)}
@@ -240,16 +253,20 @@ Analyze the user's message and return JSON only, no markdown:
   "understanding": string,
   "detectedOrgKeyword": string|null,
   "detectedOwnerKeyword": string|null,
+  "detectedPeriod": string|null,
+  "detectedMonths": number|null,
   "scopeWarning": string|null,
   "clarificationNeeded": boolean,
   "clarificationQuestion": string|null
 }
 
 Rules:
-- "understanding": 1-2 sentences starting with "I'll..." describing what brief will be created and for whom.
-- "detectedOrgKeyword": if the user mentions a specific org, region, country or division name (e.g. "TSS Germany", "Germany", "DACH", "North America"), extract the keyword to search with (e.g. "Germany"). Otherwise null.
-- "detectedOwnerKeyword": if the user mentions a specific person/owner name, extract it. Otherwise null.
-- "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter (salesOrgId/ownerId) is active yet, warn the user clearly. Otherwise null.
+- "understanding": 2-3 sentences starting with "I'll..." describing what brief will cover, which filters/org apply, and audience tone.
+- "detectedOrgKeyword": if user mentions a specific org, region, country or division (e.g. "TSS Germany", "Germany", "DACH"), extract the search keyword. Otherwise null.
+- "detectedOwnerKeyword": if user mentions a specific person/owner name, extract it. Otherwise null.
+- "detectedPeriod": if user explicitly mentions a time period (e.g. "last month", "Q3", "last 30 days"), set to that phrase. Otherwise null.
+- "detectedMonths": equivalent months (1=month/30days, 3=quarter, 6=half-year, 12=year). Otherwise null.
+- "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter (salesOrgId/ownerId) is active yet, warn clearly. Otherwise null.
 - "clarificationNeeded": true only if the request is genuinely ambiguous and needs clarification before proceeding.
 - "clarificationQuestion": if clarificationNeeded, a single clear question to ask the user. Otherwise null.
 `;

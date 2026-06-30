@@ -55,13 +55,15 @@ export default function SalesBrief() {
   const [selectedOrgId, setSelectedOrgId] = useState('');
   const [selectedOrgName, setSelectedOrgName] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
 
   const now = new Date();
+  const effectiveMonths = (useRequestPeriod && plan?.detectedMonths) ? plan.detectedMonths : selectedMonths;
   const filters = {
     ...globalFilters,
-    dateFrom: isoDate(subMonths(now, selectedMonths)),
+    dateFrom: isoDate(subMonths(now, effectiveMonths)),
     dateTo: isoDate(now),
   };
 
@@ -77,6 +79,7 @@ export default function SalesBrief() {
     setOrgMatches([]);
     setSelectedOrgId('');
     setSelectedOrgName('');
+    setUseRequestPeriod(false);
     try {
       const res = await planBrief(audience, intent.trim() || undefined, toApiFilters(filters));
       setPlan(res.plan);
@@ -278,6 +281,30 @@ export default function SalesBrief() {
               AI understood this as
             </div>
             <p style={{ marginBottom: 8 }}>{plan.understanding}</p>
+
+            {/* Date conflict */}
+            {plan.detectedMonths && plan.detectedMonths !== effectiveMonths && (
+              <div className="date-conflict-banner" style={{ marginTop: 10 }}>
+                <Icon name="alert-triangle" size={15} />
+                <span>
+                  You mentioned <strong>&ldquo;{plan.detectedPeriod}&rdquo;</strong> but data range is set to <strong>Last {selectedMonths}M</strong>. Which should we use?
+                </span>
+                <div className="date-conflict-actions">
+                  <button
+                    className={`builder-range-chip${useRequestPeriod ? ' active' : ''}`}
+                    onClick={() => setUseRequestPeriod(true)}
+                  >
+                    Use &ldquo;{plan.detectedPeriod}&rdquo;
+                  </button>
+                  <button
+                    className={`builder-range-chip${!useRequestPeriod ? ' active' : ''}`}
+                    onClick={() => setUseRequestPeriod(false)}
+                  >
+                    Keep Last {selectedMonths}M
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Org picker — shown when AI detected an org mention or raised a scope warning */}
             {(plan.detectedOrgKeyword || plan.scopeWarning) && (
