@@ -384,7 +384,7 @@ export default function SalesBrief() {
                 {planning ? 'Analyzing…' : 'Analyze & Review'}
               </button>
             ) : (
-              <button className="btn" onClick={generate} disabled={generating || plan.clarificationNeeded}>
+              <button className="btn" onClick={generate} disabled={generating}>
                 <Icon name="file-text" size={15} className={generating ? 'spinning' : undefined} />
                 {generating ? 'Writing brief…' : 'Generate Brief'}
               </button>
