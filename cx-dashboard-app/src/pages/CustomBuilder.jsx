@@ -3,6 +3,7 @@ import html2canvas from 'html2canvas';
 import { subMonths, subYears } from 'date-fns';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
 import { planReport, generateDashboard } from '../api/dashboard';
+import { getSalesOrgs } from '../api/analytics';
 import { isoDate } from '../utils/formatters';
 import DynamicChart from '../components/charts/DynamicChart';
 import DataTable from '../components/ui/DataTable';
@@ -102,6 +103,10 @@ export default function CustomBuilder() {
   const [busy, setBusy] = useState(false);
   const [showData, setShowData] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [orgMatches, setOrgMatches] = useState([]);
+  const [selectedOrgId, setSelectedOrgId] = useState('');
+  const [selectedOrgName, setSelectedOrgName] = useState('');
   const chartRef = useRef(null);
 
   // Builder uses its own fixed date range, not the global FilterBar.
@@ -116,9 +121,19 @@ export default function CustomBuilder() {
     setBusy(true);
     setError(null);
     setUseRequestPeriod(false);
+    setOrgMatches([]);
+    setSelectedOrgId('');
+    setSelectedOrgName('');
     try {
       const res = await planReport(userRequest, toApiFilters(filters));
       setIntent(res.intent);
+      setEditedTitle(res.intent.title || '');
+      // Auto-search org when AI detected one
+      const orgKeyword = res.intent.detectedOrgName || res.intent.filters?.salesOrgId;
+      if (orgKeyword) {
+        const orgs = await getSalesOrgs(orgKeyword);
+        setOrgMatches(orgs || []);
+      }
       setStep(1);
     } catch (err) {
       setError(err);
@@ -131,8 +146,16 @@ export default function CustomBuilder() {
     setStep(2);
     setError(null);
     try {
-      const res = await generateDashboard(request, toApiFilters(filters), intent);
-      setResult(res);
+      // Use the C4C org ID from picker if user selected one, else fall back to AI-detected name
+      const orgFilter = selectedOrgId
+        ? { salesOrgId: selectedOrgId }
+        : intent?.filters?.salesOrgId
+          ? { salesOrgId: intent.filters.salesOrgId }
+          : {};
+      const buildFilters = { ...toApiFilters(filters), ...orgFilter };
+      const buildIntent = { ...intent, title: editedTitle || intent?.title };
+      const res = await generateDashboard(request, buildFilters, buildIntent);
+      setResult({ ...res, title: res.title || buildIntent.title });
       setStep(3);
     } catch (err) {
       setError(err);
@@ -146,6 +169,10 @@ export default function CustomBuilder() {
     setResult(null);
     setError(null);
     setUseRequestPeriod(false);
+    setEditedTitle('');
+    setOrgMatches([]);
+    setSelectedOrgId('');
+    setSelectedOrgName('');
   };
 
   const exportPng = async () => {
@@ -267,9 +294,14 @@ export default function CustomBuilder() {
             )}
 
             <div className="plan-grid">
-              <div className="plan-item">
-                <label>Report title</label>
-                <div>{intent.title || 'Untitled report'}</div>
+              <div className="plan-item plan-item-full">
+                <label>Report title <span className="plan-label-hint">(editable)</span></label>
+                <input
+                  className="plan-title-input"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  placeholder="Report title"
+                />
               </div>
               <div className="plan-item">
                 <label>Chart type</label>
@@ -285,22 +317,63 @@ export default function CustomBuilder() {
               </div>
               <div className="plan-item">
                 <label>Period</label>
-                <div>
-                  {filters.dateFrom} → {filters.dateTo}
-                  {intent.filters?.salesOrgId ? ` · ${intent.filters.salesOrgId}` : ''}
-                  {intent.filters?.ownerId ? ` · owner: ${intent.filters.ownerId}` : ''}
-                </div>
+                <div>{filters.dateFrom} → {filters.dateTo}</div>
               </div>
             </div>
-            {error && (
-              <EmptyState title="Build failed" message={error.message} error />
+
+            {/* Org picker — auto-triggered when AI detects an org mention */}
+            {(intent.detectedOrgName || intent.filters?.salesOrgId) && (
+              <div className="plan-org-picker">
+                <div className="plan-org-picker-label">
+                  <Icon name="target" size={13} />
+                  Sales org filter — AI detected: <strong>{intent.detectedOrgName || intent.filters.salesOrgId}</strong>
+                </div>
+                {orgMatches.length === 0 ? (
+                  <p className="plan-org-nomatch">
+                    No exact org match found in C4C — filter will use name matching. Brief covers all data if no match.
+                  </p>
+                ) : (
+                  <div className="plan-org-chips">
+                    <button
+                      className={`builder-range-chip${!selectedOrgId ? ' active' : ''}`}
+                      onClick={() => { setSelectedOrgId(''); setSelectedOrgName(''); }}
+                    >
+                      All orgs
+                    </button>
+                    {orgMatches.map((org) => (
+                      <button
+                        key={org.id}
+                        className={`builder-range-chip${selectedOrgId === org.id ? ' active' : ''}`}
+                        onClick={() => { setSelectedOrgId(org.id); setSelectedOrgName(org.name); }}
+                      >
+                        {org.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedOrgId && (
+                  <p className="plan-org-selected">
+                    <Icon name="check-circle" size={13} /> Filtering to: <strong>{selectedOrgName}</strong>
+                  </p>
+                )}
+              </div>
             )}
+
+            {/* Clarification required */}
+            {intent.clarificationNeeded && intent.clarificationQuestion && (
+              <div className="date-conflict-banner">
+                <Icon name="alert-triangle" size={15} />
+                <span><strong>Clarification needed:</strong> {intent.clarificationQuestion}</span>
+              </div>
+            )}
+
+            {error && <EmptyState title="Build failed" message={error.message} error />}
             <div className="plan-actions">
               <button className="btn btn-ghost" onClick={restart}>
                 <Icon name="edit" size={15} />
                 Refine request
               </button>
-              <button className="btn" onClick={build}>
+              <button className="btn" onClick={build} disabled={!!intent.clarificationNeeded}>
                 Build report
                 <Icon name="arrow-right" size={15} />
               </button>
