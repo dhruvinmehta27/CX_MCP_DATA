@@ -50,7 +50,9 @@ const ENDPOINT_LABELS = {
   'quotes/trend': 'Quote trend over time',
   'quotes/by-biz-type': 'Quotes by business type',
   'quotes/top-customers': 'Top customers',
-  'opportunities/pipeline': 'Opportunity pipeline',
+  'opportunities/pipeline': 'Opportunity pipeline (by stage)',
+  'opportunities/created-trend': 'Opportunities created over time',
+  'opportunities/by-sales-org': 'Opportunities by sales org',
   'rfqs/by-status': 'RFQs by status',
   'daily-summary': 'Daily operations summary',
 };
@@ -99,10 +101,13 @@ export default function CustomBuilder() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showData, setShowData] = useState(false);
+  const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const chartRef = useRef(null);
 
-  // Builder uses its own fixed date range, not the global FilterBar
-  const filters = { ...globalFilters, ...builderDateRange(selectedMonths) };
+  // Builder uses its own fixed date range, not the global FilterBar.
+  // If user accepted the AI-detected period, use that instead of the chip selection.
+  const effectiveMonths = (useRequestPeriod && intent?.detectedMonths) ? intent.detectedMonths : selectedMonths;
+  const filters = { ...globalFilters, ...builderDateRange(effectiveMonths) };
 
   const plan = async (text) => {
     const userRequest = (text ?? request).trim();
@@ -110,6 +115,7 @@ export default function CustomBuilder() {
     setRequest(userRequest);
     setBusy(true);
     setError(null);
+    setUseRequestPeriod(false);
     try {
       const res = await planReport(userRequest, toApiFilters(filters));
       setIntent(res.intent);
@@ -139,6 +145,7 @@ export default function CustomBuilder() {
     setIntent(null);
     setResult(null);
     setError(null);
+    setUseRequestPeriod(false);
   };
 
   const exportPng = async () => {
@@ -236,6 +243,29 @@ export default function CustomBuilder() {
               </div>
             )}
 
+            {intent.detectedMonths && intent.detectedMonths !== effectiveMonths && (
+              <div className="date-conflict-banner">
+                <Icon name="alert-triangle" size={15} />
+                <span>
+                  You asked for <strong>&ldquo;{intent.detectedPeriod}&rdquo;</strong> but your data range is set to <strong>Last {selectedMonths}M</strong>. Which should we use?
+                </span>
+                <div className="date-conflict-actions">
+                  <button
+                    className={`builder-range-chip${useRequestPeriod ? ' active' : ''}`}
+                    onClick={() => setUseRequestPeriod(true)}
+                  >
+                    Use &ldquo;{intent.detectedPeriod}&rdquo;
+                  </button>
+                  <button
+                    className={`builder-range-chip${!useRequestPeriod ? ' active' : ''}`}
+                    onClick={() => setUseRequestPeriod(false)}
+                  >
+                    Keep Last {selectedMonths}M
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="plan-grid">
               <div className="plan-item">
                 <label>Report title</label>
@@ -256,9 +286,9 @@ export default function CustomBuilder() {
               <div className="plan-item">
                 <label>Period</label>
                 <div>
-                  {(intent.filters?.dateFrom || filters.dateFrom)} → {(intent.filters?.dateTo || filters.dateTo)}
-                  {filters.salesOrgName ? ` · ${filters.salesOrgName}` : ''}
-                  {filters.ownerId ? ` · owner: ${filters.ownerId}` : ''}
+                  {filters.dateFrom} → {filters.dateTo}
+                  {intent.filters?.salesOrgId ? ` · ${intent.filters.salesOrgId}` : ''}
+                  {intent.filters?.ownerId ? ` · owner: ${intent.filters.ownerId}` : ''}
                 </div>
               </div>
             </div>

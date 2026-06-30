@@ -1446,6 +1446,12 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
 .plan-explanation-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary); margin-bottom: 8px; }
 .plan-explanation p { font-size: 14px; color: var(--text); line-height: 1.6; margin: 0; }
 
+/* AI Report Builder — date conflict banner */
+.date-conflict-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #fff8e6; border: 1px solid #f5c842; border-radius: var(--radius); padding: 12px 16px; margin-bottom: 18px; font-size: 13px; color: #7a5800; }
+.date-conflict-banner svg { flex-shrink: 0; color: #d4900a; }
+.date-conflict-banner span { flex: 1; min-width: 200px; }
+.date-conflict-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
 /* AI Report Builder — 4-chart grid */
 .report-charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 @media (max-width: 900px) { .report-charts-grid { grid-template-columns: 1fr; } }
