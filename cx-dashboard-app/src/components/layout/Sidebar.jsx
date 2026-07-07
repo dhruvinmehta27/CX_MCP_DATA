@@ -19,7 +19,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         <img src="/Company_Logo.png" alt="Trelleborg" className="brand-logo-img" />
         {!collapsed && (
           <div className="brand-name">
-            CX AI Intelligence
+            AI Intelligence
           </div>
         )}
       </div>
