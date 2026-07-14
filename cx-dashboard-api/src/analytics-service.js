@@ -32,13 +32,15 @@ function baseFilters(filters = {}) {
 }
 
 // Match org by exact ID code (e.g. "TSSGERMANY") OR by name substring (e.g. "CSC Germany").
-// The AI Report Builder returns a human name while the FilterBar returns the C4C org code.
+// Supports comma-separated values for multi-org filtering (e.g. "TSSCANADA,TSSMEXICO").
 function matchesOrg(orgId, orgName, filterValue) {
   if (!filterValue) return true;
-  const v = filterValue.toLowerCase();
-  return (orgId && orgId.toLowerCase() === v) ||
-         (orgName && orgName.toLowerCase().includes(v)) ||
-         (orgId && orgId.toLowerCase().includes(v));
+  const values = filterValue.split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
+  return values.some((v) =>
+    (orgId && orgId.toLowerCase() === v) ||
+    (orgName && orgName.toLowerCase().includes(v)) ||
+    (orgId && orgId.toLowerCase().includes(v))
+  );
 }
 
 async function rawQuotes(filters, userJwt, userEmail) {
@@ -146,6 +148,31 @@ export async function quotesList(filters, userJwt, userEmail) {
         currency: q.CurrencyCode,
         created: parseODataDate(q.CreationDateTime)?.toISOString() || null,
         owner: q.EmployeeResponsiblePartyName,
+      }));
+    return { total, rows };
+  });
+}
+
+export async function quotesRaw(filters, userJwt, userEmail) {
+  return getOrSet(userEmail, 'quotes/raw', filters, async () => {
+    const { total, results } = await rawQuotes(filters, userJwt, userEmail);
+    const rows = [...results]
+      .sort((a, b) => (parseODataDate(b.CreationDateTime) || 0) - (parseODataDate(a.CreationDateTime) || 0))
+      .map((q) => ({
+        'Quote ID': q.ID,
+        'Quote Name': q.Name,
+        'Status': q.LifeCycleStatusCodeText,
+        'Sales Org': q.SalesOrganisationName,
+        'Account': q.BuyerPartyName,
+        'Account Country': q.BuyerCountry || '',
+        'Ship-To Account': q.ProductRecipientPartyName || '',
+        'Ship-To Country': q.ShipToCountry || '',
+        'Net Amount': toNumber(q.NetAmount),
+        'Currency': q.CurrencyCode,
+        'Created Date': parseODataDate(q.CreationDateTime)?.toISOString().slice(0, 10) || '',
+        'Created By': q.CreatedBy || '',
+        'Owner': q.EmployeeResponsiblePartyName || '',
+        'Business Type': BIZ_TYPE_LABELS[q.ZBIZTYPE] || q.ZBIZTYPE || '',
       }));
     return { total, rows };
   });
@@ -477,6 +504,7 @@ export async function opportunitiesBySalesOrg(filters, userJwt, userEmail) {
  * Dispatch table for the Claude-powered dashboard generator.
  */
 export const ENDPOINT_HANDLERS = {
+  'quotes/raw': quotesRaw,
   'quotes/by-status': quotesByStatus,
   'quotes/by-sales-org': quotesBySalesOrg,
   'quotes/trend': quotesTrend,

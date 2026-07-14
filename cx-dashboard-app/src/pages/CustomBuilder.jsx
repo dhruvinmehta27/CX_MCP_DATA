@@ -77,19 +77,37 @@ function Stepper({ current }) {
 }
 
 function flattenForTable(rawData) {
-  if (!rawData) return { columns: [], rows: [] };
+  if (!rawData) return { columns: [], rows: [], total: 0 };
   for (const value of Object.values(rawData)) {
     const arr = Array.isArray(value) ? value : value?.rows;
+    const total = value?.total ?? arr?.length ?? 0;
     if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'object') {
       const columns = Object.keys(arr[0]).map((key) => ({
         key,
-        label: key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()),
+        label: key,
         type: typeof arr[0][key] === 'number' ? 'number' : 'text',
       }));
-      return { columns, rows: arr };
+      return { columns, rows: arr, total };
     }
   }
-  return { columns: [], rows: [] };
+  return { columns: [], rows: [], total: 0 };
+}
+
+function exportCsv(columns, rows, filename) {
+  const header = columns.map((c) => `"${c.label}"`).join(',');
+  const body = rows.map((row) =>
+    columns.map((c) => {
+      const v = row[c.key] ?? '';
+      return typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : v;
+    }).join(',')
+  ).join('\n');
+  const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function CustomBuilder() {
@@ -342,9 +360,21 @@ export default function CustomBuilder() {
                   <Icon name="target" size={13} />
                   Sales org filter — AI detected: <strong>{intent.detectedOrgName || intent.filters.salesOrgId}</strong>
                 </div>
-                {orgMatches.length === 0 ? (
+                {/* If AI returned comma-separated org IDs, show them directly as chips without needing C4C lookup */}
+                {orgMatches.length === 0 && intent.filters?.salesOrgId?.includes(',') ? (
+                  <div>
+                    <p className="plan-org-nomatch" style={{ marginBottom: 6 }}>
+                      AI identified these org IDs — filter will apply all of them:
+                    </p>
+                    <div className="plan-org-chips">
+                      {intent.filters.salesOrgId.split(',').map((id) => (
+                        <span key={id} className="plan-chip">{id.trim()}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : orgMatches.length === 0 ? (
                   <p className="plan-org-nomatch">
-                    No exact org match found in C4C — filter will use name matching. Brief covers all data if no match.
+                    No exact org match found in C4C — filter will use name matching.
                   </p>
                 ) : (
                   <div className="plan-org-chips">
@@ -406,68 +436,98 @@ export default function CustomBuilder() {
       )}
 
       {/* ---------- Step 4: REPORT ---------- */}
-      {step === 3 && result && (
-        <>
-          <div className="card chart-card">
-            <div className="chart-card-header">
-              <div>
-                <div className="chart-card-title">{result.title}</div>
-                {result.summary && <div className="chart-card-subtitle">{result.summary}</div>}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {table.rows.length > 0 && (
-                  <button className="btn btn-ghost" onClick={() => setShowData((v) => !v)}>
-                    <Icon name={showData ? 'eye-off' : 'eye'} size={15} />
-                    {showData ? 'Hide data' : 'Show data'}
-                  </button>
-                )}
-                <button className="btn btn-ghost" onClick={exportPng}>
-                  <Icon name="download" size={15} />
-                  Export PNG
-                </button>
-                <button className="btn btn-ghost" onClick={restart}>
-                  <Icon name="sparkles" size={15} />
-                  New report
-                </button>
-              </div>
-            </div>
-            <div ref={chartRef} className="report-charts-grid" style={{ padding: 8 }}>
-              {(result.charts || []).map((chart, i) => (
-                <div key={i} className="card" style={{ margin: 0 }}>
-                  {chart.title && (
-                    <div className="chart-card-title" style={{ marginBottom: 8, fontSize: 13 }}>{chart.title}</div>
-                  )}
-                  <DynamicChart config={chart} height={280} />
-                  {chart.summary && (
-                    <div className="chart-card-subtitle" style={{ marginTop: 6 }}>{chart.summary}</div>
-                  )}
+      {step === 3 && result && (() => {
+        const isTable = intent?.chartType === 'table' || (!result.charts?.length && table.rows.length > 0);
+        const PREVIEW_LIMIT = 50;
+        return (
+          <>
+            <div className="card chart-card">
+              <div className="chart-card-header">
+                <div>
+                  <div className="chart-card-title">{result.title}</div>
+                  {result.summary && <div className="chart-card-subtitle">{result.summary}</div>}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {result.insights?.length > 0 && (
-            <div className="card">
-              <div className="chart-card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon name="bulb" size={17} style={{ color: 'var(--warning)' }} />
-                AI Insights
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {!isTable && table.rows.length > 0 && (
+                    <button className="btn btn-ghost" onClick={() => setShowData((v) => !v)}>
+                      <Icon name={showData ? 'eye-off' : 'eye'} size={15} />
+                      {showData ? 'Hide data' : 'Show data'}
+                    </button>
+                  )}
+                  {isTable && table.rows.length > 0 && (
+                    <button className="btn btn-ghost" onClick={() => exportCsv(table.columns, table.rows, `${(result.title || 'quotes').replace(/\s+/g, '-').toLowerCase()}.csv`)}>
+                      <Icon name="download" size={15} />
+                      Export CSV ({table.total.toLocaleString()} records)
+                    </button>
+                  )}
+                  {!isTable && (
+                    <button className="btn btn-ghost" onClick={exportPng}>
+                      <Icon name="download" size={15} />
+                      Export PNG
+                    </button>
+                  )}
+                  <button className="btn btn-ghost" onClick={restart}>
+                    <Icon name="sparkles" size={15} />
+                    New report
+                  </button>
+                </div>
               </div>
-              <ul className="insights-list">
-                {result.insights.map((insight, i) => (
-                  <li key={i}>{insight}</li>
-                ))}
-              </ul>
-            </div>
-          )}
 
-          {showData && table.rows.length > 0 && (
-            <div className="card">
-              <div className="chart-card-title" style={{ marginBottom: 10 }}>Data</div>
-              <DataTable columns={table.columns} data={table.rows} pageSize={50} />
+              {/* Table mode */}
+              {isTable ? (
+                <div>
+                  {table.total > PREVIEW_LIMIT && (
+                    <div className="date-conflict-banner" style={{ marginBottom: 12 }}>
+                      <Icon name="alert-triangle" size={15} />
+                      <span>
+                        <strong>{table.total.toLocaleString()} records</strong> found — showing first {PREVIEW_LIMIT}. Use <strong>Export CSV</strong> to download all.
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ overflowX: 'auto' }}>
+                    <DataTable columns={table.columns} data={table.rows.slice(0, PREVIEW_LIMIT)} pageSize={PREVIEW_LIMIT} />
+                  </div>
+                </div>
+              ) : (
+                <div ref={chartRef} className="report-charts-grid" style={{ padding: 8 }}>
+                  {(result.charts || []).map((chart, i) => (
+                    <div key={i} className="card" style={{ margin: 0 }}>
+                      {chart.title && (
+                        <div className="chart-card-title" style={{ marginBottom: 8, fontSize: 13 }}>{chart.title}</div>
+                      )}
+                      <DynamicChart config={chart} height={280} />
+                      {chart.summary && (
+                        <div className="chart-card-subtitle" style={{ marginTop: 6 }}>{chart.summary}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </>
-      )}
+
+            {result.insights?.length > 0 && (
+              <div className="card">
+                <div className="chart-card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="bulb" size={17} style={{ color: 'var(--warning)' }} />
+                  AI Insights
+                </div>
+                <ul className="insights-list">
+                  {result.insights.map((insight, i) => (
+                    <li key={i}>{insight}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {!isTable && showData && table.rows.length > 0 && (
+              <div className="card">
+                <div className="chart-card-title" style={{ marginBottom: 10 }}>Data</div>
+                <DataTable columns={table.columns} data={table.rows} pageSize={50} />
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

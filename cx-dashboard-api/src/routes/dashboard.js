@@ -100,7 +100,20 @@ router.post('/generate', async (req, res, next) => {
       })
     );
 
-    // 3. Generate 4 complementary charts from the data
+    // 3. Table mode — skip chart generation, return raw rows directly
+    if (intent.chartType === 'table') {
+      const firstEndpoint = intent.endpoints[0];
+      const tableData = rawData[firstEndpoint] || {};
+      return res.json({
+        charts: [],
+        rawData,
+        title: intent.title || 'Data Table',
+        summary: `${(tableData.total || tableData.rows?.length || 0).toLocaleString()} records retrieved`,
+        insights: [],
+      });
+    }
+
+    // 4. Generate 4 complementary charts from the data
     const multi = await generateMultiCharts(rawData, userRequest);
 
     res.json({
