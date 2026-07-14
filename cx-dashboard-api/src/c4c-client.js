@@ -325,11 +325,10 @@ export async function fetchQuotes(filters = {}, userJwt) {
     [
       'ObjectID', 'ID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
       'NetAmount', 'CurrencyCode', 'SalesOrganisationID', 'SalesOrganisationName',
-      'CreationDateTime', 'ValidToDate', 'BuyerPartyName',
+      'CreationDateTime', 'ValidToDate', 'BuyerPartyName', 'BuyerPartyID',
+      'ProductRecipientPartyName', 'ProductRecipientPartyID',
       'EmployeeResponsiblePartyName', 'ZBIZTYPE',
-      'BuyerPartyCountry', 'BuyerPartyCountryCode',       // Account country
-      'ShipToPartyName', 'ShipToPartyCountry', 'ShipToPartyCountryCode', // Ship-To
-      'CreatedBy',                                         // Created By user
+      'CreatedBy', 'LastChangedBy',
     ],
     parts.join(' and '),
     userJwt
