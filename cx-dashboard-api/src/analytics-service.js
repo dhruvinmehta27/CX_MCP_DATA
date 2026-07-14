@@ -7,7 +7,9 @@ import {
   fetchQuotes, fetchOpportunities, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
+  fetchAccountCountries,
 } from './c4c-client.js';
+import { getAccountCountryMap, enrichWithCountry } from './account-cache.js';
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
   quotesByDayThisWeek, isOpenStatus, isWonStatus, isRfqOpen, parseODataDate, toNumber,
@@ -41,12 +43,14 @@ function matchesOrg(orgId, orgName, filterValue) {
 
 async function rawQuotes(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
-  // SalesOrganisationID isn't filterable in C4C, so fetch the date/owner set
-  // once (all orgs, cached) and scope to the chosen org in-process.
   const fetchKey = { ...base, salesOrgId: undefined };
-  const { data } = await getOrSet(userEmail, 'raw:quotes', fetchKey, () => fetchQuotes(fetchKey, userJwt));
-  if (!base.salesOrgId) return data;
-  const results = data.results.filter((q) =>
+  const [{ data }, countryMap] = await Promise.all([
+    getOrSet(userEmail, 'raw:quotes', fetchKey, () => fetchQuotes(fetchKey, userJwt)),
+    getAccountCountryMap(() => fetchAccountCountries(userJwt)),
+  ]);
+  const enriched = enrichWithCountry(data.results, countryMap);
+  if (!base.salesOrgId) return { ...data, results: enriched };
+  const results = enriched.filter((q) =>
     matchesOrg(q.SalesOrganisationID, q.SalesOrganisationName, base.salesOrgId)
   );
   return { ...data, results, total: results.length };
