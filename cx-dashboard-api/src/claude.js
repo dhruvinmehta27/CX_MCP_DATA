@@ -47,7 +47,7 @@ function parseJsonResponse(text) {
 }
 
 const VALID_ENDPOINTS = [
-  'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
+  'quotes/raw', 'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
   'opportunities/pipeline', 'opportunities/created-trend', 'opportunities/by-sales-org',
   'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
 ];
@@ -64,8 +64,8 @@ export function sanitizeIntent(intent = {}) {
 export async function parseIntent(userRequest, filters = {}) {
   const prompt = `Parse this analytics request and return JSON only, no markdown:
 {
-  "endpoints": [one or more from: "quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"opportunities/created-trend"|"opportunities/by-sales-org"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
-  "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel",
+  "endpoints": [one or more from: "quotes/raw"|"quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"opportunities/created-trend"|"opportunities/by-sales-org"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
+  "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel"|"table",
   "title": string,
   "xKey": string,
   "yKeys": [string],
@@ -82,6 +82,7 @@ export async function parseIntent(userRequest, filters = {}) {
 }
 
 ENDPOINT SELECTION RULES — pick the most specific match:
+- "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
 - "how many opportunities created", "count of opportunities", "opportunities created in last X" → use "opportunities/created-trend"
 - "pipeline by stage", "pipeline health", "stage breakdown", "open pipeline", "weighted pipeline" → use "opportunities/pipeline"
 - "opportunities by sales org", "which org has most opportunities", "org performance" → use "opportunities/by-sales-org"
@@ -101,6 +102,7 @@ Today's date for relative period calculation: ${new Date().toISOString().slice(0
 
 ORG & OWNER RULES:
 - detectedOrgName: if user mentions a specific org/region/country (e.g. "CSC Germany", "Germany", "DACH"), set to the name as mentioned. Also set filters.salesOrgId to the same value.
+- If user mentions MULTIPLE orgs (e.g. "Industrial Americas (Canada, US Industrial, Mexico, Brazil)"), set detectedOrgName to a human label (e.g. "Industrial Americas") and set filters.salesOrgId to a comma-separated list of the C4C org IDs you know (e.g. "TSSCANADA,TSSSEGCHETRAOPER,TSSMEXICO,TSSBRAZIL"). Known org ID patterns: country names map to TSS+COUNTRY or CSC+COUNTRY prefix.
 - detectedOwnerName: if user mentions a specific person, set to their name. Also set filters.ownerId.
 - clarificationNeeded: true only if the request is genuinely ambiguous (e.g. "show me data" with no context).
 - clarificationQuestion: a single specific question to resolve the ambiguity.
