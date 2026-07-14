@@ -153,8 +153,12 @@ export default function CustomBuilder() {
       const res = await planReport(userRequest, toApiFilters(filters));
       setIntent(res.intent);
       setEditedTitle(res.intent.title || '');
-      // Auto-search org when AI detected one
-      const orgKeyword = res.intent.detectedOrgName || res.intent.filters?.salesOrgId;
+      // Auto-search org when AI detected one.
+      // If salesOrgId is comma-separated (multi-org), skip the C4C search — the IDs
+      // are used directly by matchesOrg() and shown as read-only chips in the UI.
+      const salesOrgId = res.intent.filters?.salesOrgId || '';
+      const isMultiOrg = salesOrgId.includes(',');
+      const orgKeyword = !isMultiOrg ? (res.intent.detectedOrgName || salesOrgId) : null;
       if (orgKeyword) {
         const orgs = await getSalesOrgs(orgKeyword);
         setOrgMatches(orgs || []);
