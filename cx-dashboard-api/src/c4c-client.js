@@ -419,6 +419,19 @@ export async function fetchAppointments(filters = {}, userJwt) {
 }
 
 /**
+ * Fetch all accounts with their country — used to build the account country cache.
+ * Paginated the same way as other collections; no user-scoped filter needed here.
+ */
+export async function fetchAccountCountries(userJwt) {
+  return fetchAllPages(
+    `${ODATA_BASE}/CorporateAccountCollection`,
+    ['AccountID', 'CountryCode', 'CountryCodeText'],
+    '',
+    userJwt
+  );
+}
+
+/**
  * Sales org lookup for the FilterBar — custom OData service
  * cust/v1/orgidnamesandfunc, filtered server-side on SalesIndicator + name.
  */
