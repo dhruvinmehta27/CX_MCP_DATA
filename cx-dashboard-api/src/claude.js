@@ -102,7 +102,14 @@ Today's date for relative period calculation: ${new Date().toISOString().slice(0
 
 ORG & OWNER RULES:
 - detectedOrgName: if user mentions a specific org/region/country (e.g. "CSC Germany", "Germany", "DACH"), set to the name as mentioned. Also set filters.salesOrgId to the same value.
-- If user mentions MULTIPLE orgs (e.g. "Industrial Americas (Canada, US Industrial, Mexico, Brazil)"), set detectedOrgName to a human label (e.g. "Industrial Americas") and set filters.salesOrgId to a comma-separated list of the C4C org IDs you know (e.g. "TSSCANADA,TSSSEGCHETRAOPER,TSSMEXICO,TSSBRAZIL"). Known org ID patterns: country names map to TSS+COUNTRY or CSC+COUNTRY prefix.
+- If user mentions MULTIPLE orgs (e.g. "Industrial Americas (Canada, US Industrial, Mexico, Brazil)"), set detectedOrgName to a human label (e.g. "Industrial Americas") and set filters.salesOrgId to a comma-separated list of the exact C4C org IDs.
+- KNOWN ORG IDs (use these exact values — do NOT guess):
+  Industrial Americas = TSSSEGCHETRAOPER,TSSMEXICO,TSSCANADA,TSSBRAZIL
+  Canada = TSSCANADA
+  Mexico = TSSMEXICO
+  Brazil = TSSBRAZIL
+  US Industrial / Industrial US / United States Industrial = TSSSEGCHETRAOPER
+  For any org not in this list, use the name as-is and let in-process filtering handle it.
 - detectedOwnerName: if user mentions a specific person, set to their name. Also set filters.ownerId.
 - clarificationNeeded: true only if the request is genuinely ambiguous (e.g. "show me data" with no context).
 - clarificationQuestion: a single specific question to resolve the ambiguity.
