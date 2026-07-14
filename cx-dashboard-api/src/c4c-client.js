@@ -327,6 +327,9 @@ export async function fetchQuotes(filters = {}, userJwt) {
       'NetAmount', 'CurrencyCode', 'SalesOrganisationID', 'SalesOrganisationName',
       'CreationDateTime', 'ValidToDate', 'BuyerPartyName',
       'EmployeeResponsiblePartyName', 'ZBIZTYPE',
+      'BuyerPartyCountry', 'BuyerPartyCountryCode',       // Account country
+      'ShipToPartyName', 'ShipToPartyCountry', 'ShipToPartyCountryCode', // Ship-To
+      'CreatedBy',                                         // Created By user
     ],
     parts.join(' and '),
     userJwt
