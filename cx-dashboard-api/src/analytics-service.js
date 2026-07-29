@@ -528,12 +528,15 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
       ? hdrData.results.filter((o) => matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId))
       : hdrData.results;
 
-    const headerMap = new Map(headers.map((h) => [h.ID, h]));
+    // Build two maps so the join works whether OpportunityID is the
+    // human-readable ID (e.g. "17053") or the internal ObjectID (GUID).
+    const headerById = new Map(headers.map((h) => [h.ID, h]));
+    const headerByObjectId = new Map(headers.map((h) => [h.ObjectID, h]));
 
     // Join items to filtered headers; apply optional product category keyword
     const rows = allItems
       .filter((item) => {
-        if (!headerMap.has(item.OpportunityID)) return false;
+        if (!headerById.has(item.OpportunityID) && !headerByObjectId.has(item.OpportunityID)) return false;
         if (productKeywords.length > 0) {
           const cat = (item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '').toLowerCase();
           return productKeywords.some((k) => cat.includes(k));
@@ -541,7 +544,7 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
         return true;
       })
       .map((item) => {
-        const hdr = headerMap.get(item.OpportunityID);
+        const hdr = headerById.get(item.OpportunityID) || headerByObjectId.get(item.OpportunityID);
         return {
           'Opportunity ID': item.OpportunityID,
           'Product ID': item.ProductID || '',
@@ -563,7 +566,20 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
       })
       .sort((a, b) => String(a['Opportunity ID']).localeCompare(String(b['Opportunity ID'])));
 
-    return { total: rows.length, rows };
+    return {
+      total: rows.length,
+      rows,
+      _debug: {
+        totalHeaders: hdrData.results?.length,
+        filteredHeaders: headers.length,
+        totalItems: allItems.length,
+        productKeywords,
+        salesOrgId: base.salesOrgId,
+        sampleItemOpportunityID: allItems[0]?.OpportunityID,
+        sampleHeaderID: headers[0]?.ID,
+        sampleHeaderObjectID: headers[0]?.ObjectID,
+      },
+    };
   });
 }
 
