@@ -508,7 +508,12 @@ export async function opportunitiesBySalesOrg(filters, userJwt, userEmail) {
 export async function opportunityItemsRaw(filters, userJwt, userEmail) {
   return getOrSet(userEmail, 'opportunities/items', filters, async () => {
     const base = baseFilters(filters);
-    const productKeyword = (filters.productCategory || '').toLowerCase();
+    // Support multiple keywords separated by "and", "or", or comma — OR-matched
+    const productKeywords = (filters.productCategory || '')
+      .toLowerCase()
+      .split(/\s+and\s+|\s+or\s+|,/)
+      .map((k) => k.trim())
+      .filter(Boolean);
 
     // Fetch headers (date + owner filtered server-side) and all items in parallel.
     const fetchKey = { ...base, salesOrgId: undefined };
@@ -529,9 +534,9 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
     const rows = allItems
       .filter((item) => {
         if (!headerMap.has(item.OpportunityID)) return false;
-        if (productKeyword) {
+        if (productKeywords.length > 0) {
           const cat = (item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '').toLowerCase();
-          return cat.includes(productKeyword);
+          return productKeywords.some((k) => cat.includes(k));
         }
         return true;
       })
