@@ -54,6 +54,8 @@ const ENDPOINT_LABELS = {
   'opportunities/pipeline': 'Opportunity pipeline (by stage)',
   'opportunities/created-trend': 'Opportunities created over time',
   'opportunities/by-sales-org': 'Opportunities by sales org',
+  'opportunities/items': 'Opportunity line items (products)',
+  'quotes/raw': 'All quotes (raw detail)',
   'rfqs/by-status': 'RFQs by status',
   'daily-summary': 'Daily operations summary',
 };
