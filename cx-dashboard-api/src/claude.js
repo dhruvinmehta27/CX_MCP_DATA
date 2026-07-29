@@ -83,8 +83,9 @@ export async function parseIntent(userRequest, filters = {}) {
 }
 
 ENDPOINT SELECTION RULES — pick the most specific match:
+IMPORTANT: If the user asks for product-level detail (Product ID, Product Category, Quantity, Cost, Price, line items, items within opportunities, specific product types like "oil seals"/"cassette seals"/"seals"), ALWAYS use "opportunities/items" — even if the word "pipeline" or "opportunity" appears. Product detail always wins over pipeline/stage views.
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
-- "opportunity items", "opportunity products", "product ID", "product category", "oil seals", "cassette seals", "quantity", "cost per item", "line items", "opportunity line", "show me products in opportunities" → use "opportunities/items" and set chartType "table". If user mentions a product category keyword (e.g. "oil seals", "cassette seals", "glyd ring"), set filters.productCategory to that keyword.
+- ANY of: "product ID", "product category", "product description", "line items", "opportunity items", "opportunity products", "items in opportunities", "opportunity line", "show me products", "oil seals", "cassette seals", "glyd ring", "seals", "quantity", "cost per item", "unit price", "net amount per item", "customer details per product", "don't group", "ungrouped", "one row per" → use "opportunities/items" and set chartType "table". Extract any product category keyword the user mentions and set filters.productCategory to it.
 - "how many opportunities created", "count of opportunities", "opportunities created in last X" → use "opportunities/created-trend"
 - "pipeline by stage", "pipeline health", "stage breakdown", "open pipeline", "weighted pipeline" → use "opportunities/pipeline"
 - "opportunities by sales org", "which org has most opportunities", "org performance" → use "opportunities/by-sales-org"
