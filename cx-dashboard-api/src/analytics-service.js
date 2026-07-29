@@ -4,7 +4,7 @@
  * Shared by the REST routes and the Claude-powered dashboard generator.
  */
 import {
-  fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchRFQs,
+  fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
   fetchAccountCountries,
@@ -515,27 +515,28 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
       .map((k) => k.trim())
       .filter(Boolean);
 
-    // Fetch headers (date + owner filtered server-side) and all items in parallel.
+    // 1. Fetch headers (date + owner filtered server-side).
     const fetchKey = { ...base, salesOrgId: undefined };
-    const [{ data: hdrData }, { data: itemsData }] = await Promise.all([
-      getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt)),
-      getOrSet(userEmail, 'raw:opportunity-items', {}, () => fetchOpportunityItems(userJwt)),
-    ]);
-    const allItems = itemsData?.results || [];
+    const { data: hdrData } = await getOrSet(
+      userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt)
+    );
 
-    // In-process: org filter on headers
+    // 2. Apply org filter in-process.
     const headers = base.salesOrgId
       ? hdrData.results.filter((o) => matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId))
       : hdrData.results;
 
-    // In C4C OpportunityItemCollection, ParentObjectID is the GUID of the
-    // parent opportunity — join on that against header ObjectID.
+    // 3. Fetch only items whose ParentObjectID is one of the filtered headers.
+    //    This avoids the global 60k cap: we target the exact opportunities we care about.
+    const parentObjectIds = headers.map((h) => h.ObjectID).filter(Boolean);
+    const itemsData = await fetchOpportunityItemsByParents(parentObjectIds, userJwt);
+    const allItems = itemsData.results || [];
+
+    // 4. Build lookup map and apply product keyword filter.
     const headerByObjectId = new Map(headers.map((h) => [h.ObjectID, h]));
 
-    // Join items to filtered headers; apply optional product category keyword
     const rows = allItems
       .filter((item) => {
-        if (!headerByObjectId.has(item.ParentObjectID)) return false;
         if (productKeywords.length > 0) {
           const cat = (item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '').toLowerCase();
           return productKeywords.some((k) => cat.includes(k));
