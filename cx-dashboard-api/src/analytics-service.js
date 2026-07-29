@@ -19,6 +19,36 @@ import { getOrSet } from './cache.js';
 
 const BIZ_TYPE_LABELS = { 11: 'New', 12: 'Follow-up', 13: 'Replacement' };
 
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function suggestCategories(keywords, items) {
+  const uniqueCats = [...new Set(
+    items.map((i) => i.ProductCategoryDescription || i.ProductCategoryDescription_SDK || '').filter(Boolean)
+  )];
+  if (uniqueCats.length === 0) return [];
+  return keywords.flatMap((kw) => {
+    const scored = uniqueCats
+      .map((cat) => {
+        const dist = levenshtein(kw, cat.toLowerCase());
+        return { cat, sim: 1 - dist / Math.max(kw.length, cat.length) };
+      })
+      .filter((s) => s.sim > 0.4)
+      .sort((a, b) => b.sim - a.sim)
+      .slice(0, 3)
+      .map((s) => s.cat);
+    return scored.length ? [{ keyword: kw, suggestions: scored }] : [];
+  });
+}
+
 /**
  * Raw-dataset cache shared by all endpoints of one entity. Keyed only on
  * the base filters, so the six quote endpoints (by-status, trend, list, …)
@@ -539,7 +569,9 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
       .filter((item) => {
         if (productKeywords.length > 0) {
           const cat = (item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '').toLowerCase();
-          return productKeywords.some((k) => cat.includes(k));
+          return productKeywords.some((k) =>
+            cat.includes(k) || (k.endsWith('s') && cat.includes(k.slice(0, -1)))
+          );
         }
         return true;
       })
@@ -566,9 +598,14 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
       })
       .sort((a, b) => String(a['Opportunity ID']).localeCompare(String(b['Opportunity ID'])));
 
+    const categorySuggestions = rows.length === 0 && productKeywords.length > 0
+      ? suggestCategories(productKeywords, allItems)
+      : [];
+
     return {
       total: rows.length,
       rows,
+      categorySuggestions,
       _debug: {
         totalHeaders: hdrData.results?.length,
         filteredHeaders: headers.length,
