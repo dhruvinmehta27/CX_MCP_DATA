@@ -49,6 +49,7 @@ function parseJsonResponse(text) {
 const VALID_ENDPOINTS = [
   'quotes/raw', 'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
   'opportunities/pipeline', 'opportunities/created-trend', 'opportunities/by-sales-org',
+  'opportunities/items',
   'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
 ];
 
@@ -64,7 +65,7 @@ export function sanitizeIntent(intent = {}) {
 export async function parseIntent(userRequest, filters = {}) {
   const prompt = `Parse this analytics request and return JSON only, no markdown:
 {
-  "endpoints": [one or more from: "quotes/raw"|"quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"opportunities/created-trend"|"opportunities/by-sales-org"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
+  "endpoints": [one or more from: "quotes/raw"|"quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"opportunities/created-trend"|"opportunities/by-sales-org"|"opportunities/items"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
   "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel"|"table",
   "title": string,
   "xKey": string,
@@ -78,11 +79,12 @@ export async function parseIntent(userRequest, filters = {}) {
   "detectedOwnerName": string|null,
   "clarificationNeeded": boolean,
   "clarificationQuestion": string|null,
-  "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null }
+  "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null, "productCategory": string|null }
 }
 
 ENDPOINT SELECTION RULES — pick the most specific match:
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
+- "opportunity items", "opportunity products", "product ID", "product category", "oil seals", "cassette seals", "quantity", "cost per item", "line items", "opportunity line", "show me products in opportunities" → use "opportunities/items" and set chartType "table". If user mentions a product category keyword (e.g. "oil seals", "cassette seals", "glyd ring"), set filters.productCategory to that keyword.
 - "how many opportunities created", "count of opportunities", "opportunities created in last X" → use "opportunities/created-trend"
 - "pipeline by stage", "pipeline health", "stage breakdown", "open pipeline", "weighted pipeline" → use "opportunities/pipeline"
 - "opportunities by sales org", "which org has most opportunities", "org performance" → use "opportunities/by-sales-org"
@@ -109,6 +111,8 @@ ORG & OWNER RULES:
   Mexico = TSSMEXICO
   Brazil = TSSBRAZIL
   US Industrial / Industrial US / United States Industrial = TSSSEGCHETRAOPER
+  India / TSS India = TSSINDIA
+  China / TSS China = TSSCHINA
   For any org not in this list, use the name as-is and let in-process filtering handle it.
 - detectedOwnerName: if user mentions a specific person, set to their name. Also set filters.ownerId.
 - clarificationNeeded: true only if the request is genuinely ambiguous (e.g. "show me data" with no context).

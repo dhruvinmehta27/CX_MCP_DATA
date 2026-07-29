@@ -361,6 +361,26 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   );
 }
 
+export async function fetchOpportunityItems(userJwt) {
+  // No server-side date/org filter available on items — fetch all, join in-process.
+  return fetchAllPages(
+    `${ODATA_BASE}/OpportunityItemCollection`,
+    [
+      'ObjectID', 'ParentObjectID', 'OpportunityID', 'ID',
+      'ProductID', 'ProductIDDescription',
+      'ProductCategoryDescription', 'ProductCategoryDescription_SDK',
+      'Quantity', 'QuantityUnitCodeText',
+      'NetAmount', 'NetAmountCurrencyCode',
+      'ExpectedNetAmount', 'ExpectedNetAmountCurrencyCode',
+      'CostAmountContent_KUT', 'CostAmountcurrencyCode_KUT',
+      'ItemCostcontent', 'ItemCostcurrencyCode',
+      'LifeCycleStatusCodeText',
+    ],
+    '',
+    userJwt
+  );
+}
+
 export async function fetchRFQs(filters = {}, userJwt) {
   const parts = [];
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
