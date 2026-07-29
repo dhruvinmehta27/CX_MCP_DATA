@@ -539,7 +539,9 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
       .filter((item) => {
         if (productKeywords.length > 0) {
           const cat = (item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '').toLowerCase();
-          return productKeywords.some((k) => cat.includes(k));
+          return productKeywords.some((k) =>
+            cat.includes(k) || (k.endsWith('s') && cat.includes(k.slice(0, -1)))
+          );
         }
         return true;
       })
