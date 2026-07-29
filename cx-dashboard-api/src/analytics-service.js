@@ -528,15 +528,14 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
       ? hdrData.results.filter((o) => matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId))
       : hdrData.results;
 
-    // Build two maps so the join works whether OpportunityID is the
-    // human-readable ID (e.g. "17053") or the internal ObjectID (GUID).
-    const headerById = new Map(headers.map((h) => [h.ID, h]));
+    // In C4C OpportunityItemCollection, ParentObjectID is the GUID of the
+    // parent opportunity — join on that against header ObjectID.
     const headerByObjectId = new Map(headers.map((h) => [h.ObjectID, h]));
 
     // Join items to filtered headers; apply optional product category keyword
     const rows = allItems
       .filter((item) => {
-        if (!headerById.has(item.OpportunityID) && !headerByObjectId.has(item.OpportunityID)) return false;
+        if (!headerByObjectId.has(item.ParentObjectID)) return false;
         if (productKeywords.length > 0) {
           const cat = (item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '').toLowerCase();
           return productKeywords.some((k) => cat.includes(k));
@@ -544,7 +543,7 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
         return true;
       })
       .map((item) => {
-        const hdr = headerById.get(item.OpportunityID) || headerByObjectId.get(item.OpportunityID);
+        const hdr = headerByObjectId.get(item.ParentObjectID);
         return {
           'Opportunity ID': item.OpportunityID,
           'Product ID': item.ProductID || '',
@@ -575,8 +574,7 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
         totalItems: allItems.length,
         productKeywords,
         salesOrgId: base.salesOrgId,
-        sampleItemOpportunityID: allItems[0]?.OpportunityID,
-        sampleHeaderID: headers[0]?.ID,
+        sampleItemParentObjectID: allItems[0]?.ParentObjectID,
         sampleHeaderObjectID: headers[0]?.ObjectID,
       },
     };
