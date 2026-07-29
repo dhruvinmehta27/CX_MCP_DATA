@@ -84,7 +84,7 @@ router.post('/generate', async (req, res, next) => {
 
     // 1. Use the confirmed plan when provided (wizard flow), otherwise parse
     const intent = req.body.intent
-      ? sanitizeIntent(req.body.intent)
+      ? sanitizeIntent(req.body.intent, userRequest)
       : await parseIntent(userRequest, filters);
     // UI-supplied dates (builder range chips) always win over AI-parsed dates
     const mergedFilters = { ...(intent.filters || {}), ...filters };

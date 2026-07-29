@@ -53,9 +53,27 @@ const VALID_ENDPOINTS = [
   'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
 ];
 
-export function sanitizeIntent(intent = {}) {
+// Keywords that deterministically force opportunities/items — no LLM override possible.
+const ITEMS_KEYWORDS = [
+  'product id', 'product category', 'product description', 'line item', 'line-item',
+  'oil seal', 'cassette seal', 'glyd ring', 'quantity', 'cost per item', 'unit price',
+  'opportunity item', 'opportunity product', 'items in opportunit', 'products in opportunit',
+  'dont group', "don't group", 'do not group', 'ungrouped', 'one row per',
+];
+
+function needsItemsEndpoint(userRequest) {
+  const lower = (userRequest || '').toLowerCase();
+  return ITEMS_KEYWORDS.some((k) => lower.includes(k));
+}
+
+export function sanitizeIntent(intent = {}, userRequest = '') {
   intent.endpoints = (intent.endpoints || []).filter((e) => VALID_ENDPOINTS.includes(e));
   if (intent.endpoints.length === 0) intent.endpoints = ['quotes/by-status'];
+  // Hard override: product-level keywords always force the line-item endpoint
+  if (needsItemsEndpoint(userRequest)) {
+    intent.endpoints = ['opportunities/items'];
+    intent.chartType = 'table';
+  }
   return intent;
 }
 
@@ -130,7 +148,7 @@ Request: ${userRequest}`;
     max_tokens: 2000,
     messages: [{ role: 'user', content: prompt }],
   });
-  return sanitizeIntent(parseJsonResponse(extractText(response)));
+  return sanitizeIntent(parseJsonResponse(extractText(response)), userRequest);
 }
 
 /**
