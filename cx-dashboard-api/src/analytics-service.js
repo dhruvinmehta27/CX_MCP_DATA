@@ -4,7 +4,7 @@
  * Shared by the REST routes and the Claude-powered dashboard generator.
  */
 import {
-  fetchQuotes, fetchOpportunities, fetchRFQs,
+  fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
   fetchAccountCountries,
@@ -501,10 +501,74 @@ export async function opportunitiesBySalesOrg(filters, userJwt, userEmail) {
 }
 
 /**
+ * Opportunity line-item detail — joins OpportunityItemCollection to headers.
+ * Supports: org filter (header), date filter (header), product category keyword filter.
+ * Returns one flat row per item, sorted by OpportunityID.
+ */
+export async function opportunityItemsRaw(filters, userJwt, userEmail) {
+  return getOrSet(userEmail, 'opportunities/items', filters, async () => {
+    const base = baseFilters(filters);
+    const productKeyword = (filters.productCategory || '').toLowerCase();
+
+    // Fetch headers (date + owner filtered server-side) and all items in parallel.
+    const fetchKey = { ...base, salesOrgId: undefined };
+    const [{ data: hdrData }, { results: allItems }] = await Promise.all([
+      getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt)),
+      getOrSet(userEmail, 'raw:opportunity-items', {}, () =>
+        fetchOpportunityItems(userJwt).then((r) => r)
+      ),
+    ]);
+
+    // In-process: org filter on headers
+    const headers = base.salesOrgId
+      ? hdrData.results.filter((o) => matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId))
+      : hdrData.results;
+
+    const headerMap = new Map(headers.map((h) => [h.ID, h]));
+
+    // Join items to filtered headers; apply optional product category keyword
+    const rows = allItems
+      .filter((item) => {
+        if (!headerMap.has(item.OpportunityID)) return false;
+        if (productKeyword) {
+          const cat = (item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '').toLowerCase();
+          return cat.includes(productKeyword);
+        }
+        return true;
+      })
+      .map((item) => {
+        const hdr = headerMap.get(item.OpportunityID);
+        return {
+          'Opportunity ID': item.OpportunityID,
+          'Product ID': item.ProductID || '',
+          'Product Description': item.ProductIDDescription || '',
+          'Product Category': item.ProductCategoryDescription || item.ProductCategoryDescription_SDK || '',
+          'Quantity': toNumber(item.Quantity),
+          'Unit': item.QuantityUnitCodeText || '',
+          'Net Amount': toNumber(item.NetAmount || item.ExpectedNetAmount),
+          'Currency': item.NetAmountCurrencyCode || item.ExpectedNetAmountCurrencyCode || '',
+          'Cost': toNumber(item.CostAmountContent_KUT || item.ItemCostcontent),
+          'Cost Currency': item.CostAmountcurrencyCode_KUT || item.ItemCostcurrencyCode || '',
+          'Item Status': item.LifeCycleStatusCodeText || '',
+          'Customer': hdr?.ProspectPartyName || '',
+          'Customer ID': hdr?.ProspectPartyID || '',
+          'Sales Org': hdr?.SalesOrganisationName || '',
+          'Owner': hdr?.MainEmployeeResponsiblePartyName || '',
+          'Created Date': parseODataDate(hdr?.CreationDateTime)?.toISOString().slice(0, 10) || '',
+        };
+      })
+      .sort((a, b) => String(a['Opportunity ID']).localeCompare(String(b['Opportunity ID'])));
+
+    return { total: rows.length, rows };
+  });
+}
+
+/**
  * Dispatch table for the Claude-powered dashboard generator.
  */
 export const ENDPOINT_HANDLERS = {
   'quotes/raw': quotesRaw,
+  'opportunities/items': opportunityItemsRaw,
   'quotes/by-status': quotesByStatus,
   'quotes/by-sales-org': quotesBySalesOrg,
   'quotes/trend': quotesTrend,
