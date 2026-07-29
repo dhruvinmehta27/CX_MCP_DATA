@@ -445,8 +445,39 @@ export default function CustomBuilder() {
       {step === 3 && result && (() => {
         const isTable = intent?.chartType === 'table' || (!result.charts?.length && table.rows.length > 0);
         const PREVIEW_LIMIT = 50;
+        const categorySuggestions = result.rawData?.['opportunities/items']?.categorySuggestions || [];
+
+        const retryWithSuggestion = (keyword, suggestion) => {
+          const corrected = request.replace(new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), suggestion);
+          restart();
+          setTimeout(() => plan(corrected), 0);
+        };
+
         return (
           <>
+            {categorySuggestions.length > 0 && (
+              <div className="date-conflict-banner" style={{ marginBottom: 12 }}>
+                <Icon name="alert-triangle" size={15} />
+                <div>
+                  <strong>0 records found.</strong> Did you mean one of these product categories?
+                  {categorySuggestions.map(({ keyword, suggestions }) => (
+                    <div key={keyword} style={{ marginTop: 6 }}>
+                      <span style={{ opacity: 0.7, fontSize: 12 }}>&ldquo;{keyword}&rdquo; →</span>{' '}
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          className="builder-range-chip"
+                          style={{ marginLeft: 6 }}
+                          onClick={() => retryWithSuggestion(keyword, s)}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="card chart-card">
               <div className="chart-card-header">
                 <div>
