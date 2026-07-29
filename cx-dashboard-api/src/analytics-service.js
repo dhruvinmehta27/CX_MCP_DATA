@@ -512,12 +512,11 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
 
     // Fetch headers (date + owner filtered server-side) and all items in parallel.
     const fetchKey = { ...base, salesOrgId: undefined };
-    const [{ data: hdrData }, { results: allItems }] = await Promise.all([
+    const [{ data: hdrData }, { data: itemsData }] = await Promise.all([
       getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt)),
-      getOrSet(userEmail, 'raw:opportunity-items', {}, () =>
-        fetchOpportunityItems(userJwt).then((r) => r)
-      ),
+      getOrSet(userEmail, 'raw:opportunity-items', {}, () => fetchOpportunityItems(userJwt)),
     ]);
+    const allItems = itemsData?.results || [];
 
     // In-process: org filter on headers
     const headers = base.salesOrgId
