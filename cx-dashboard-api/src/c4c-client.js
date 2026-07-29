@@ -361,24 +361,54 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   );
 }
 
+const OPPORTUNITY_ITEM_FIELDS = [
+  'ObjectID', 'ParentObjectID', 'OpportunityID', 'ID',
+  'ProductID', 'ProductIDDescription',
+  'ProductCategoryDescription', 'ProductCategoryDescription_SDK',
+  'Quantity', 'QuantityUnitCodeText',
+  'NetAmount', 'NetAmountCurrencyCode',
+  'ExpectedNetAmount', 'ExpectedNetAmountCurrencyCode',
+  'CostAmountContent_KUT', 'CostAmountcurrencyCode_KUT',
+  'ItemCostcontent', 'ItemCostcurrencyCode',
+  'LifeCycleStatusCodeText',
+];
+
 export async function fetchOpportunityItems(userJwt) {
   // No server-side date/org filter available on items — fetch all, join in-process.
   return fetchAllPages(
     `${ODATA_BASE}/OpportunityItemCollection`,
-    [
-      'ObjectID', 'ParentObjectID', 'OpportunityID', 'ID',
-      'ProductID', 'ProductIDDescription',
-      'ProductCategoryDescription', 'ProductCategoryDescription_SDK',
-      'Quantity', 'QuantityUnitCodeText',
-      'NetAmount', 'NetAmountCurrencyCode',
-      'ExpectedNetAmount', 'ExpectedNetAmountCurrencyCode',
-      'CostAmountContent_KUT', 'CostAmountcurrencyCode_KUT',
-      'ItemCostcontent', 'ItemCostcurrencyCode',
-      'LifeCycleStatusCodeText',
-    ],
+    OPPORTUNITY_ITEM_FIELDS,
     '',
     userJwt
   );
+}
+
+/**
+ * Fetch items for a specific set of parent opportunity ObjectIDs.
+ * Batches OData $filter to avoid URL length limits (25 IDs per request).
+ * Use this when the parent set is already filtered (org + date) to avoid
+ * the global 60k record cap problem.
+ */
+export async function fetchOpportunityItemsByParents(parentObjectIds, userJwt) {
+  if (!parentObjectIds || parentObjectIds.length === 0) return { total: 0, results: [] };
+  const BATCH = 25;
+  const pages = [];
+  for (let i = 0; i < parentObjectIds.length; i += BATCH) {
+    pages.push(parentObjectIds.slice(i, i + BATCH));
+  }
+  const batches = await Promise.all(
+    pages.map((ids) => {
+      const filter = ids.map((id) => `ParentObjectID eq '${odataEscape(id)}'`).join(' or ');
+      return fetchAllPages(
+        `${ODATA_BASE}/OpportunityItemCollection`,
+        OPPORTUNITY_ITEM_FIELDS,
+        filter,
+        userJwt
+      );
+    })
+  );
+  const results = batches.flatMap((b) => b.results || []);
+  return { total: results.length, results };
 }
 
 export async function fetchRFQs(filters = {}, userJwt) {
