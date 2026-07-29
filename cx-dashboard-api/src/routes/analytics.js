@@ -49,6 +49,7 @@ router.get('/whoami', async (req, res) => {
     await probeC4CAccess(req.userJwt);
     res.json({ ok: true, user: req.userEmail });
   } catch (err) {
+    console.warn(`[whoami] no C4C access for ${req.userEmail}: ${err.message}`);
     res.json({ ok: false, user: req.userEmail, message: err.message });
   }
 });
