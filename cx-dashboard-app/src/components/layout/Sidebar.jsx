@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import Icon from '../ui/Icon';
 
 const NAV = [
@@ -16,14 +16,14 @@ const NAV = [
 export default function Sidebar({ collapsed, onToggle }) {
   return (
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
-      <div className="sidebar-brand">
+      <Link to="/" className="sidebar-brand" style={{ textDecoration: 'none', cursor: 'pointer' }}>
         <img src="/Company_Logo.png" alt="Trelleborg" className="brand-logo-img" />
         {!collapsed && (
           <div className="brand-name">
             AI Intelligence
           </div>
         )}
-      </div>
+      </Link>
       <nav className="sidebar-nav">
         {NAV.map((item) => (
           <NavLink
