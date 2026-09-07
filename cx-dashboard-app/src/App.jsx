@@ -6,6 +6,7 @@ import FilterBar from './components/layout/FilterBar';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import AccessGate from './auth/AccessGate';
 import { FilterProvider } from './hooks/useFilters';
+import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import DailyBriefing from './pages/DailyBriefing';
 import QuoteAnalytics from './pages/QuoteAnalytics';
@@ -33,7 +34,7 @@ function Shell() {
   // The welcome / launchpad is a full-screen page with NO app chrome — the
   // sidebar + filter bar only appear once the user picks a section.
   if (location.pathname === '/') {
-    return <Dashboard />;
+    return <Home />;
   }
 
   const [title, subtitle] = PAGE_TITLES[location.pathname] || ['Dashboard', ''];
