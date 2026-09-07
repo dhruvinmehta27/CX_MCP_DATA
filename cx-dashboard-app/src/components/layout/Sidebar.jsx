@@ -2,6 +2,7 @@ import { NavLink, Link } from 'react-router-dom';
 import Icon from '../ui/Icon';
 
 const NAV = [
+  { to: '/', icon: 'home', label: 'Home', end: true },
   { to: '/builder', icon: 'sparkles', label: 'AI Report Builder' },
   { to: '/brief', icon: 'briefcase', label: 'Sales Brief' },
   // Hidden — available when needed:
