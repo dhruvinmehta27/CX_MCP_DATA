@@ -27,7 +27,7 @@ const DATA_OBJECTS = [
   { icon: 'target',       label: 'Opportunities',         detail: 'Pipeline stages, created trend, by sales org' },
   { icon: 'box',          label: 'Opportunity Products',  detail: 'Line items — product, category, quantity, cost, price' },
   { icon: 'inbox',        label: 'RFQs',                  detail: 'Request-for-quote status and breakdown' },
-  { icon: 'activity',     label: 'Activities',             detail: 'Tasks, visits & meetings — overdue and upcoming' },
+  { icon: 'activity',     label: 'Activities',             detail: 'Tasks, visits & appointments — overdue and upcoming' },
 ];
 
 export default function Home() {
