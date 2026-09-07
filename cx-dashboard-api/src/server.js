@@ -29,6 +29,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'cx-dashboard-api', time: new Date().toISOString() });
 });
 
+// Returns which C4C system is configured — derived from the destination name.
+// 352500 = QUA, 332854 = PROD. Destination naming convention: *_PRD_* → PROD, else QUA.
+app.get('/api/info', (req, res) => {
+  const dest = process.env.C4C_DESTINATION || '';
+  const isProd = dest.toUpperCase().includes('PRD');
+  res.json({ system: isProd ? 'PROD' : 'QUA', destination: dest });
+});
+
 app.use('/api', authMiddleware);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
