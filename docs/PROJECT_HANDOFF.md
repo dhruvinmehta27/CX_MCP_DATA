@@ -2,6 +2,8 @@
 
 > Single source of truth for the Trelleborg Sealing Solutions (TSS) sales dashboard built on SAP Cloud for Customer (C4C). Hand this to a new chat/developer to continue work.
 
+> 📐 **Architecture diagrams + component/endpoint reference + access model:** see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+
 ---
 
 ## ⭐ START HERE — paste this into a new chat to load context
