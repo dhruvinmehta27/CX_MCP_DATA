@@ -185,7 +185,7 @@ export default function CustomBuilder() {
     if (!isRefinement) setBaseRequest(userRequest);
     setBusy(true);
     setError(null);
-    setUseRequestPeriod(false);
+    if (!isRefinement) setUseRequestPeriod(false);
     setOrgMatches([]);
     setSelectedOrgId('');
     setSelectedOrgName('');
