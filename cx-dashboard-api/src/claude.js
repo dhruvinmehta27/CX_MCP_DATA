@@ -93,6 +93,18 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
     if (lower.includes('table')) intent.chartType = 'table';
     else if (intent.chartType === 'pie') intent.chartType = 'pie';
     else intent.chartType = 'bar';
+    // Ask for scope if no org is specified — avoids fetching all records across every org
+    const lower2 = (userRequest || '').toLowerCase();
+    const userSaidAll = lower2.includes('all org') || lower2.includes('all sales org') || lower2 === 'all';
+    const hasOrg = intent.filters?.salesOrgId || userSaidAll;
+    const hasDate = intent.filters?.dateFrom || intent.filters?.dateTo || intent.filters?.months ||
+                    intent.detectedDateFrom || intent.detectedDateTo || intent.detectedPeriod;
+    if (!hasOrg) {
+      intent.clarificationNeeded = true;
+      intent.clarificationQuestion = hasDate
+        ? 'Which sales org or region should I focus on? (e.g. TSS India, Germany, Industrial Americas) — or type "all" to include every org.'
+        : 'Which sales org or region, and what time period? (e.g. "TSS India in 2026") — or type "all orgs" to include everything.';
+    }
   }
   return intent;
 }
