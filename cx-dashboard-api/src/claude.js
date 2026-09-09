@@ -118,16 +118,21 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
     else intent.chartType = 'bar';
   }
 
-  // Proactive scope check: for raw/large endpoints, block if no org scoping
-  if (requiresScope(intent) && !intent.clarificationNeeded) {
+  // Proactive scope check: for raw/large endpoints, block if no org scoping.
+  // Always run this — it overrides any clarificationNeeded the LLM may have set.
+  if (requiresScope(intent)) {
     const { hasOrg, hasDate } = hasScopeFilter(intent, userRequest);
     // For opportunities/items, a product category filter is enough scoping even without org
     const hasProductScope = intent.endpoints.includes('opportunities/items') && intent.filters?.productCategory;
     if (!hasOrg && !hasProductScope) {
       intent.clarificationNeeded = true;
       intent.clarificationQuestion = hasDate
-        ? 'Which sales org or region should I focus on? — or choose "All orgs" to include every org.'
-        : 'Which sales org or region, and what time period? (e.g. "TSS India in 2026", "Germany last 3 months") — or choose "All orgs" below.';
+        ? 'Which sales org or region should I focus on? — or type "all" to include every org.'
+        : 'Which sales org or region, and what time period? (e.g. "TSS India in 2026", "Germany last 3 months") — or type "all" to include everything.';
+    } else {
+      // Scope is satisfied — clear any clarification the LLM may have incorrectly set
+      intent.clarificationNeeded = false;
+      intent.clarificationQuestion = null;
     }
   }
 
