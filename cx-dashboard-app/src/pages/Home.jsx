@@ -23,11 +23,36 @@ const FEATURES = [
 ];
 
 const DATA_OBJECTS = [
-  { icon: 'file-text',    label: 'Quotes',                detail: 'Status, value, trend, by sales org & business type' },
-  { icon: 'target',       label: 'Opportunities',         detail: 'Pipeline stages, created trend, by sales org' },
-  { icon: 'box',          label: 'Opportunity Products',  detail: 'Line items — product, category, quantity, cost, price' },
-  { icon: 'inbox',        label: 'RFQs',                  detail: 'Request-for-quote status and breakdown' },
-  { icon: 'activity',     label: 'Activities',             detail: 'Tasks, visits & appointments — overdue and upcoming' },
+  {
+    icon: 'file-text',
+    label: 'Quotes',
+    can: ['Status breakdown & counts', 'Value by sales org', 'Monthly trend', 'By business type', 'Top customers by quote volume', 'Top reps by quote count', 'Raw quote list with filters'],
+    cannot: ['Quote line items / products', 'Quote approval history'],
+  },
+  {
+    icon: 'target',
+    label: 'Opportunities',
+    can: ['Pipeline by stage', 'Created trend over time', 'By sales org', 'Open vs won vs lost'],
+    cannot: ['Opportunity owner ranking', 'Forecast accuracy'],
+  },
+  {
+    icon: 'box',
+    label: 'Opportunity Products',
+    can: ['Line items by product category', 'Quantity, cost & price per item', 'Filter by org + product type', 'Customer & owner per line item'],
+    cannot: ['RFQ product detail', 'Product master data'],
+  },
+  {
+    icon: 'inbox',
+    label: 'RFQs',
+    can: ['Status breakdown', 'By supplier / account', 'Monthly trend', 'Open & overdue RFQ list', 'Filter by supplier name & date'],
+    cannot: ['RFQ line items / product category', 'RFQ value / amount'],
+  },
+  {
+    icon: 'activity',
+    label: 'Activities',
+    can: ['Overdue tasks', 'Upcoming visits & appointments', 'Daily summary'],
+    cannot: ['Activity history older than data range', 'Call logs'],
+  },
 ];
 
 export default function Home() {
@@ -84,23 +109,37 @@ export default function Home() {
       {/* Data objects */}
       <div style={{ width: '100%', maxWidth: 780 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
-          Data available from SAP C4C
+          What you can ask — by data source
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(228px, 1fr))', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
           {DATA_OBJECTS.map((d) => (
             <div key={d.label} style={{
-              display: 'flex', gap: 12, alignItems: 'flex-start',
               background: '#fff', border: '1px solid var(--border)',
-              borderRadius: 10, padding: '14px 16px',
+              borderRadius: 12, padding: '16px 18px',
               boxShadow: 'var(--shadow-sm)',
             }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon name={d.icon} size={15} style={{ color: 'var(--primary)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon name={d.icon} size={15} style={{ color: 'var(--primary)' }} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{d.label}</div>
               </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 3 }}>{d.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{d.detail}</div>
-              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#1e7a0f', marginBottom: 5 }}>✓ Can ask</div>
+              <ul style={{ margin: '0 0 10px', paddingLeft: 16, listStyle: 'none' }}>
+                {d.can.map((item) => (
+                  <li key={item} style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ color: '#36A41D', fontWeight: 700, flexShrink: 0 }}>·</span>{item}
+                  </li>
+                ))}
+              </ul>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#b84f00', marginBottom: 5 }}>✗ Not yet available</div>
+              <ul style={{ margin: 0, paddingLeft: 16, listStyle: 'none' }}>
+                {d.cannot.map((item) => (
+                  <li key={item} style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ color: '#e76500', fontWeight: 700, flexShrink: 0 }}>·</span>{item}
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>
