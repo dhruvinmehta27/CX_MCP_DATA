@@ -210,13 +210,15 @@ See `PROJECT_HANDOFF.md` §9 for the full operational gotchas.
 
 ## 9. What has been built (change history)
 
-**Original platform** — C4C analytics over per-user OBO: Daily Briefing, Quote Analytics, Pipeline Command Center (5 views), Pipeline Health, RFQ Tracker, AI Report Builder, Sales Brief; base-currency valuation, OPEN-only pipeline, exact inline counts + fail-closed guardrails, the paginated 60k-capped fetch engine, shared raw-fetch cache, Copilot inline chart endpoints.
+> **Original creator & platform owner: Dhruvin Mehta** ([`@dhruvinmehta27`](https://github.com/dhruvinmehta27)) — architected and built the platform, the SAP BTP / Azure AD OBO infrastructure, the Azure AI Foundry integration, the data-loading engine, the core pages, and the data-correctness rules; owns deployment and operations. **Abdul Nandalpad** contributed the AI-features layer noted below. AI-assisted implementation throughout.
 
-**AI model routing** — Claude calls now route through **Azure AI Foundry** (`ANTHROPIC_BASE_URL` + `api-key` header), model `claude-sonnet-4-6`. First-party Anthropic still works when the vars are unset.
+**Original platform (Dhruvin Mehta — original creator)** — C4C analytics over per-user OBO: Daily Briefing, Quote Analytics, Pipeline Command Center (5 views), Pipeline Health, RFQ Tracker, AI Report Builder, Sales Brief; base-currency valuation, OPEN-only pipeline, exact inline counts + fail-closed guardrails, the paginated 60k-capped fetch engine, shared raw-fetch cache, Copilot inline chart endpoints.
 
-**Filter bar redesign** — date range → **dual-handle year-ticked slider** (keyboard-operable, fail-safe UTC math); Sales Org **search box → dropdown** sourced from `OrganisationalUnitFunctionsCollection` (CompanyIndicator) + `OrganisationalUnitNameAndAddressCollection`, joined on `OrganisationalUnitID`; sales-org scoping applied **in-process** (C4C can't filter `SalesOrganisationID`).
+**AI model routing (Dhruvin Mehta)** — Claude calls now route through **Azure AI Foundry** (`ANTHROPIC_BASE_URL` + `api-key` header), model `claude-sonnet-4-6`. First-party Anthropic still works when the vars are unset.
 
-**Access / diagnostics** — `AccessGate` distinguishes **network** ("Can't reach the dashboard") vs **C4C denial**, shows a "Technical details" reason; backend logs `[whoami] no C4C access …`. (Used to trace real Azure-assignment and C4C-user issues for onboarding.)
+**Filter bar redesign (Dhruvin Mehta)** — date range → **dual-handle year-ticked slider** (keyboard-operable, fail-safe UTC math); Sales Org **search box → dropdown** sourced from `OrganisationalUnitFunctionsCollection` (CompanyIndicator) + `OrganisationalUnitNameAndAddressCollection`, joined on `OrganisationalUnitID`; sales-org scoping applied **in-process** (C4C can't filter `SalesOrganisationID`).
+
+**Access / diagnostics (Dhruvin Mehta)** — `AccessGate` distinguishes **network** ("Can't reach the dashboard") vs **C4C denial**, shows a "Technical details" reason; backend logs `[whoami] no C4C access …`. (Used to trace real Azure-assignment and C4C-user issues for onboarding.)
 
 **AI Report Builder (Abdul)** — 4-chart grid + plan explanation; **scope-clarification flow** (asks org/period for raw/large queries; inline text answers; "all orgs" shortcut); deterministic routing overrides (product detail → `opportunities/items`; "top N by count" → `quotes/top-creators`); new endpoints: **`quotes/top-creators`**, **`opportunities/items`** (line-item / product search with plural-tolerant, multi-keyword matching + "Did you mean?"), **`rfqs/by-supplier` / `rfqs/trend` / `rfqs/list`**.
 
