@@ -619,6 +619,23 @@ export async function opportunityItemsRaw(filters, userJwt, userEmail) {
   });
 }
 
+export async function quotesTopCreators(filters, userJwt, userEmail) {
+  return getOrSet(userEmail, 'quotes/top-creators', filters, async () => {
+    const { results } = await rawQuotes(filters, userJwt, userEmail);
+    const limit = filters.limit || 10;
+    const counts = {};
+    for (const q of results) {
+      const key = q.EmployeeResponsiblePartyName || q.CreatedBy || 'Unknown';
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    const rows = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([name, count], i) => ({ Rank: i + 1, 'Sales Rep / Owner': name, 'Quote Count': count }));
+    return { total: rows.length, rows };
+  });
+}
+
 /**
  * Dispatch table for the Claude-powered dashboard generator.
  */
@@ -630,6 +647,7 @@ export const ENDPOINT_HANDLERS = {
   'quotes/trend': quotesTrend,
   'quotes/by-biz-type': quotesByBizType,
   'quotes/top-customers': quotesTopCustomers,
+  'quotes/top-creators': quotesTopCreators,
   'opportunities/pipeline': opportunitiesPipeline,
   'opportunities/created-trend': opportunitiesCreatedTrend,
   'opportunities/by-sales-org': opportunitiesBySalesOrg,
