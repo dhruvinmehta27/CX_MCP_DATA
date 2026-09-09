@@ -112,9 +112,8 @@ function exportCsv(columns, rows, filename) {
   URL.revokeObjectURL(url);
 }
 
-function ClarificationInput({ question, onSubmit }) {
+function ClarificationInput({ question, onSubmit, onAllOrgs }) {
   const [value, setValue] = useState('');
-  const ref = useRef(null);
   return (
     <div style={{ background: 'rgba(231,101,0,0.06)', border: '1px solid rgba(231,101,0,0.22)', borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
@@ -123,18 +122,24 @@ function ClarificationInput({ question, onSubmit }) {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <input
-          ref={ref}
           autoFocus
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && value.trim()) onSubmit(value.trim()); }}
-          placeholder='e.g. "TSS India" or "all orgs" or "Q1 2026"'
+          placeholder='e.g. "TSS India" or "Q1 2026"'
           style={{
             flex: 1, fontSize: 13, padding: '7px 12px',
             border: '1px solid var(--border)', borderRadius: 8,
             background: 'var(--bg)', color: 'var(--text)', outline: 'none',
           }}
         />
+        <button
+          className="btn btn-ghost"
+          onClick={onAllOrgs}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          All orgs
+        </button>
         <button
           className="btn"
           disabled={!value.trim()}
@@ -449,7 +454,13 @@ export default function CustomBuilder() {
 
             {/* Clarification required */}
             {intent.clarificationNeeded && intent.clarificationQuestion && (
-              <ClarificationInput question={intent.clarificationQuestion} onSubmit={(extra) => plan(`${baseRequest} — ${extra}`, true)} />
+              <ClarificationInput
+                question={intent.clarificationQuestion}
+                onSubmit={(extra) => plan(`${baseRequest} — ${extra}`, true)}
+                onAllOrgs={() => {
+                  setIntent((prev) => ({ ...prev, clarificationNeeded: false, clarificationQuestion: null }));
+                }}
+              />
             )}
 
             {error && <EmptyState title="Build failed" message={error.message} error />}
