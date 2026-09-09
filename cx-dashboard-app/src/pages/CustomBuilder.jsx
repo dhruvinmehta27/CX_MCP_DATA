@@ -153,6 +153,7 @@ export default function CustomBuilder() {
   const [selectedMonths, setSelectedMonths] = useState(6);
   const [step, setStep] = useState(0);
   const [request, setRequest] = useState('');
+  const [baseRequest, setBaseRequest] = useState('');
   const [intent, setIntent] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -177,10 +178,11 @@ export default function CustomBuilder() {
     dateTo: (useRequestPeriod && overrideDateTo) ? overrideDateTo : baseRange.dateTo,
   };
 
-  const plan = async (text) => {
+  const plan = async (text, isRefinement = false) => {
     const userRequest = (text ?? request).trim();
     if (!userRequest || busy) return;
     setRequest(userRequest);
+    if (!isRefinement) setBaseRequest(userRequest);
     setBusy(true);
     setError(null);
     setUseRequestPeriod(false);
@@ -447,7 +449,7 @@ export default function CustomBuilder() {
 
             {/* Clarification required */}
             {intent.clarificationNeeded && intent.clarificationQuestion && (
-              <ClarificationInput question={intent.clarificationQuestion} onSubmit={(extra) => plan(`${request} — ${extra}`)} />
+              <ClarificationInput question={intent.clarificationQuestion} onSubmit={(extra) => plan(`${baseRequest} — ${extra}`, true)} />
             )}
 
             {error && <EmptyState title="Build failed" message={error.message} error />}

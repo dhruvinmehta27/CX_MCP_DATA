@@ -83,7 +83,7 @@ function userWantsAll(userRequest) {
   const lower = (userRequest || '').toLowerCase();
   return lower.includes('all org') || lower.includes('all sales org') ||
          lower.includes('entire org') || lower.includes('every org') ||
-         lower === 'all';
+         /\ball\b/.test(lower);
 }
 
 // Returns true if any meaningful scope filter is present
