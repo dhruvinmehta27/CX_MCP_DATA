@@ -112,6 +112,42 @@ function exportCsv(columns, rows, filename) {
   URL.revokeObjectURL(url);
 }
 
+function ClarificationInput({ question, onSubmit }) {
+  const [value, setValue] = useState('');
+  const ref = useRef(null);
+  return (
+    <div style={{ background: 'rgba(231,101,0,0.06)', border: '1px solid rgba(231,101,0,0.22)', borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
+        <Icon name="alert-triangle" size={15} style={{ color: '#b84f00', flexShrink: 0, marginTop: 2 }} />
+        <span style={{ fontSize: 13, color: '#7a3800' }}><strong>Clarification needed:</strong> {question}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          ref={ref}
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && value.trim()) onSubmit(value.trim()); }}
+          placeholder='e.g. "TSS India" or "all orgs" or "Q1 2026"'
+          style={{
+            flex: 1, fontSize: 13, padding: '7px 12px',
+            border: '1px solid var(--border)', borderRadius: 8,
+            background: 'var(--bg)', color: 'var(--text)', outline: 'none',
+          }}
+        />
+        <button
+          className="btn"
+          disabled={!value.trim()}
+          onClick={() => onSubmit(value.trim())}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          Apply <Icon name="arrow-right" size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomBuilder() {
   const { filters: globalFilters } = useFilters();
   const [selectedMonths, setSelectedMonths] = useState(6);
@@ -411,32 +447,7 @@ export default function CustomBuilder() {
 
             {/* Clarification required */}
             {intent.clarificationNeeded && intent.clarificationQuestion && (
-              <div style={{ background: 'rgba(231,101,0,0.06)', border: '1px solid rgba(231,101,0,0.22)', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <Icon name="alert-triangle" size={15} style={{ color: '#b84f00', flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: '#7a3800' }}><strong>Clarification needed:</strong> {intent.clarificationQuestion}</span>
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Sales org / region</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                  {['All orgs', 'TSS India', 'Germany', 'Industrial Americas', 'China', 'Canada', 'Brazil', 'Mexico'].map((org) => (
-                    <button key={org} className="builder-range-chip" onClick={() => plan(`${request} for ${org}`)}>
-                      {org}
-                    </button>
-                  ))}
-                </div>
-                {!intent.detectedPeriod && !intent.detectedDateFrom && (
-                  <>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Time period</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {['2026', 'Q1 2026', 'Q2 2026', 'Last 3 months', 'Last 6 months', 'Last 12 months'].map((period) => (
-                        <button key={period} className="builder-range-chip" onClick={() => plan(`${request} for ${period}`)}>
-                          {period}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <ClarificationInput question={intent.clarificationQuestion} onSubmit={(extra) => plan(`${request} — ${extra}`)} />
             )}
 
             {error && <EmptyState title="Build failed" message={error.message} error />}
