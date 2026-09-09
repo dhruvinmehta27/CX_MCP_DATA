@@ -411,9 +411,22 @@ export default function CustomBuilder() {
 
             {/* Clarification required */}
             {intent.clarificationNeeded && intent.clarificationQuestion && (
-              <div className="date-conflict-banner">
-                <Icon name="alert-triangle" size={15} />
-                <span><strong>Clarification needed:</strong> {intent.clarificationQuestion}</span>
+              <div style={{ background: 'rgba(231,101,0,0.06)', border: '1px solid rgba(231,101,0,0.22)', borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Icon name="alert-triangle" size={15} style={{ color: '#b84f00', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: '#7a3800' }}><strong>Clarification needed:</strong> {intent.clarificationQuestion}</span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {['All orgs', 'TSS India', 'Germany', 'Industrial Americas', 'China', 'Canada', 'Brazil', 'Mexico'].map((org) => (
+                    <button
+                      key={org}
+                      className="builder-range-chip"
+                      onClick={() => plan(`${request} for ${org}`)}
+                    >
+                      {org}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
