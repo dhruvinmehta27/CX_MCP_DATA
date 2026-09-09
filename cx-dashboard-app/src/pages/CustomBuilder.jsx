@@ -416,17 +416,26 @@ export default function CustomBuilder() {
                   <Icon name="alert-triangle" size={15} style={{ color: '#b84f00', flexShrink: 0 }} />
                   <span style={{ fontSize: 13, color: '#7a3800' }}><strong>Clarification needed:</strong> {intent.clarificationQuestion}</span>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Sales org / region</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                   {['All orgs', 'TSS India', 'Germany', 'Industrial Americas', 'China', 'Canada', 'Brazil', 'Mexico'].map((org) => (
-                    <button
-                      key={org}
-                      className="builder-range-chip"
-                      onClick={() => plan(`${request} for ${org}`)}
-                    >
+                    <button key={org} className="builder-range-chip" onClick={() => plan(`${request} for ${org}`)}>
                       {org}
                     </button>
                   ))}
                 </div>
+                {!intent.detectedPeriod && !intent.detectedDateFrom && (
+                  <>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Time period</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {['2026', 'Q1 2026', 'Q2 2026', 'Last 3 months', 'Last 6 months', 'Last 12 months'].map((period) => (
+                        <button key={period} className="builder-range-chip" onClick={() => plan(`${request} for ${period}`)}>
+                          {period}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

@@ -78,14 +78,37 @@ function needsItemsEndpoint(userRequest) {
   return ITEMS_KEYWORDS.some((k) => lower.includes(k));
 }
 
+// Returns true when the user explicitly said they want all orgs / no filter
+function userWantsAll(userRequest) {
+  const lower = (userRequest || '').toLowerCase();
+  return lower.includes('all org') || lower.includes('all sales org') ||
+         lower.includes('entire org') || lower.includes('every org') ||
+         lower === 'all';
+}
+
+// Returns true if any meaningful scope filter is present
+function hasScopeFilter(intent, userRequest) {
+  const hasOrg = intent.filters?.salesOrgId || userWantsAll(userRequest);
+  const hasDate = intent.filters?.dateFrom || intent.filters?.dateTo ||
+                  intent.filters?.months || intent.detectedDateFrom ||
+                  intent.detectedDateTo || intent.detectedPeriod;
+  return { hasOrg, hasDate };
+}
+
+function requiresScope(intent) {
+  return intent.endpoints.some((e) => ['quotes/raw', 'opportunities/items', 'quotes/top-creators'].includes(e));
+}
+
 export function sanitizeIntent(intent = {}, userRequest = '') {
   intent.endpoints = (intent.endpoints || []).filter((e) => VALID_ENDPOINTS.includes(e));
   if (intent.endpoints.length === 0) intent.endpoints = ['quotes/by-status'];
+
   // Hard override: product-level keywords always force the line-item endpoint
   if (needsItemsEndpoint(userRequest)) {
     intent.endpoints = ['opportunities/items'];
     intent.chartType = 'table';
   }
+
   // Hard override: "top N users/reps by quote count" → aggregated endpoint, never raw
   if (needsTopCreatorsEndpoint(userRequest)) {
     intent.endpoints = ['quotes/top-creators'];
@@ -93,19 +116,21 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
     if (lower.includes('table')) intent.chartType = 'table';
     else if (intent.chartType === 'pie') intent.chartType = 'pie';
     else intent.chartType = 'bar';
-    // Ask for scope if no org is specified — avoids fetching all records across every org
-    const lower2 = (userRequest || '').toLowerCase();
-    const userSaidAll = lower2.includes('all org') || lower2.includes('all sales org') || lower2 === 'all';
-    const hasOrg = intent.filters?.salesOrgId || userSaidAll;
-    const hasDate = intent.filters?.dateFrom || intent.filters?.dateTo || intent.filters?.months ||
-                    intent.detectedDateFrom || intent.detectedDateTo || intent.detectedPeriod;
-    if (!hasOrg) {
+  }
+
+  // Proactive scope check: for raw/large endpoints, block if no org scoping
+  if (requiresScope(intent) && !intent.clarificationNeeded) {
+    const { hasOrg, hasDate } = hasScopeFilter(intent, userRequest);
+    // For opportunities/items, a product category filter is enough scoping even without org
+    const hasProductScope = intent.endpoints.includes('opportunities/items') && intent.filters?.productCategory;
+    if (!hasOrg && !hasProductScope) {
       intent.clarificationNeeded = true;
       intent.clarificationQuestion = hasDate
-        ? 'Which sales org or region should I focus on? (e.g. TSS India, Germany, Industrial Americas) — or type "all" to include every org.'
-        : 'Which sales org or region, and what time period? (e.g. "TSS India in 2026") — or type "all orgs" to include everything.';
+        ? 'Which sales org or region should I focus on? — or choose "All orgs" to include every org.'
+        : 'Which sales org or region, and what time period? (e.g. "TSS India in 2026", "Germany last 3 months") — or choose "All orgs" below.';
     }
   }
+
   return intent;
 }
 
