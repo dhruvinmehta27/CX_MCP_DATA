@@ -414,6 +414,7 @@ export async function fetchOpportunityItemsByParents(parentObjectIds, userJwt) {
 export async function fetchRFQs(filters = {}, userJwt) {
   const parts = [];
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
+  if (filters.supplier) parts.push(`substringof('${odataEscape(filters.supplier)}',AccountName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return fetchAllPages(
     `${CUSTOM_BASE}/zrfq/RFQRootCollection`,

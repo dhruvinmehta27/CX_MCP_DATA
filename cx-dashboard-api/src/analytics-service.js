@@ -102,7 +102,7 @@ async function rawOpportunities(filters, userJwt, userEmail) {
 }
 
 async function rawRFQs(filters, userJwt, userEmail) {
-  const base = baseFilters(filters);
+  const base = { ...baseFilters(filters), supplier: filters.supplier || null };
   const { data } = await getOrSet(userEmail, 'raw:rfqs', base, () => fetchRFQs(base, userJwt));
   return data;
 }
@@ -304,6 +304,16 @@ export async function pipelineOverviewSvc(filters, userJwt, userEmail) {
       overview.meta.prevPeriod = { from: prevFilters.dateFrom, to: prevFilters.dateTo };
     }
     return overview;
+  });
+}
+
+export async function rfqsBySupplier(filters, userJwt, userEmail) {
+  const limit = parseInt(filters.limit || '20', 10);
+  return getOrSet(userEmail, 'rfqs/by-supplier', { ...filters, limit }, async () => {
+    const { results } = await rawRFQs(filters, userJwt, userEmail);
+    return countBy(results, 'AccountName')
+      .slice(0, limit)
+      .map(({ label, count }) => ({ supplier: label || 'Unknown', count }));
   });
 }
 
@@ -652,6 +662,9 @@ export const ENDPOINT_HANDLERS = {
   'opportunities/created-trend': opportunitiesCreatedTrend,
   'opportunities/by-sales-org': opportunitiesBySalesOrg,
   'rfqs/by-status': rfqsByStatus,
+  'rfqs/by-supplier': rfqsBySupplier,
+  'rfqs/trend': rfqsTrend,
+  'rfqs/list': rfqsList,
   'daily-summary': getDailySummary,
 };
 
