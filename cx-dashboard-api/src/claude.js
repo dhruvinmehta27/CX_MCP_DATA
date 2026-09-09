@@ -50,8 +50,20 @@ const VALID_ENDPOINTS = [
   'quotes/raw', 'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
   'opportunities/pipeline', 'opportunities/created-trend', 'opportunities/by-sales-org',
   'opportunities/items',
-  'rfqs/by-status', 'quotes/top-customers', 'daily-summary',
+  'rfqs/by-status', 'quotes/top-customers', 'quotes/top-creators', 'daily-summary',
 ];
+
+// Keywords that force quotes/top-creators (ranked aggregation by owner/creator).
+const TOP_CREATORS_KEYWORDS = [
+  'top users', 'top reps', 'top sales rep', 'who created most', 'most quotes',
+  'most quote', 'highest quote count', 'by quote count', 'ranked by quote',
+  'top creators', 'top 10 users', 'top 5 users', 'top 20 users',
+];
+
+function needsTopCreatorsEndpoint(userRequest) {
+  const lower = (userRequest || '').toLowerCase();
+  return TOP_CREATORS_KEYWORDS.some((k) => lower.includes(k));
+}
 
 // Keywords that deterministically force opportunities/items — no LLM override possible.
 const ITEMS_KEYWORDS = [
@@ -74,6 +86,11 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
     intent.endpoints = ['opportunities/items'];
     intent.chartType = 'table';
   }
+  // Hard override: "top N users/reps by quote count" → aggregated endpoint, never raw
+  if (needsTopCreatorsEndpoint(userRequest)) {
+    intent.endpoints = ['quotes/top-creators'];
+    intent.chartType = intent.chartType === 'pie' ? 'pie' : 'bar';
+  }
   return intent;
 }
 
@@ -83,7 +100,7 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
 export async function parseIntent(userRequest, filters = {}) {
   const prompt = `Parse this analytics request and return JSON only, no markdown:
 {
-  "endpoints": [one or more from: "quotes/raw"|"quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"opportunities/created-trend"|"opportunities/by-sales-org"|"opportunities/items"|"rfqs/by-status"|"quotes/top-customers"|"daily-summary"],
+  "endpoints": [one or more from: "quotes/raw"|"quotes/by-status"|"quotes/by-sales-org"|"quotes/trend"|"quotes/by-biz-type"|"opportunities/pipeline"|"opportunities/created-trend"|"opportunities/by-sales-org"|"opportunities/items"|"rfqs/by-status"|"quotes/top-customers"|"quotes/top-creators"|"daily-summary"],
   "chartType": "bar"|"line"|"pie"|"area"|"composed"|"funnel"|"table",
   "title": string,
   "xKey": string,
@@ -102,6 +119,7 @@ export async function parseIntent(userRequest, filters = {}) {
 
 ENDPOINT SELECTION RULES — pick the most specific match:
 IMPORTANT: If the user asks for product-level detail (Product ID, Product Category, Quantity, Cost, Price, line items, items within opportunities, specific product types like "oil seals"/"cassette seals"/"seals"), ALWAYS use "opportunities/items" — even if the word "pipeline" or "opportunity" appears. Product detail always wins over pipeline/stage views.
+- "top N users", "who created most quotes", "top reps by quote count", "most quotes by person", "ranked by quote count" → use "quotes/top-creators" and set chartType "bar". Extract limit N from the request and set filters.limit.
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
 - ANY of: "product ID", "product category", "product description", "line items", "opportunity items", "opportunity products", "items in opportunities", "opportunity line", "show me products", "oil seals", "cassette seals", "glyd ring", "seals", "quantity", "cost per item", "unit price", "net amount per item", "customer details per product", "don't group", "ungrouped", "one row per" → use "opportunities/items" and set chartType "table". Extract any product category keyword the user mentions and set filters.productCategory to it.
 - "how many opportunities created", "count of opportunities", "opportunities created in last X" → use "opportunities/created-trend"
