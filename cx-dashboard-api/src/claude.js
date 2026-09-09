@@ -89,7 +89,10 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
   // Hard override: "top N users/reps by quote count" → aggregated endpoint, never raw
   if (needsTopCreatorsEndpoint(userRequest)) {
     intent.endpoints = ['quotes/top-creators'];
-    intent.chartType = intent.chartType === 'pie' ? 'pie' : 'bar';
+    const lower = (userRequest || '').toLowerCase();
+    if (lower.includes('table')) intent.chartType = 'table';
+    else if (intent.chartType === 'pie') intent.chartType = 'pie';
+    else intent.chartType = 'bar';
   }
   return intent;
 }
