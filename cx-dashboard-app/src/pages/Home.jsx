@@ -79,7 +79,7 @@ export default function Home() {
       </p>
 
       {/* Feature cards */}
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: 780, marginBottom: 52 }}>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: 900, marginBottom: 52 }}>
         {FEATURES.map((f) => (
           <button
             key={f.to}
@@ -107,11 +107,11 @@ export default function Home() {
       </div>
 
       {/* Data objects */}
-      <div style={{ width: '100%', maxWidth: 780 }}>
+      <div style={{ width: '100%', maxWidth: 1200 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
           What you can ask — by data source
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
           {DATA_OBJECTS.map((d) => (
             <div key={d.label} style={{
               background: '#fff', border: '1px solid var(--border)',
