@@ -44,8 +44,8 @@ const DATA_OBJECTS = [
   {
     icon: 'inbox',
     label: 'RFQs',
-    can: ['Status breakdown', 'By supplier / account', 'Monthly trend', 'Open & overdue RFQ list', 'Filter by supplier name & date'],
-    cannot: ['RFQ line items / product category', 'RFQ value / amount'],
+    can: ['Status breakdown', 'By account / customer', 'Monthly trend', 'Open & overdue RFQ list', 'Filter by account name & date'],
+    cannot: ['RFQ by supplier (vendor)', 'RFQ line items / product category', 'RFQ value / amount'],
   },
   {
     icon: 'activity',

@@ -50,7 +50,7 @@ const VALID_ENDPOINTS = [
   'quotes/raw', 'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
   'opportunities/pipeline', 'opportunities/created-trend', 'opportunities/by-sales-org',
   'opportunities/items',
-  'rfqs/by-status', 'rfqs/by-supplier', 'rfqs/trend', 'rfqs/list',
+  'rfqs/by-status', 'rfqs/by-account', 'rfqs/trend', 'rfqs/list',
   'quotes/top-customers', 'quotes/top-creators', 'daily-summary',
 ];
 
@@ -160,7 +160,7 @@ export async function parseIntent(userRequest, filters = {}) {
   "detectedOwnerName": string|null,
   "clarificationNeeded": boolean,
   "clarificationQuestion": string|null,
-  "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null, "productCategory": string|null, "supplier": string|null }
+  "filters": { "salesOrgId": string|null, "ownerId": string|null, "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "months": number|null, "limit": number|null, "productCategory": string|null, "account": string|null }
 }
 
 ENDPOINT SELECTION RULES — pick the most specific match:
@@ -174,9 +174,9 @@ IMPORTANT: If the user asks for product-level detail (Product ID, Product Catego
 - "quote count", "quote status", "quote value", "open quotes" → use "quotes/by-status"
 - "quotes by org", "quote volume by org" → use "quotes/by-sales-org"
 - "quote trend", "monthly quotes", "quotes over time" → use "quotes/trend"
-- "RFQ by supplier", "RFQs per supplier", "which supplier has most RFQs", "RFQ by account", "RFQ by customer" → use "rfqs/by-supplier" and set chartType "bar". Extract supplier name and set filters.supplier if mentioned.
+- "RFQ by account", "RFQs per account", "RFQ by customer", "which account has most RFQs", "RFQ by supplier" (note: in C4C RFQs are linked to accounts/customers, not vendors) → use "rfqs/by-account" and set chartType "bar". Extract account name and set filters.account if mentioned.
 - "RFQ trend", "RFQs over time", "monthly RFQs", "RFQ volume by month" → use "rfqs/trend" and set chartType "line"
-- "list RFQs", "show me RFQs", "open RFQs", "overdue RFQs", "RFQ details", "RFQs for supplier X", "RFQs this quarter" → use "rfqs/list" and set chartType "table". Extract supplier name and set filters.supplier if mentioned.
+- "list RFQs", "show me RFQs", "open RFQs", "overdue RFQs", "RFQ details", "RFQs for account X", "RFQs this quarter" → use "rfqs/list" and set chartType "table". Extract account name and set filters.account if mentioned.
 - "RFQ status", "RFQ breakdown", "how many RFQs" → use "rfqs/by-status"
 - "daily", "today", "this week summary" → use "daily-summary"
 - For broad requests mentioning both quotes and pipeline → use multiple endpoints
