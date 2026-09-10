@@ -411,6 +411,15 @@ export async function fetchOpportunityItemsByParents(parentObjectIds, userJwt) {
   return { total: results.length, results };
 }
 
+export async function fetchRFQFields(userJwt) {
+  const dest = await getDestination(userJwt);
+  const result = await odataGet(dest, `${CUSTOM_BASE}/zrfq/RFQRootCollection`, {
+    $format: 'json', $top: 1,
+  });
+  const record = (result.results || [])[0] || {};
+  return Object.keys(record).filter((k) => !k.startsWith('__')).sort();
+}
+
 export async function fetchRFQs(filters = {}, userJwt) {
   const parts = [];
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
