@@ -5,13 +5,13 @@
  */
 import { Router } from 'express';
 import * as svc from '../analytics-service.js';
-import { fetchSalesOrgs, probeC4CAccess } from '../c4c-client.js';
+import { fetchSalesOrgs, probeC4CAccess, fetchRFQFields } from '../c4c-client.js';
 
 const router = Router();
 
 function pickFilters(query) {
-  const { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare, scope } = query;
-  return { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare, scope };
+  const { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare, scope, account, supplier } = query;
+  return { salesOrgId, ownerId, dateFrom, dateTo, months, limit, compare, scope, account, supplier };
 }
 
 function handle(serviceFn) {
@@ -37,10 +37,22 @@ router.get('/opportunities/pipeline-overview', handle(svc.pipelineOverviewSvc));
 router.get('/opportunities/by-owner', handle(svc.opportunitiesByOwner));
 router.get('/opportunities/close-trend', handle(svc.opportunitiesCloseTrend));
 router.get('/opportunities/list', handle(svc.opportunitiesList));
+router.get('/quotes/top-creators', handle(svc.quotesTopCreators));
 router.get('/rfqs/by-status', handle(svc.rfqsByStatus));
+router.get('/rfqs/by-account', handle(svc.rfqsByAccount));
 router.get('/rfqs/trend', handle(svc.rfqsTrend));
 router.get('/rfqs/list', handle(svc.rfqsList));
 router.get('/daily-summary', handle(svc.getDailySummary));
+
+// Debug: returns all field names on a single RFQRootCollection record
+router.get('/rfqs/fields', async (req, res, next) => {
+  try {
+    const fields = await fetchRFQFields(req.userJwt);
+    res.json({ fields });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Lightweight access probe: does the signed-in user actually have C4C access?
 // Always 200 with { ok } so the UI gets a clean signal (not an error card).
