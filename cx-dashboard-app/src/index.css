@@ -901,10 +901,75 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
 .c4c-link:hover { text-decoration: underline; }
 
 /* ---------- Sales Brief ---------- */
+.brief-layout {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) { .brief-layout { grid-template-columns: 1fr; } }
+
+.brief-sidebar {
+  position: sticky;
+  top: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 20px;
+}
+@media (max-width: 900px) { .brief-sidebar { position: static; } }
+
+.brief-sidebar-label {
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.audience-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.audience-row {
+  display: flex; align-items: center; gap: 10px;
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  padding: 10px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+  transition: all 0.15s;
+}
+.audience-row:hover { background: var(--card); border-color: var(--border); }
+.audience-row.selected {
+  border-color: var(--primary);
+  background: var(--primary-tint);
+}
+.audience-row-icon {
+  width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: 9px;
+  background: #EEF1F4;
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.audience-row.selected .audience-row-icon { background: var(--primary); color: #fff; }
+.audience-row-text { min-width: 0; }
+.audience-row-label { font-weight: 600; font-size: 13px; color: var(--text); }
+.audience-row-desc { font-size: 11px; color: var(--text-muted); line-height: 1.35; margin-top: 1px; }
+
+.brief-date-presets {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.brief-date-presets .builder-range-chip { width: 100%; text-align: center; }
+.brief-date-hint {
+  font-size: 11px; color: var(--text-muted); text-align: center;
+  margin-top: 2px; font-variant-numeric: tabular-nums;
+}
+
 .brief-setup {
   width: 100%;
-  max-width: 880px;
-  margin: 0 auto;
   display: flex; flex-direction: column; gap: 14px;
   padding: 26px;
 }
@@ -914,40 +979,6 @@ tr.row-due-soon:hover td { background: #FFF1E5; }
   margin-top: 6px;
 }
 .brief-setup-label span { text-transform: none; font-weight: 500; letter-spacing: 0; }
-.audience-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-@media (max-width: 860px) { .audience-grid { grid-template-columns: 1fr; } }
-.audience-card {
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 14px;
-  text-align: center;
-  cursor: pointer;
-  font-family: inherit;
-  display: flex; flex-direction: column; align-items: center; gap: 7px;
-  transition: all 0.15s;
-}
-.audience-card:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-.audience-card.selected {
-  border-color: var(--primary);
-  background: var(--primary-tint);
-  box-shadow: 0 0 0 3px rgba(0, 112, 242, 0.12);
-}
-.audience-icon {
-  width: 42px; height: 42px;
-  border-radius: 11px;
-  background: #EEF1F4;
-  color: var(--text-secondary);
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
-}
-.audience-card.selected .audience-icon { background: var(--primary); color: #fff; }
-.audience-label { font-weight: 600; font-size: 13.5px; color: var(--text); }
-.audience-desc { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
 
 .brief-stats {
   display: grid;
