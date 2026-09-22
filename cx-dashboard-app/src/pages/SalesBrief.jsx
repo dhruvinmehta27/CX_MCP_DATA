@@ -92,8 +92,14 @@ export default function SalesBrief() {
       // Search for orgs whenever AI detected a keyword OR raised a scope warning
       const keyword = res.plan.detectedOrgKeyword || (res.plan.scopeWarning ? intent.trim() : null);
       if (keyword) {
-        const orgs = await getSalesOrgs(keyword);
-        setOrgMatches(orgs || []);
+        try {
+          const orgs = await getSalesOrgs(keyword);
+          setOrgMatches(orgs || []);
+        } catch {
+          // Org lookup requires OrganisationalUnitFunctionsCollection access.
+          // If the user lacks it (RBAM_ERROR 403), silently skip — brief still generates.
+          setOrgMatches([]);
+        }
       }
     } catch (err) {
       setError(err);

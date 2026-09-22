@@ -71,6 +71,12 @@ router.get('/sales-orgs', async (req, res, next) => {
     const orgs = await fetchSalesOrgs(req.query.search, req.userJwt);
     res.json(orgs);
   } catch (err) {
+    // OrganisationalUnitFunctionsCollection requires special C4C authorization.
+    // If this user lacks it (RBAM_ERROR 403), return empty rather than 500 —
+    // the org dropdown just won't pre-populate but everything else still works.
+    if (err.message && err.message.includes('403')) {
+      return res.json([]);
+    }
     next(err);
   }
 });

@@ -205,8 +205,12 @@ export default function CustomBuilder() {
       const isMultiOrg = salesOrgId.includes(',');
       const orgKeyword = !isMultiOrg ? (res.intent.detectedOrgName || salesOrgId) : null;
       if (orgKeyword) {
-        const orgs = await getSalesOrgs(orgKeyword);
-        setOrgMatches(orgs || []);
+        try {
+          const orgs = await getSalesOrgs(orgKeyword);
+          setOrgMatches(orgs || []);
+        } catch {
+          setOrgMatches([]);
+        }
       }
       setStep(1);
     } catch (err) {
