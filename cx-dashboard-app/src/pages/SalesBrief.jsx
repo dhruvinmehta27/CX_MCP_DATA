@@ -207,23 +207,6 @@ export default function SalesBrief() {
   // ---------- Setup screen ----------
   return (
     <div className="page builder-page">
-      <div className="builder-range-bar">
-        <Icon name="calendar" size={14} style={{ color: 'var(--text-secondary)' }} />
-        <span className="builder-range-label">Data range:</span>
-        {BRIEF_DATE_PRESETS.map((p) => (
-          <button
-            key={p.months}
-            className={`builder-range-chip${selectedMonths === p.months ? ' active' : ''}`}
-            onClick={() => setSelectedMonths(p.months)}
-            disabled={generating}
-          >
-            {p.label}
-          </button>
-        ))}
-        <span className="builder-range-hint">
-          {filters.dateFrom} → {filters.dateTo}
-        </span>
-      </div>
       <div className="builder-hero" style={{ paddingBottom: 0 }}>
         <div className="builder-badge">
           <Icon name="file-text" size={13} />
@@ -236,24 +219,55 @@ export default function SalesBrief() {
         </p>
       </div>
 
-      <div className="brief-setup card">
-        <label className="brief-setup-label">Audience</label>
-        <div className="audience-grid">
-          {AUDIENCES.map((a) => (
-            <button
-              key={a.id}
-              className={`audience-card${audience === a.id ? ' selected' : ''}`}
-              onClick={() => { setAudience(a.id); setPlan(null); }}
-            >
-              <div className="audience-icon">
-                <Icon name={a.icon} size={20} />
-              </div>
-              <div className="audience-label">{a.label}</div>
-              <div className="audience-desc">{a.desc}</div>
-            </button>
-          ))}
+      <div className="brief-layout">
+        {/* Left: audience + date range */}
+        <div className="brief-sidebar card">
+          <div>
+            <div className="brief-sidebar-label">Audience</div>
+            <div className="audience-list">
+              {AUDIENCES.map((a) => (
+                <button
+                  key={a.id}
+                  className={`audience-row${audience === a.id ? ' selected' : ''}`}
+                  onClick={() => { setAudience(a.id); setPlan(null); }}
+                >
+                  <div className="audience-row-icon">
+                    <Icon name={a.icon} size={17} />
+                  </div>
+                  <div className="audience-row-text">
+                    <div className="audience-row-label">{a.label}</div>
+                    <div className="audience-row-desc">{a.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="brief-sidebar-label">
+              <Icon name="calendar" size={12} style={{ marginRight: 5, verticalAlign: -1 }} />
+              Data range
+            </div>
+            <div className="brief-date-presets">
+              {BRIEF_DATE_PRESETS.map((p) => (
+                <button
+                  key={p.months}
+                  className={`builder-range-chip${selectedMonths === p.months ? ' active' : ''}`}
+                  onClick={() => setSelectedMonths(p.months)}
+                  disabled={generating}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="brief-date-hint">
+              {filters.dateFrom} → {filters.dateTo}
+            </div>
+          </div>
         </div>
 
+        {/* Right: work panel */}
+        <div className="brief-setup card">
         <label className="brief-setup-label">
           What do you want to communicate? <span>(optional)</span>
         </label>
@@ -408,7 +422,7 @@ export default function SalesBrief() {
               </button>
             )}
             {!plan ? (
-              <button className="btn" onClick={analyze} disabled={planning || stats.loading}>
+              <button className="btn" onClick={() => analyze()} disabled={planning || stats.loading}>
                 <Icon name="sparkles" size={15} className={planning ? 'spinning' : undefined} />
                 {planning ? 'Analyzing…' : 'Analyze & Review'}
               </button>
@@ -419,6 +433,7 @@ export default function SalesBrief() {
               </button>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>
