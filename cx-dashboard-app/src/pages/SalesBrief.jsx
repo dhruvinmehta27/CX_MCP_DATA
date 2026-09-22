@@ -344,13 +344,13 @@ export default function SalesBrief() {
 
             {/* Org picker — shown when AI detected an org mention or raised a scope warning */}
             {(plan.detectedOrgKeyword || plan.scopeWarning) && (
-              <div style={{ marginTop: 10, padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+              <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
                   <Icon name="target" size={12} style={{ marginRight: 5 }} />
                   Select matching sales org to filter data
                 </div>
                 {orgMatches.length === 0 ? (
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
                     No orgs found matching &ldquo;{plan.detectedOrgKeyword}&rdquo; — brief will cover all orgs.
                   </p>
                 ) : (

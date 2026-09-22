@@ -366,7 +366,8 @@ Analyze the user's message and return JSON only, no markdown:
 }
 
 Rules:
-- "understanding": 2-3 sentences starting with "I'll..." describing what brief will cover, which filters/org apply, and audience tone. Do NOT mention a data period — the user will confirm that separately.
+- "understanding": 2-3 sentences starting with "I'll..." describing what brief will cover and audience tone. Do NOT mention a data period — the user will confirm that separately.
+  IMPORTANT: org/territory scoping has NOT been confirmed yet at this point — a separate lookup happens after this and its result is shown separately in the UI. Never assert "Filters will be applied for Sales Org: X" or other definite language about org scoping. Either phrase it tentatively (e.g. "I'll try to scope this to the org/territory you mentioned") or leave org specifics out of this text entirely and let the org-picker section communicate the actual match result.
 - "detectedOrgKeyword": if user mentions a specific org, region, country or division (e.g. "TSS Germany", "Germany", "DACH"), extract the search keyword. Otherwise null.
 - "detectedOwnerKeyword": if user mentions a specific person/owner name, extract it. Otherwise null.
 - "detectedPeriod": if user explicitly mentions a time period (e.g. "Q4 2025", "last month", "H1 2026"), set to the human label. Otherwise null.
