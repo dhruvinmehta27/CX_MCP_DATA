@@ -58,6 +58,7 @@ export default function SalesBrief() {
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [overrideDateFrom, setOverrideDateFrom] = useState(null);
   const [overrideDateTo, setOverrideDateTo] = useState(null);
+  const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
 
@@ -76,7 +77,7 @@ export default function SalesBrief() {
   // exactness defaults to true when the API doesn't supply a flag (older builds)
   const ex = (key) => s?.exact?.[key] !== false;
 
-  const analyze = async () => {
+  const analyze = async (extraContext = '') => {
     setPlanning(true);
     setError(null);
     setPlan(null);
@@ -86,8 +87,10 @@ export default function SalesBrief() {
     setUseRequestPeriod(false);
     setOverrideDateFrom(null);
     setOverrideDateTo(null);
+    setClarificationAnswer('');
+    const fullIntent = extraContext ? `${intent.trim()} — ${extraContext}` : intent.trim();
     try {
-      const res = await planBrief(audience, intent.trim() || undefined, toApiFilters(filters));
+      const res = await planBrief(audience, fullIntent || undefined, toApiFilters(filters));
       setPlan(res.plan);
       // Search for orgs whenever AI detected a keyword OR raised a scope warning
       const keyword = res.plan.detectedOrgKeyword || (res.plan.scopeWarning ? intent.trim() : null);
@@ -364,9 +367,29 @@ export default function SalesBrief() {
             )}
 
             {plan.clarificationNeeded && plan.clarificationQuestion && (
-              <p style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(0,112,242,0.06)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8, fontSize: 13, marginBottom: 0 }}>
-                <strong>Clarification needed:</strong> {plan.clarificationQuestion}
-              </p>
+              <div style={{ marginTop: 10, padding: '12px 14px', background: 'rgba(231,101,0,0.06)', border: '1px solid rgba(231,101,0,0.22)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
+                  <Icon name="alert-triangle" size={15} style={{ color: '#b84f00', flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 13, color: '#7a3800' }}><strong>I need a bit more info:</strong> {plan.clarificationQuestion}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    autoFocus
+                    value={clarificationAnswer}
+                    onChange={(e) => setClarificationAnswer(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && clarificationAnswer.trim()) analyze(clarificationAnswer.trim()); }}
+                    placeholder='Type your answer and press Enter…'
+                    style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}
+                  />
+                  <button
+                    className="btn"
+                    disabled={!clarificationAnswer.trim() || planning}
+                    onClick={() => analyze(clarificationAnswer.trim())}
+                  >
+                    Apply <Icon name="arrow-right" size={13} />
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}

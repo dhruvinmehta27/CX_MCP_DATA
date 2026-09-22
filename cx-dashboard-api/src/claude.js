@@ -372,8 +372,12 @@ Rules:
 - "detectedPeriod": if user explicitly mentions a time period (e.g. "Q4 2025", "last month", "H1 2026"), set to the human label. Otherwise null.
 - "detectedDateFrom" / "detectedDateTo": if user mentions a specific calendar period, calculate the exact ISO dates. Examples: "Q4 2025" → 2025-10-01 / 2025-12-31, "Q1 2026" → 2026-01-01 / 2026-03-31, "last month" from today (${new Date().toISOString().slice(0,10)}) → first/last of previous month, "H1 2025" → 2025-01-01 / 2025-06-30. Set both to null if no specific period mentioned.
 - "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter is active yet, warn clearly. Otherwise null.
-- "clarificationNeeded": true only if genuinely ambiguous.
-- "clarificationQuestion": single clear question if clarificationNeeded.
+- "clarificationNeeded": true when the request is ambiguous and you cannot confidently scope the brief without more information. Examples of ambiguous requests:
+  * User mentions a territory code or abbreviation you don't recognise (e.g. "TR2", "DACH East", "Region 5") — you don't know if this maps to a sales org, a country, a team, or something else
+  * User mentions a term that could mean multiple things (e.g. "Turkey" could be the country or a specific org unit)
+  * User's intent is genuinely unclear even for a general brief
+  Do NOT set clarificationNeeded just because an org filter isn't set — that is handled by scopeWarning + the org picker.
+- "clarificationQuestion": if clarificationNeeded, ask ONE concise question that will resolve the ambiguity. Be specific about what you didn't understand. Example: "You mentioned 'TR2 Region' — could you clarify what this refers to? Is it a sales territory, a specific sales org, or a country/region name?"
 `;
 
   const response = await getClient().messages.create({
