@@ -427,13 +427,30 @@ export async function fetchOpportunityItemsByParents(parentObjectIds, userJwt) {
   return { total: results.length, results };
 }
 
-export async function fetchRFQFields(userJwt) {
+// Debug: fetch one raw record (no $select) from a collection and list its
+// field names — used to discover what's available before wiring a field
+// into an actual $select list. Same approach we used to find RFQ fields.
+const FIELD_DISCOVERY_COLLECTIONS = {
+  opportunities: `${ODATA_BASE}/OpportunityCollection`,
+  'opportunity-items': `${ODATA_BASE}/OpportunityItemCollection`,
+  quotes: `${ODATA_BASE}/SalesQuoteCollection`,
+  'quote-items': `${ODATA_BASE}/SalesQuoteItemCollection`,
+  rfqs: `${CUSTOM_BASE}/zrfq/RFQRootCollection`,
+};
+
+export async function fetchCollectionFields(collectionKey, userJwt) {
+  const path = FIELD_DISCOVERY_COLLECTIONS[collectionKey];
+  if (!path) {
+    throw new Error(`Unknown collection "${collectionKey}" — valid: ${Object.keys(FIELD_DISCOVERY_COLLECTIONS).join(', ')}`);
+  }
   const dest = await getDestination(userJwt);
-  const result = await odataGet(dest, `${CUSTOM_BASE}/zrfq/RFQRootCollection`, {
-    $format: 'json', $top: 1,
-  });
+  const result = await odataGet(dest, path, { $format: 'json', $top: 1 });
   const record = (result.results || [])[0] || {};
   return Object.keys(record).filter((k) => !k.startsWith('__')).sort();
+}
+
+export async function fetchRFQFields(userJwt) {
+  return fetchCollectionFields('rfqs', userJwt);
 }
 
 export async function fetchRFQs(filters = {}, userJwt) {
