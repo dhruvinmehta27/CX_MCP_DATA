@@ -280,18 +280,20 @@ async function countByStatus(collectionPath, codeField, textField, isOpen, filte
 
 function quoteFilter(filters = {}) {
   const parts = [];
-  // NOTE: SalesOrganisationID is readable but NOT filterable on this tenant
-  // (C4C: "Expression can not converted into ABAP select options"). Sales-org
-  // scoping is applied in-process in analytics-service (rawQuotes), not here.
+  // NOTE: SalesOrganisationID and BuyerPartyName are readable but NOT
+  // filterable in combination with the date-range filter on this tenant
+  // (C4C: "Expression can not converted into ABAP select options"). Both
+  // sales-org and account scoping are applied in-process in
+  // analytics-service (rawQuotes), not here.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
-  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',BuyerPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
 }
 function opportunityFilter(filters = {}) {
   const parts = [];
+  // ProspectPartyName hits the same ABAP select-option error combined with
+  // dates — account scoping is applied in-process in rawOpportunities.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
-  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',ProspectPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
 }
@@ -325,9 +327,11 @@ export function countRFQs(filters, userJwt) {
 export async function fetchQuotes(filters = {}, userJwt) {
   const parts = [];
   // SalesOrganisationID is not filterable server-side (see quoteFilter) — org
-  // scoping happens in-process in rawQuotes.
+  // scoping happens in-process in rawQuotes. BuyerPartyName hits the same
+  // "Expression can not converted into ABAP select options" error when
+  // combined with the date-range filter — account scoping happens
+  // in-process in rawQuotes too (not server-side here).
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
-  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',BuyerPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return fetchAllPages(
     `${ODATA_BASE}/SalesQuoteCollection`,
