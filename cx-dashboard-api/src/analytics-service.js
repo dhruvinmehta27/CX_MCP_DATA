@@ -73,6 +73,11 @@ function matchesOrg(orgId, orgName, filterValue) {
   );
 }
 
+function matchesAccount(accountName, filterValue) {
+  if (!filterValue) return true;
+  return !!accountName && accountName.toLowerCase().includes(filterValue.trim().toLowerCase());
+}
+
 async function rawQuotes(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
   const fetchKey = { ...base, salesOrgId: undefined };
@@ -103,8 +108,15 @@ async function rawOpportunities(filters, userJwt, userEmail) {
 
 async function rawRFQs(filters, userJwt, userEmail) {
   const base = { ...baseFilters(filters), account: filters.account || null };
-  const { data } = await getOrSet(userEmail, 'raw:rfqs', base, () => fetchRFQs(base, userJwt));
-  return data;
+  // Account can't be combined with the date-range filter server-side on the
+  // custom zrfq service (ABAP select-option error) — fetch without it (cached
+  // on date/owner only) and scope by account in-process, same pattern as
+  // sales-org scoping on Quotes/Opportunities.
+  const fetchKey = { ...base, account: undefined };
+  const { data } = await getOrSet(userEmail, 'raw:rfqs', fetchKey, () => fetchRFQs(fetchKey, userJwt));
+  if (!base.account) return data;
+  const results = data.results.filter((r) => matchesAccount(r.AccountName, base.account));
+  return { ...data, results, total: results.length };
 }
 
 export async function quotesByStatus(filters, userJwt, userEmail) {
