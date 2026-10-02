@@ -80,28 +80,34 @@ function matchesAccount(accountName, filterValue) {
 
 async function rawQuotes(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
-  const fetchKey = { ...base, salesOrgId: undefined };
+  // SalesOrganisationID and BuyerPartyName both fail combined with the
+  // date-range filter server-side (ABAP select-option error) — fetch
+  // without either (cached on date/owner only) and scope both in-process.
+  const fetchKey = { ...base, salesOrgId: undefined, account: undefined };
   const [{ data }, countryMap] = await Promise.all([
     getOrSet(userEmail, 'raw:quotes', fetchKey, () => fetchQuotes(fetchKey, userJwt)),
     getAccountCountryMap(() => fetchAccountCountries(userJwt)),
   ]);
   const enriched = enrichWithCountry(data.results, countryMap);
-  if (!base.salesOrgId) return { ...data, results: enriched };
   const results = enriched.filter((q) =>
-    matchesOrg(q.SalesOrganisationID, q.SalesOrganisationName, base.salesOrgId)
+    matchesOrg(q.SalesOrganisationID, q.SalesOrganisationName, base.salesOrgId) &&
+    matchesAccount(q.BuyerPartyName, base.account)
   );
+  if (!base.salesOrgId && !base.account) return { ...data, results: enriched };
   return { ...data, results, total: results.length };
 }
 
 async function rawOpportunities(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
-  // SalesOrganisationID isn't filterable in C4C — fetch without org filter (cached),
-  // then scope in-process. Same pattern as rawQuotes.
-  const fetchKey = { ...base, salesOrgId: undefined };
+  // SalesOrganisationID and ProspectPartyName both fail combined with the
+  // date-range filter server-side (ABAP select-option error) — fetch
+  // without either (cached on date/owner only) and scope both in-process.
+  const fetchKey = { ...base, salesOrgId: undefined, account: undefined };
   const { data } = await getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt));
-  if (!base.salesOrgId) return data;
+  if (!base.salesOrgId && !base.account) return data;
   const results = data.results.filter((o) =>
-    matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId)
+    matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId) &&
+    matchesAccount(o.ProspectPartyName, base.account)
   );
   return { ...data, results, total: results.length };
 }
