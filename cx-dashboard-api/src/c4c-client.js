@@ -350,8 +350,10 @@ export async function fetchQuotes(filters = {}, userJwt) {
 
 export async function fetchOpportunities(filters = {}, userJwt) {
   const parts = [];
+  // ProspectPartyName hits the same ABAP select-option error combined with
+  // dates as BuyerPartyName/AccountName elsewhere — account scoping is
+  // applied in-process in rawOpportunities, not here.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
-  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',ProspectPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return fetchAllPages(
     `${ODATA_BASE}/OpportunityCollection`,
