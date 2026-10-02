@@ -41,7 +41,7 @@ router.post('/brief-plan', async (req, res, next) => {
 // Audience-tailored, print-ready sales brief from live C4C data
 router.post('/brief', async (req, res, next) => {
   try {
-    const { audience, intent, filters = {} } = req.body || {};
+    const { audience, intent, filters = {}, focusAreas = [] } = req.body || {};
     if (!audience) {
       return res.status(400).json({ error: 'audience is required' });
     }
@@ -54,6 +54,7 @@ router.post('/brief', async (req, res, next) => {
       preparedBy: req.userEmail,
       period: `${f.dateFrom || 'start'} to ${f.dateTo || 'today'}`,
       customerName: f.account || null,
+      focusAreas,
     });
     res.json({ brief, stats: data.stats });
   } catch (err) {

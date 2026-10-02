@@ -117,11 +117,12 @@ export default function SalesBrief() {
       if (res.plan.detectedCustomerKeyword) {
         setSelectedCustomer(res.plan.detectedCustomerKeyword);
       }
-      // Search for orgs whenever AI detected a keyword OR raised a scope warning
-      const keyword = res.plan.detectedOrgKeyword || (res.plan.scopeWarning ? intent.trim() : null);
-      if (keyword) {
+      // Search for orgs only when the AI actually extracted an org keyword —
+      // scopeWarning alone isn't enough signal now that it also covers
+      // customer-only mentions (which have nothing to do with sales orgs).
+      if (res.plan.detectedOrgKeyword) {
         try {
-          const orgs = await getSalesOrgs(keyword);
+          const orgs = await getSalesOrgs(res.plan.detectedOrgKeyword);
           setOrgMatches(orgs || []);
         } catch {
           // Org lookup requires OrganisationalUnitFunctionsCollection access.
@@ -393,11 +394,37 @@ export default function SalesBrief() {
                     Brief will be filtered to opportunities/quotes with <strong>{selectedCustomer}</strong> as the customer.
                   </p>
                 )}
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '14px 0 8px' }}>
+                  <Icon name="sparkles" size={12} style={{ marginRight: 5 }} />
+                  Focus areas <span style={{ textTransform: 'none', fontWeight: 500, color: 'var(--text-muted)' }}>(optional — pick what the rep should see)</span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {FOCUS_AREAS.map((f) => {
+                    const active = selectedFocusAreas.includes(f.id);
+                    return (
+                      <button
+                        key={f.id}
+                        className={`builder-range-chip${active ? ' active' : ''}`}
+                        title={f.desc}
+                        onClick={() => setSelectedFocusAreas((prev) =>
+                          active ? prev.filter((id) => id !== f.id) : [...prev, f.id]
+                        )}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedFocusAreas.length === 0 && (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, marginBottom: 0 }}>
+                    None selected — brief will give a balanced full overview.
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Org picker — shown when AI detected an org mention or raised a scope warning */}
-            {(plan.detectedOrgKeyword || plan.scopeWarning) && (
+            {/* Org picker — shown only when AI actually extracted an org keyword */}
+            {plan.detectedOrgKeyword && (
               <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
                   <Icon name="target" size={12} style={{ marginRight: 5 }} />
