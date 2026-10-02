@@ -297,12 +297,12 @@ function opportunityFilter(filters = {}) {
 }
 function rfqFilter(filters = {}) {
   const parts = [];
-  // NOTE: do NOT add an account/substringof filter here — this feeds
-  // countByStatus, which appends its own "and RFQStatus eq 'x'" clause per
-  // status. The custom zrfq OData service fails that combined expression
-  // with "Expression can not converted into ABAP select options" (500).
-  // fetchRFQs below (used by rfqs/by-account, rfqs/list) supports account
-  // filtering fine on its own — just not combined through countByStatus.
+  // NOTE: do NOT add an account/substringof filter here (or in fetchRFQs
+  // below) combined with the date-range filter — the custom zrfq OData
+  // service fails that combined expression with "Expression can not
+  // converted into ABAP select options" (500), regardless of whether
+  // countByStatus's extra per-status "eq" clause is involved. Account
+  // scoping for RFQs is applied in-process in analytics-service (rawRFQs).
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
@@ -432,8 +432,12 @@ export async function fetchRFQFields(userJwt) {
 
 export async function fetchRFQs(filters = {}, userJwt) {
   const parts = [];
+  // NOTE: do NOT combine substringof(AccountName) with the date-range filter
+  // here — the custom zrfq OData service fails that combined expression with
+  // "Expression can not converted into ABAP select options" (500). Account
+  // scoping is applied in-process in analytics-service (rawRFQs) instead,
+  // same pattern as sales-org scoping on Quotes/Opportunities.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
-  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',AccountName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return fetchAllPages(
     `${CUSTOM_BASE}/zrfq/RFQRootCollection`,
