@@ -710,6 +710,16 @@ export async function briefStats(filters, userJwt, userEmail) {
     );
     const closed = won.length + lost.length;
 
+    // Most recent touch across opps + quotes — recency signal for rep prep
+    // ("this relationship's gone quiet" vs "we spoke last week").
+    const allDates = [
+      ...opps.results.map((o) => parseODataDate(o.EntityLastChangedOn)),
+      ...quotes.results.map((q) => parseODataDate(q.CreationDateTime)),
+    ].filter(Boolean);
+    const lastActivityDate = allDates.length
+      ? new Date(Math.max(...allDates.map((d) => d.getTime()))).toISOString().slice(0, 10)
+      : null;
+
     return {
       totalOpportunities: opps.total,
       totalQuotes: quotes.total,
@@ -717,6 +727,9 @@ export async function briefStats(filters, userJwt, userEmail) {
       openPipelineValue: open.reduce((a, o) => a + oppValue(o), 0),
       winRate: closed ? Math.round((won.length / closed) * 100) : null,
       wonCount: won.length,
+      lostCount: lost.length,
+      lostValue: lost.reduce((a, o) => a + oppValue(o), 0),
+      lastActivityDate,
       sopNext12MValue: open
         .filter((o) => {
           const d = parseODataDate(o.ExpectedProcessingEndDate);
@@ -739,6 +752,8 @@ export async function briefStats(filters, userJwt, userEmail) {
         openPipelineValue: !opps.truncated,
         winRate: !opps.truncated,
         wonCount: !opps.truncated,
+        lostCount: !opps.truncated,
+        lostValue: !opps.truncated,
         sopNext12MValue: !opps.truncated,
         staleCount: !opps.truncated,
         orgCount: !quotes.truncated,

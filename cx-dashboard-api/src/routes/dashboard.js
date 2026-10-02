@@ -53,6 +53,7 @@ router.post('/brief', async (req, res, next) => {
       data,
       preparedBy: req.userEmail,
       period: `${f.dateFrom || 'start'} to ${f.dateTo || 'today'}`,
+      customerName: f.account || null,
     });
     res.json({ brief, stats: data.stats });
   } catch (err) {

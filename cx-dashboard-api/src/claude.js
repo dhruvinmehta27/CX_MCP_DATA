@@ -394,7 +394,7 @@ Rules:
 const AUDIENCE_TONES = {
   board: 'Board / Executive — strategic overview, revenue focus. Concise, confident, no operational minutiae.',
   regional: 'Regional Manager — operational detail, owner performance, bottlenecks, concrete next actions.',
-  customer: 'Customer Meeting — value-oriented, opportunity focused. NEVER include internal-only figures (win rates, loss counts, stale-deal counts, owner performance).',
+  customer: 'Customer Meeting — INTERNAL prep notes for the sales rep before meeting this customer, not a document handed to the customer. Surface win/loss history, open deals to push, stale deals to address, and recency — framed as talking points and things to watch for, not raw internal metrics dumped flatly.',
   team: 'Sales Team — win rates, pipeline health, motivating and energetic tone, celebrate wins.',
   territory: 'Territory Review — sales-org breakdown, geographic performance comparison.',
   investor: 'Investor / Stakeholder — growth story, pipeline momentum, forward-looking confidence with credible numbers.',
@@ -403,9 +403,19 @@ const AUDIENCE_TONES = {
 /**
  * Write a structured, print-ready sales brief tailored to the audience.
  */
-export async function generateBrief({ audience, intent, data, preparedBy, period }) {
+export async function generateBrief({ audience, intent, data, preparedBy, period, customerName }) {
+  const customerContext = customerName
+    ? `\nThis brief is scoped to ONE specific customer: "${customerName}". All data below is already filtered to this customer's opportunities, quotes, and RFQs.
+For audience "customer" specifically, include a "Talking Points" section covering:
+  - Win/loss history with this customer (win rate, won count, lost count/value) — framed as "here's our track record with them," not a bare metrics table
+  - Open deals currently in motion that the rep should push toward a decision
+  - Stale deals (untouched 90+ days) — flag these as "worth raising in the meeting" so the rep doesn't let them go cold
+  - Recency (lastActivityDate in stats) — tell the rep if the relationship is warm or has gone quiet
+  - Anything the data suggests the rep should NOT bring up unprompted (e.g. a recent loss) vs. what's safe/positive to lead with
+This section is for the REP's eyes only — it will not be shown to the customer.`
+    : '';
   const prompt = `Write a sales brief for Trelleborg Sealing Solutions (industrial sealing manufacturer) based on live CRM data.
-Audience: ${AUDIENCE_TONES[audience] || audience}
+Audience: ${AUDIENCE_TONES[audience] || audience}${customerContext}
 ${intent ? `The presenter specifically wants to communicate: "${intent}"` : 'No specific message given — provide a balanced full overview.'}
 Prepared by: ${preparedBy}. Data period: ${period}.
 Return JSON only, no markdown fences:
@@ -417,6 +427,7 @@ Return JSON only, no markdown fences:
   "keyTakeaways": [string]
 }
 Rules:
+- "title": if this brief is scoped to one customer, include the customer name in the title (e.g. "Trumpf Account Review" not a generic title).
 - 4-6 keyMetrics with values formatted for slides (e.g. "€45.1M", "33%", "592").
 - 3-5 sections; each body is 1-2 short paragraphs of flowing prose; bullets optional (max 4).
 - 3-5 keyTakeaways, each a single punchy sentence.
