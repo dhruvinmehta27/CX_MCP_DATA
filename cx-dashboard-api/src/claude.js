@@ -357,6 +357,7 @@ Analyze the user's message and return JSON only, no markdown:
   "understanding": string,
   "detectedOrgKeyword": string|null,
   "detectedOwnerKeyword": string|null,
+  "detectedCustomerKeyword": string|null,
   "detectedPeriod": string|null,
   "detectedDateFrom": "YYYY-MM-DD"|null,
   "detectedDateTo": "YYYY-MM-DD"|null,
@@ -369,10 +370,11 @@ Rules:
 - "understanding": 2-3 sentences starting with "I'll..." describing what brief will cover and audience tone. Do NOT mention a data period — the user will confirm that separately.
   IMPORTANT: org/territory scoping has NOT been confirmed yet at this point — a separate lookup happens after this and its result is shown separately in the UI. Never assert "Filters will be applied for Sales Org: X" or other definite language about org scoping. Either phrase it tentatively (e.g. "I'll try to scope this to the org/territory you mentioned") or leave org specifics out of this text entirely and let the org-picker section communicate the actual match result.
 - "detectedOrgKeyword": if user mentions a specific org, region, country or division (e.g. "TSS Germany", "Germany", "DACH"), extract the search keyword. Otherwise null.
-- "detectedOwnerKeyword": if user mentions a specific person/owner name, extract it. Otherwise null.
+- "detectedOwnerKeyword": if user mentions a specific person/owner name (sales rep), extract it. Otherwise null.
+- "detectedCustomerKeyword": if user mentions a specific CUSTOMER/ACCOUNT name — i.e. the company being sold to, not Trelleborg's own sales org (e.g. "customer Trumpf", "understanding of Trumpf", "brief for Siemens", "our account with Bosch") — extract the customer name. This is especially important for "Customer Meeting" audience briefs, which are usually about ONE specific customer. Otherwise null.
 - "detectedPeriod": if user explicitly mentions a time period (e.g. "Q4 2025", "last month", "H1 2026"), set to the human label. Otherwise null.
 - "detectedDateFrom" / "detectedDateTo": if user mentions a specific calendar period, calculate the exact ISO dates. Examples: "Q4 2025" → 2025-10-01 / 2025-12-31, "Q1 2026" → 2026-01-01 / 2026-03-31, "last month" from today (${new Date().toISOString().slice(0,10)}) → first/last of previous month, "H1 2025" → 2025-01-01 / 2025-06-30. Set both to null if no specific period mentioned.
-- "scopeWarning": if detectedOrgKeyword or detectedOwnerKeyword is set BUT no matching filter is active yet, warn clearly. Otherwise null.
+- "scopeWarning": if detectedOrgKeyword, detectedOwnerKeyword, or detectedCustomerKeyword is set BUT no matching filter is active yet, warn clearly (name which one). Otherwise null.
 - "clarificationNeeded": true when the request is ambiguous and you cannot confidently scope the brief without more information. Examples of ambiguous requests:
   * User mentions a territory code or abbreviation you don't recognise (e.g. "TR2", "DACH East", "Region 5") — you don't know if this maps to a sales org, a country, a team, or something else
   * User mentions a term that could mean multiple things (e.g. "Turkey" could be the country or a specific org unit)
