@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { subMonths } from 'date-fns';
 import useAuth from '../auth/useAuth';
 import useFilters, { toApiFilters } from '../hooks/useFilters';
@@ -62,6 +62,15 @@ export default function SalesBrief() {
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+
+  // Browser "Print to PDF" uses document.title as the default filename/header —
+  // without this it always saves as the generic "AI Intelligence".
+  useEffect(() => {
+    if (!result?.brief?.title) return;
+    const previousTitle = document.title;
+    document.title = `${result.brief.title} — Trelleborg Sealing Solutions`;
+    return () => { document.title = previousTitle; };
+  }, [result]);
 
   const now = new Date();
   // When user accepts the AI-detected period, use its exact dates (for specific quarters)
