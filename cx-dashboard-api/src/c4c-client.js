@@ -297,8 +297,13 @@ function opportunityFilter(filters = {}) {
 }
 function rfqFilter(filters = {}) {
   const parts = [];
+  // NOTE: do NOT add an account/substringof filter here — this feeds
+  // countByStatus, which appends its own "and RFQStatus eq 'x'" clause per
+  // status. The custom zrfq OData service fails that combined expression
+  // with "Expression can not converted into ABAP select options" (500).
+  // fetchRFQs below (used by rfqs/by-account, rfqs/list) supports account
+  // filtering fine on its own — just not combined through countByStatus.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
-  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',AccountName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
 }
