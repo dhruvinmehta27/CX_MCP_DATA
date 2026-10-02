@@ -400,20 +400,32 @@ const AUDIENCE_TONES = {
   investor: 'Investor / Stakeholder — growth story, pipeline momentum, forward-looking confidence with credible numbers.',
 };
 
+// Maps focus-area chip ids (picked by the user in the Sales Brief UI) to the
+// specific instruction each one adds to the "Talking Points" section —
+// keeps the brief scoped to exactly what the rep asked for, instead of a
+// fixed list we guessed at.
+const FOCUS_AREA_PROMPTS = {
+  'win-loss': `Win/loss history with this customer (win rate, won count, lost count/value) — framed as "here's our track record with them," not a bare metrics table.`,
+  'relationship-health': `Recency (lastActivityDate in stats) and stale deals (untouched 90+ days) — tell the rep if the relationship is warm or has gone quiet, and flag stale deals as "worth raising in the meeting."`,
+  'open-deals': `Open deals currently in motion with this customer that the rep should push toward a decision.`,
+  'product-mix': `Product/category patterns from this customer's past quotes and opportunities — a natural cross-sell or up-sell angle to raise.`,
+  'risk-flags': `Anything the data suggests the rep should NOT bring up unprompted (e.g. a recent loss) vs. what's safe/positive to lead with.`,
+};
+
 /**
  * Write a structured, print-ready sales brief tailored to the audience.
  */
-export async function generateBrief({ audience, intent, data, preparedBy, period, customerName }) {
-  const customerContext = customerName
-    ? `\nThis brief is scoped to ONE specific customer: "${customerName}". All data below is already filtered to this customer's opportunities, quotes, and RFQs.
-For audience "customer" specifically, include a "Talking Points" section covering:
-  - Win/loss history with this customer (win rate, won count, lost count/value) — framed as "here's our track record with them," not a bare metrics table
-  - Open deals currently in motion that the rep should push toward a decision
-  - Stale deals (untouched 90+ days) — flag these as "worth raising in the meeting" so the rep doesn't let them go cold
-  - Recency (lastActivityDate in stats) — tell the rep if the relationship is warm or has gone quiet
-  - Anything the data suggests the rep should NOT bring up unprompted (e.g. a recent loss) vs. what's safe/positive to lead with
-This section is for the REP's eyes only — it will not be shown to the customer.`
-    : '';
+export async function generateBrief({ audience, intent, data, preparedBy, period, customerName, focusAreas = [] }) {
+  let customerContext = '';
+  if (customerName) {
+    customerContext = `\nThis brief is scoped to ONE specific customer: "${customerName}". All data below is already filtered to this customer's opportunities, quotes, and RFQs.`;
+    const activeFocusPrompts = focusAreas.map((id) => FOCUS_AREA_PROMPTS[id]).filter(Boolean);
+    if (activeFocusPrompts.length > 0) {
+      customerContext += `\nInclude a "Talking Points" section covering exactly these points (the rep explicitly chose these focus areas — do not add others):\n` +
+        activeFocusPrompts.map((p) => `  - ${p}`).join('\n') +
+        `\nThis section is for the REP's eyes only — it will not be shown to the customer.`;
+    }
+  }
   const prompt = `Write a sales brief for Trelleborg Sealing Solutions (industrial sealing manufacturer) based on live CRM data.
 Audience: ${AUDIENCE_TONES[audience] || audience}${customerContext}
 ${intent ? `The presenter specifically wants to communicate: "${intent}"` : 'No specific message given — provide a balanced full overview.'}
