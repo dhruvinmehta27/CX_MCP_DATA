@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import * as svc from '../analytics-service.js';
-import { fetchSalesOrgs, probeC4CAccess, fetchRFQFields } from '../c4c-client.js';
+import { fetchSalesOrgs, probeC4CAccess, fetchCollectionFields } from '../c4c-client.js';
 
 const router = Router();
 
@@ -44,11 +44,14 @@ router.get('/rfqs/trend', handle(svc.rfqsTrend));
 router.get('/rfqs/list', handle(svc.rfqsList));
 router.get('/daily-summary', handle(svc.getDailySummary));
 
-// Debug: returns all field names on a single RFQRootCollection record
-router.get('/rfqs/fields', async (req, res, next) => {
+// Debug: returns all field names on a single record from the given collection.
+// Valid :collection values: opportunities, opportunity-items, quotes,
+// quote-items, rfqs — used to discover what's available before wiring a
+// field into a real $select list, without guessing.
+router.get('/fields/:collection', async (req, res, next) => {
   try {
-    const fields = await fetchRFQFields(req.userJwt);
-    res.json({ fields });
+    const fields = await fetchCollectionFields(req.params.collection, req.userJwt);
+    res.json({ collection: req.params.collection, fields });
   } catch (err) {
     next(err);
   }

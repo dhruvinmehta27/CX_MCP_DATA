@@ -16,6 +16,14 @@ const BRIEF_DATE_PRESETS = [
   { label: 'Last 1Y', months: 12 },
 ];
 
+const FOCUS_AREAS = [
+  { id: 'win-loss', label: 'Win/Loss History', desc: "Our track record with this customer" },
+  { id: 'relationship-health', label: 'Relationship Health', desc: 'Recency, deals going stale' },
+  { id: 'open-deals', label: 'Open Deals to Push', desc: "What's in motion, needs a decision" },
+  { id: 'product-mix', label: 'Product Opportunities', desc: 'Cross-sell / up-sell angles' },
+  { id: 'risk-flags', label: 'Risk Flags', desc: "What not to bring up unprompted" },
+];
+
 const AUDIENCES = [
   { id: 'board', icon: 'briefcase', label: 'Board / Executive', desc: 'Strategic overview, revenue focus' },
   { id: 'regional', icon: 'target', label: 'Regional Manager', desc: 'Operational detail, owner performance' },
@@ -55,6 +63,7 @@ export default function SalesBrief() {
   const [selectedOrgId, setSelectedOrgId] = useState('');
   const [selectedOrgName, setSelectedOrgName] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('');
+  const [selectedFocusAreas, setSelectedFocusAreas] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [overrideDateFrom, setOverrideDateFrom] = useState(null);
@@ -136,7 +145,7 @@ export default function SalesBrief() {
         ...(selectedOrgId ? { salesOrgId: selectedOrgId } : {}),
         ...(selectedCustomer.trim() ? { account: selectedCustomer.trim() } : {}),
       };
-      const res = await generateBrief(audience, intent.trim() || undefined, activeFilters);
+      const res = await generateBrief(audience, intent.trim() || undefined, activeFilters, selectedFocusAreas);
       // Store the period actually used so the document header is authoritative
       setResult({ ...res, usedDateFrom: filters.dateFrom, usedDateTo: filters.dateTo });
     } catch (err) {
