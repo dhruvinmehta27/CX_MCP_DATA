@@ -54,6 +54,7 @@ export default function SalesBrief() {
   const [orgMatches, setOrgMatches] = useState([]);
   const [selectedOrgId, setSelectedOrgId] = useState('');
   const [selectedOrgName, setSelectedOrgName] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState('');
   const [generating, setGenerating] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [overrideDateFrom, setOverrideDateFrom] = useState(null);
@@ -84,6 +85,7 @@ export default function SalesBrief() {
     setOrgMatches([]);
     setSelectedOrgId('');
     setSelectedOrgName('');
+    setSelectedCustomer('');
     setUseRequestPeriod(false);
     setOverrideDateFrom(null);
     setOverrideDateTo(null);
@@ -92,6 +94,11 @@ export default function SalesBrief() {
     try {
       const res = await planBrief(audience, fullIntent || undefined, toApiFilters(filters));
       setPlan(res.plan);
+      // Customer/account filtering is a direct substring match — no lookup needed,
+      // just pre-fill it so the user can confirm or edit before generating.
+      if (res.plan.detectedCustomerKeyword) {
+        setSelectedCustomer(res.plan.detectedCustomerKeyword);
+      }
       // Search for orgs whenever AI detected a keyword OR raised a scope warning
       const keyword = res.plan.detectedOrgKeyword || (res.plan.scopeWarning ? intent.trim() : null);
       if (keyword) {
@@ -118,6 +125,7 @@ export default function SalesBrief() {
       const activeFilters = {
         ...toApiFilters(filters),
         ...(selectedOrgId ? { salesOrgId: selectedOrgId } : {}),
+        ...(selectedCustomer.trim() ? { account: selectedCustomer.trim() } : {}),
       };
       const res = await generateBrief(audience, intent.trim() || undefined, activeFilters);
       // Store the period actually used so the document header is authoritative
@@ -342,6 +350,34 @@ export default function SalesBrief() {
               </div>
             )}
 
+            {/* Customer/account filter — direct substring match, no lookup needed */}
+            {plan.detectedCustomerKeyword && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+                  <Icon name="users" size={12} style={{ marginRight: 5 }} />
+                  Customer filter
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    value={selectedCustomer}
+                    onChange={(e) => setSelectedCustomer(e.target.value)}
+                    placeholder="Customer / account name"
+                    style={{ flex: 1, padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}
+                  />
+                  {selectedCustomer && (
+                    <button className="builder-range-chip" onClick={() => setSelectedCustomer('')}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {selectedCustomer && (
+                  <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 8, marginBottom: 0 }}>
+                    Brief will be filtered to opportunities/quotes with <strong>{selectedCustomer}</strong> as the customer.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Org picker — shown when AI detected an org mention or raised a scope warning */}
             {(plan.detectedOrgKeyword || plan.scopeWarning) && (
               <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(0,112,242,0.18)', borderRadius: 8 }}>
@@ -416,7 +452,7 @@ export default function SalesBrief() {
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             {plan && (
-              <button className="btn btn-ghost" onClick={() => { setPlan(null); setOrgMatches([]); setSelectedOrgId(''); setSelectedOrgName(''); }} disabled={generating}>
+              <button className="btn btn-ghost" onClick={() => { setPlan(null); setOrgMatches([]); setSelectedOrgId(''); setSelectedOrgName(''); setSelectedCustomer(''); }} disabled={generating}>
                 <Icon name="edit" size={15} />
                 Refine
               </button>

@@ -57,8 +57,8 @@ function suggestCategories(keywords, items) {
  * exhausted memory on wide date ranges.
  */
 function baseFilters(filters = {}) {
-  const { salesOrgId, ownerId, dateFrom, dateTo } = filters;
-  return { salesOrgId, ownerId, dateFrom, dateTo };
+  const { salesOrgId, ownerId, dateFrom, dateTo, account } = filters;
+  return { salesOrgId, ownerId, dateFrom, dateTo, account };
 }
 
 // Match org by exact ID code (e.g. "TSSGERMANY") OR by name substring (e.g. "CSC Germany").

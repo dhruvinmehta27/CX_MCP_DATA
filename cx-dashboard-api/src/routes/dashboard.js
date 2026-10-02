@@ -11,8 +11,8 @@ import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 const router = Router();
 
 function pickFilters(source = {}) {
-  const { salesOrgId, ownerId, dateFrom, dateTo } = source;
-  return { salesOrgId, ownerId, dateFrom, dateTo };
+  const { salesOrgId, ownerId, dateFrom, dateTo, account } = source;
+  return { salesOrgId, ownerId, dateFrom, dateTo, account };
 }
 
 // Headline numbers for the Sales Brief "data included" panel

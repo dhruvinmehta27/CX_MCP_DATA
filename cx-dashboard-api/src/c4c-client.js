@@ -284,18 +284,21 @@ function quoteFilter(filters = {}) {
   // (C4C: "Expression can not converted into ABAP select options"). Sales-org
   // scoping is applied in-process in analytics-service (rawQuotes), not here.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
+  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',BuyerPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
 }
 function opportunityFilter(filters = {}) {
   const parts = [];
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
+  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',ProspectPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
 }
 function rfqFilter(filters = {}) {
   const parts = [];
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
+  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',AccountName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return parts.join(' and ');
 }
@@ -319,6 +322,7 @@ export async function fetchQuotes(filters = {}, userJwt) {
   // SalesOrganisationID is not filterable server-side (see quoteFilter) — org
   // scoping happens in-process in rawQuotes.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
+  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',BuyerPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return fetchAllPages(
     `${ODATA_BASE}/SalesQuoteCollection`,
@@ -338,6 +342,7 @@ export async function fetchQuotes(filters = {}, userJwt) {
 export async function fetchOpportunities(filters = {}, userJwt) {
   const parts = [];
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
+  if (filters.account) parts.push(`substringof('${odataEscape(filters.account)}',ProspectPartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
   return fetchAllPages(
     `${ODATA_BASE}/OpportunityCollection`,
