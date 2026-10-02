@@ -27,7 +27,7 @@ const FOCUS_AREAS = [
 const AUDIENCES = [
   { id: 'board', icon: 'briefcase', label: 'Board / Executive', desc: 'Strategic overview, revenue focus' },
   { id: 'regional', icon: 'target', label: 'Regional Manager', desc: 'Operational detail, owner performance' },
-  { id: 'customer', icon: 'users', label: 'Customer Meeting', desc: 'Value-oriented, opportunity focused' },
+  { id: 'customer', icon: 'users', label: 'Customer Meeting', desc: 'Rep prep notes: win/loss, open deals, risk flags' },
   { id: 'team', icon: 'check-circle', label: 'Sales Team', desc: 'Win rates, pipeline health, motivation' },
   { id: 'territory', icon: 'funnel', label: 'Territory Review', desc: 'Org breakdown, geographic performance' },
   { id: 'investor', icon: 'trending-up', label: 'Investor / Stakeholder', desc: 'Growth story, pipeline momentum' },
