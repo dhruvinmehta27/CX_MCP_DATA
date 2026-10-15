@@ -61,16 +61,28 @@ function baseFilters(filters = {}) {
   return { salesOrgId, ownerId, dateFrom, dateTo, account };
 }
 
+// Words too generic to use as an org-matching token on their own (would
+// false-match almost any org name/ID).
+const ORG_FILLER_WORDS = new Set(['the', 'sales', 'organization', 'organisation', 'org', 'for', 'and', 'in', 'a']);
+
 // Match org by exact ID code (e.g. "TSSGERMANY") OR by name substring (e.g. "CSC Germany").
 // Supports comma-separated values for multi-org filtering (e.g. "TSSCANADA,TSSMEXICO").
+// Also tolerant of a verbose phrase (e.g. "Hungary sales organization" instead of
+// just "Hungary") since the custom-aggregate agent derives this from free text —
+// a plain substring check silently matches nothing in that case and produces a
+// false "0 records" answer, so we fall back to significant-word matching too.
 function matchesOrg(orgId, orgName, filterValue) {
   if (!filterValue) return true;
+  const idLower = (orgId || '').toLowerCase();
+  const nameLower = (orgName || '').toLowerCase();
   const values = filterValue.split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
-  return values.some((v) =>
-    (orgId && orgId.toLowerCase() === v) ||
-    (orgName && orgName.toLowerCase().includes(v)) ||
-    (orgId && orgId.toLowerCase().includes(v))
-  );
+  return values.some((v) => {
+    if (idLower === v) return true;
+    if (idLower && (idLower.includes(v) || v.includes(idLower))) return true;
+    if (nameLower && (nameLower.includes(v) || v.includes(nameLower))) return true;
+    const tokens = v.split(/\s+/).filter((t) => t.length >= 3 && !ORG_FILLER_WORDS.has(t));
+    return tokens.some((t) => (idLower && idLower.includes(t)) || (nameLower && nameLower.includes(t)));
+  });
 }
 
 function matchesAccount(accountName, filterValue) {
