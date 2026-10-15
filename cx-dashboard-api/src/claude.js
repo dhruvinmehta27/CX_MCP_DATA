@@ -616,7 +616,12 @@ const CUSTOM_AGENT_TOOLS = [
   },
 ];
 
-const CUSTOM_AGENT_MAX_TURNS = 6;
+// Raised from 6 to 10: the "retry without creation-date filter on a
+// false-zero" rule adds a round trip on top of normal exploration
+// (list_fields + aggregate + possible retries), and 6 was observed to be
+// too tight — a real, resolvable query hit the ceiling and reported
+// "could not resolve" instead of finishing.
+const CUSTOM_AGENT_MAX_TURNS = 10;
 
 /**
  * Runs the tool-calling loop for a custom-metric request. `executeTool` is
