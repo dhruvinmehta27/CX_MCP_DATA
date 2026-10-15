@@ -468,6 +468,22 @@ Data: ${JSON.stringify(data).slice(0, 40_000)}`;
 // confirmed the field and returned real matched values.
 // ---------------------------------------------------------------------------
 
+// Known business-term -> real-field mappings, confirmed by hand (e.g. via
+// C4C's "View Model Attributes" UI panel showing the model binding behind a
+// screen label). list_fields can NEVER discover these on its own — OData
+// metadata only exposes technical field names, not custom UI label renames,
+// so a term like "Estimated Peak Turnover" (a renamed label for
+// ExpectedRevenueAmount in this tenant's UI) has no way to be found by
+// searching field names alone. Add entries here as more are confirmed.
+const BUSINESS_TERM_GLOSSARY = [
+  {
+    terms: ['estimated peak turnover', 'peak turnover', 'expected peak turnover'],
+    entity: 'opportunities',
+    fieldName: 'ExpectedRevenueAmount',
+    note: 'Confirmed via C4C UI model binding (/Root/ExpectedRevenueAmount/content) — this is a renamed UI label, not a separate field. ExpectedRevenueAmount is in the deal\'s original transaction currency (varies per record). If the user asks for a sum specifically "in EUR"/"in €", use ZBaseCurrency_KUTContent_KUT instead — the already EUR-converted figure — not raw ExpectedRevenueAmount, to avoid mixing currencies in the sum.',
+  },
+];
+
 const CUSTOM_AGENT_TOOLS = [
   {
     name: 'list_fields',
@@ -516,10 +532,18 @@ const CUSTOM_AGENT_MAX_TURNS = 6;
  * mechanics only; actual data access is delegated.
  */
 export async function runCustomAggregateAgent({ userRequest, baseFilters = {}, executeTool }) {
+  const glossaryText = BUSINESS_TERM_GLOSSARY
+    .map((g) => `  - "${g.terms.join('" / "')}" → entity: ${g.entity}, fieldName: ${g.fieldName}. ${g.note}`)
+    .join('\n');
+
   const systemPrompt = `You are a data analyst for Trelleborg Sealing Solutions' SAP C4C CRM data. The user asked a question that doesn't match any pre-built report — you must verify real data before answering.
 
+KNOWN BUSINESS-TERM ALIASES — check this list FIRST, before calling list_fields. These are confirmed mappings from business language to real field names (found by inspecting the C4C UI's model binding, since OData metadata never exposes custom UI label renames — list_fields cannot discover these on its own):
+${glossaryText || '  (none yet)'}
+If the user's term matches one of these (even loosely — "peak turnover", "turnover", "estimated peak turnover" are all the same alias), use the mapped field directly — skip list_fields and go straight to aggregate.
+
 CRITICAL RULES — these exist because guessing produced confidently wrong answers in production:
-1. NEVER invent, guess, or assume a field name exists. If you are not certain, call list_fields first.
+1. NEVER invent, guess, or assume a field name exists. If a term isn't in the glossary above and you are not certain, call list_fields first.
 2. If after checking list_fields (try multiple relevant collections if the field could be on either) you cannot find a field matching what the user asked for, STOP. Do not substitute a different metric, do not approximate. Report success: false and explain specifically what you looked for and didn't find.
 3. aggregate returning valuesFound: 0 while recordsMatched > 0 means the field name was wrong, or empty for every matched record. This is NOT a valid "the answer is 0" result — treat it as failure, try a different field name from list_fields, or give up and report success: false.
 4. Your final explanation must describe EXACTLY what the aggregate tool actually returned — never describe a filter, field, or computation you did not actually execute via a tool call.
