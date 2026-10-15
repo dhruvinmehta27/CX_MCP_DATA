@@ -406,6 +406,34 @@ export async function fetchOpportunityQuoteReferences(userJwt) {
   );
 }
 
+// Quote line items — confirmed field names against a live record
+// (SalesQuoteItemCollection). RFQ_IDcontent_SDK links a quote item to the
+// RFQ it generated (procurement-side RFQ, not a C4C RFQRootCollection
+// relationship we've verified separately) — confirmed to exist as a real
+// field, but every sample record we captured had it empty, so its
+// populated value format is NOT independently verified yet.
+const QUOTE_ITEM_FIELDS = [
+  'ObjectID', 'ParentObjectID', 'QuoteID', 'ItemID',
+  'ProductInternalID', 'Description',
+  'NetAmount', 'NetAmountCurrencyCode',
+  'Quantity', 'QuantityMeasureUnitCodeText',
+  'LifeCycleStatusCodeText',
+  'CreationDateTime',
+  'RFQ_IDcontent_SDK',
+];
+
+export async function fetchQuoteItems(filters = {}, userJwt) {
+  const parts = [];
+  parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  const extra = (filters.extraFields || []).filter((f) => !QUOTE_ITEM_FIELDS.includes(f));
+  return fetchAllPages(
+    `${ODATA_BASE}/SalesQuoteItemCollection`,
+    [...QUOTE_ITEM_FIELDS, ...extra],
+    parts.join(' and '),
+    userJwt
+  );
+}
+
 const OPPORTUNITY_ITEM_FIELDS = [
   'ObjectID', 'ParentObjectID', 'OpportunityID', 'ID',
   'ProductID', 'ProductIDDescription',

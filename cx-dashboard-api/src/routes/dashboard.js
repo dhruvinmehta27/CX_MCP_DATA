@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent } from '../claude.js';
-import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote } from '../analytics-service.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes } from '../analytics-service.js';
 import { fetchCollectionFields } from '../c4c-client.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -48,6 +48,9 @@ function executeCustomAgentTool(req) {
         status: input.status || 'all',
       };
       return opportunitiesConvertedToQuote(filters, req.userJwt, req.userEmail);
+    }
+    if (name === 'count_rfqs_from_quotes') {
+      return rfqsRaisedFromQuotes({ dateFrom: input.dateFrom || null, dateTo: input.dateTo || null }, req.userJwt, req.userEmail);
     }
     throw new Error(`Unknown tool: ${name}`);
   };

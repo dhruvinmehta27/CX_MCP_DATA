@@ -7,7 +7,7 @@ import {
   fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
-  fetchAccountCountries, fetchOpportunityQuoteReferences,
+  fetchAccountCountries, fetchOpportunityQuoteReferences, fetchQuoteItems,
 } from './c4c-client.js';
 import { getAccountCountryMap, enrichWithCountry } from './account-cache.js';
 import {
@@ -225,6 +225,38 @@ export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail)
       Status: o.LifeCycleStatusCodeText,
     })),
     truncated: !!opps.truncated,
+  };
+}
+
+/**
+ * Counts quote items that have a linked RFQ (RFQ_IDcontent_SDK populated),
+ * i.e. RFQs raised FROM quotes — the reverse direction of
+ * opportunitiesConvertedToQuote. Scoped by date only (CreationDateTime on
+ * the item) — org/account filtering isn't supported yet since that would
+ * require joining back to the quote header, not built for v1.
+ *
+ * CAVEAT: RFQ_IDcontent_SDK is a confirmed real field, but every sample
+ * record captured during discovery had it empty — its populated value
+ * format has not been independently verified against a real linked
+ * record. Results should be treated as provisional until validated
+ * against at least one confirmed real RFQ-linked quote item.
+ */
+export async function rfqsRaisedFromQuotes(filters, userJwt, userEmail) {
+  const fetchFilters = { dateFrom: filters.dateFrom || null, dateTo: filters.dateTo || null };
+  const { data } = await getOrSet(userEmail, 'quote-items:rfq-linked', fetchFilters, () => fetchQuoteItems(fetchFilters, userJwt));
+  const linked = data.results.filter((i) => i.RFQ_IDcontent_SDK);
+  const uniqueRFQIds = new Set(linked.map((i) => i.RFQ_IDcontent_SDK));
+
+  return {
+    quoteItemsChecked: data.total,
+    quoteItemsWithRFQLink: linked.length,
+    uniqueRFQCount: uniqueRFQIds.size,
+    sample: linked.slice(0, 10).map((i) => ({
+      'Quote ID': i.QuoteID,
+      'Item ID': i.ItemID,
+      'RFQ ID': i.RFQ_IDcontent_SDK,
+    })),
+    truncated: !!data.truncated,
   };
 }
 

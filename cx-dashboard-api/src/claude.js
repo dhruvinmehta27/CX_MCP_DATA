@@ -167,6 +167,7 @@ export async function parseIntent(userRequest, filters = {}) {
 ENDPOINT SELECTION RULES — pick the most specific match:
 CRITICAL — check this FIRST, before anything else: if the user asks for a SUM, COUNT, AVERAGE, or TOTAL of a specific named metric/field that is NOT one of the standard figures covered by the rules below (win rate, pipeline value, quote count, quote status, RFQ status, product quantity/cost/price at the line-item level) — especially if the field name sounds like a custom/business-specific term you don't recognize (e.g. "Estimated Peak Turnover", "SOP value", any term with capitalized Title Case that isn't plainly "revenue" or "amount") — use "custom/aggregate" and set chartType "table". Do NOT guess which endpoint might contain this field, do NOT silently substitute opportunities/items or any other endpoint. This is critical: inventing a field mapping produces a confidently wrong answer, which is worse than asking a specialized agent to verify the field exists first. "custom/aggregate" triggers a separate verification step that checks real C4C field names before computing anything.
 ALSO use "custom/aggregate" for "how many opportunities converted to quote", "quote conversion rate", "opportunities that became quotes", or similar — there is no simple field for this, it requires checking a relationship between Opportunities and Quotes that only the custom/aggregate agent knows how to do correctly.
+ALSO use "custom/aggregate" for "how many RFQs raised from quotes", "RFQs generated from quotes this quarter", or similar — the reverse direction, same reasoning.
 IMPORTANT: If the user asks for product-level detail (Product ID, Product Category, Quantity, Cost, Price, line items, items within opportunities, specific product types like "oil seals"/"cassette seals"/"seals"), ALWAYS use "opportunities/items" — even if the word "pipeline" or "opportunity" appears. Product detail always wins over pipeline/stage views.
 - "top N users", "who created most quotes", "top reps by quote count", "most quotes by person", "ranked by quote count" → use "quotes/top-creators" and set chartType "bar". Extract limit N from the request and set filters.limit.
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
@@ -599,6 +600,17 @@ const CUSTOM_AGENT_TOOLS = [
         account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
         dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+      },
+    },
+  },
+  {
+    name: 'count_rfqs_from_quotes',
+    description: 'Counts RFQs that have been raised FROM quotes (the reverse direction of count_quote_conversions) — i.e. quote line items that reference an RFQ they generated. Use this for "how many RFQs have been raised from quotes this quarter", "RFQs generated from quotes", etc. There is no boolean flag for this — it is derived from RFQ_IDcontent_SDK on SalesQuoteItem, which this tool handles internally. CAVEAT you must pass on to the user if the result is 0 or looks surprising: this field has not been seen populated in any sample record during development — if the count is 0, say that plainly rather than treating it as a confident "no RFQs were raised," since it could also mean this field isn\'t actually being populated by the current process. Only supports date filtering (no org/account filter yet).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        dateFrom: { type: 'string', description: 'ISO date, filters quote items on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters quote items on CreationDateTime.' },
       },
     },
   },
