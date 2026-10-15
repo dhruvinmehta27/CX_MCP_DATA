@@ -15,5 +15,5 @@ export const getBriefStats = (filters) =>
 export const planBrief = (audience, intent, filters) =>
   client.post('/api/dashboard/brief-plan', { audience, intent, filters }).then((r) => r.data);
 
-export const generateBrief = (audience, intent, filters) =>
-  client.post('/api/dashboard/brief', { audience, intent, filters }).then((r) => r.data);
+export const generateBrief = (audience, intent, filters, focusAreas) =>
+  client.post('/api/dashboard/brief', { audience, intent, filters, focusAreas }).then((r) => r.data);
