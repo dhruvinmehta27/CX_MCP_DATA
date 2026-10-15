@@ -46,6 +46,31 @@ function parseJsonResponse(text) {
   return JSON.parse(cleaned);
 }
 
+// Tolerant JSON extraction for the custom-aggregate agent's final answer only.
+// Unlike parseJsonResponse (used by other prompts), the model here sometimes
+// prefixes the JSON with a sentence of preamble, so we search for a fenced
+// block or a brace-matched object anywhere in the text instead of requiring
+// it to start at position 0.
+function extractFinalAnswerJson(text) {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [];
+  if (fenced) candidates.push(fenced[1]);
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    candidates.push(text.slice(firstBrace, lastBrace + 1));
+  }
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate.trim());
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
 const VALID_ENDPOINTS = [
   'quotes/raw', 'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
   'opportunities/pipeline', 'opportunities/created-trend', 'opportunities/by-sales-org',
@@ -691,11 +716,9 @@ When you have a final answer (or have given up), respond with JSON only, no mark
     const toolUses = response.content.filter((b) => b.type === 'tool_use');
     if (toolUses.length === 0) {
       const text = extractText(response);
-      try {
-        return parseJsonResponse(text);
-      } catch {
-        return { success: false, value: null, formattedValue: null, fieldUsed: null, entity: null, aggregation: null, recordsMatched: null, explanation: text || 'The agent did not return a parseable answer.', caveats: [] };
-      }
+      const parsed = extractFinalAnswerJson(text);
+      if (parsed) return parsed;
+      return { success: false, value: null, formattedValue: null, fieldUsed: null, entity: null, aggregation: null, recordsMatched: null, explanation: text || 'The agent did not return a parseable answer.', caveats: [] };
     }
 
     messages.push({ role: 'assistant', content: response.content });

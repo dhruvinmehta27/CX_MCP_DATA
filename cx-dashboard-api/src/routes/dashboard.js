@@ -141,10 +141,11 @@ router.post('/generate', async (req, res, next) => {
         baseFilters: mergedFilters,
         executeTool: executeCustomAgentTool(req),
       });
+      const noDataFound = agentResult.success && agentResult.recordsMatched === 0;
       const row = agentResult.success
         ? {
             Metric: userRequest,
-            Value: agentResult.formattedValue || agentResult.value,
+            Value: noDataFound ? 'No matching records found' : (agentResult.formattedValue || agentResult.value),
             'Field used': agentResult.fieldUsed,
             'Records matched': agentResult.recordsMatched,
           }
