@@ -528,6 +528,12 @@ const PENDING_FIELDS = [
     fieldName: 'ZLostTotal_SDK_e660a65186d74f1fa49c5c15c52392a9',
     note: 'Confirmed field name via UI model binding (/Root/ZLostTotal_SDK_e660a65186d74f1fa49c5c15c52392a9/content), but NOT YET LIVE — announced as coming soon, not yet deployed to the system as of this writing. Likely represents the total value of lost quote items/lines, based on the name, but this has not been confirmed. When this comes up, call list_fields on "quotes" to check if it now exists — if not found, tell the user it\'s planned but not yet available rather than failing silently or guessing a substitute metric.',
   },
+  {
+    terms: ['open total', 'quote open total', 'total open'],
+    entity: 'quotes',
+    fieldName: 'ZOpenTotal_SDK_dd2271b3b5214c838c51b902b5a1ee6f',
+    note: 'Confirmed field name via UI model binding (/Root/ZOpenTotal_SDK_dd2271b3b5214c838c51b902b5a1ee6f/content), but NOT YET LIVE — same status as ZLostTotal_SDK above (coming soon, not yet deployed). Likely represents the total value of open/not-yet-decided quote items/lines, based on the name, but not confirmed. Check list_fields on "quotes" when this comes up; if not found, tell the user it\'s planned but not yet available.',
+  },
 ];
 
 
