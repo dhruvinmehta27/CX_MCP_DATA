@@ -578,7 +578,7 @@ const CUSTOM_AGENT_TOOLS = [
         fieldName: { type: 'string', description: 'The exact field name as returned by list_fields.' },
         aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter by opportunity lifecycle outcome. Only meaningful for entity="opportunities". Default "all".' },
-        salesOrgId: { type: 'string', description: 'Sales org ID or name substring, if the user specified one.' },
+        salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
         account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
         dateFrom: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
@@ -596,7 +596,7 @@ const CUSTOM_AGENT_TOOLS = [
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome before checking conversion. Default "all".' },
-        salesOrgId: { type: 'string', description: 'Sales org ID or name substring, if the user specified one.' },
+        salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
         account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
         dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
