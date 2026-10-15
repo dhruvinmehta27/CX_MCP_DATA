@@ -52,6 +52,7 @@ const VALID_ENDPOINTS = [
   'opportunities/items',
   'rfqs/by-status', 'rfqs/by-account', 'rfqs/trend', 'rfqs/list',
   'quotes/top-customers', 'quotes/top-creators', 'daily-summary',
+  'custom/aggregate',
 ];
 
 // Keywords that force quotes/top-creators (ranked aggregation by owner/creator).
@@ -97,7 +98,7 @@ function hasScopeFilter(intent, userRequest) {
 }
 
 function requiresScope(intent) {
-  return intent.endpoints.some((e) => ['quotes/raw', 'opportunities/items', 'quotes/top-creators', 'rfqs/list'].includes(e));
+  return intent.endpoints.some((e) => ['quotes/raw', 'opportunities/items', 'quotes/top-creators', 'rfqs/list', 'custom/aggregate'].includes(e));
 }
 
 export function sanitizeIntent(intent = {}, userRequest = '') {
@@ -164,6 +165,7 @@ export async function parseIntent(userRequest, filters = {}) {
 }
 
 ENDPOINT SELECTION RULES — pick the most specific match:
+CRITICAL — check this FIRST, before anything else: if the user asks for a SUM, COUNT, AVERAGE, or TOTAL of a specific named metric/field that is NOT one of the standard figures covered by the rules below (win rate, pipeline value, quote count, quote status, RFQ status, product quantity/cost/price at the line-item level) — especially if the field name sounds like a custom/business-specific term you don't recognize (e.g. "Estimated Peak Turnover", "SOP value", any term with capitalized Title Case that isn't plainly "revenue" or "amount") — use "custom/aggregate" and set chartType "table". Do NOT guess which endpoint might contain this field, do NOT silently substitute opportunities/items or any other endpoint. This is critical: inventing a field mapping produces a confidently wrong answer, which is worse than asking a specialized agent to verify the field exists first. "custom/aggregate" triggers a separate verification step that checks real C4C field names before computing anything.
 IMPORTANT: If the user asks for product-level detail (Product ID, Product Category, Quantity, Cost, Price, line items, items within opportunities, specific product types like "oil seals"/"cassette seals"/"seals"), ALWAYS use "opportunities/items" — even if the word "pipeline" or "opportunity" appears. Product detail always wins over pipeline/stage views.
 - "top N users", "who created most quotes", "top reps by quote count", "most quotes by person", "ranked by quote count" → use "quotes/top-creators" and set chartType "bar". Extract limit N from the request and set filters.limit.
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
@@ -442,4 +444,128 @@ Data: ${JSON.stringify(data).slice(0, 40_000)}`;
     messages: [{ role: 'user', content: prompt }],
   });
   return parseJsonResponse(extractText(response));
+}
+
+// ---------------------------------------------------------------------------
+// Custom aggregate agent — handles requests that mention a specific metric/
+// field not covered by any pre-built endpoint. Instead of guessing which
+// endpoint/field to use (the failure mode that produced confidently wrong
+// answers), this runs a tool-calling loop: the agent can look up real field
+// names (list_fields) before computing anything (aggregate), and the system
+// prompt forbids it from claiming success unless a tool call actually
+// confirmed the field and returned real matched values.
+// ---------------------------------------------------------------------------
+
+const CUSTOM_AGENT_TOOLS = [
+  {
+    name: 'list_fields',
+    description: 'List all real field names available on a C4C collection. Use this BEFORE aggregate whenever you are not 100% certain a field name exists exactly as the user described it — never guess or invent a field name.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        collection: {
+          type: 'string',
+          enum: ['opportunities', 'opportunity-items', 'quotes', 'quote-items', 'rfqs'],
+          description: 'Which collection to inspect. Use "opportunities" or "quotes" for header-level fields, the "-items" variants for line-item fields.',
+        },
+      },
+      required: ['collection'],
+    },
+  },
+  {
+    name: 'aggregate',
+    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities or Quotes, with optional filters. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero."',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: { type: 'string', enum: ['opportunities', 'quotes'] },
+        fieldName: { type: 'string', description: 'The exact field name as returned by list_fields.' },
+        aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter by opportunity lifecycle outcome. Only meaningful for entity="opportunities". Default "all".' },
+        salesOrgId: { type: 'string', description: 'Sales org ID or name substring, if the user specified one.' },
+        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        dateFrom: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
+        secondaryDateField: { type: 'string', description: 'A different date field to also filter on, e.g. ExpectedProcessingEndDate for "start of production". Must be a real field confirmed via list_fields.' },
+        secondaryDateFrom: { type: 'string' },
+        secondaryDateTo: { type: 'string' },
+      },
+      required: ['entity', 'fieldName', 'aggregation'],
+    },
+  },
+];
+
+const CUSTOM_AGENT_MAX_TURNS = 6;
+
+/**
+ * Runs the tool-calling loop for a custom-metric request. `executeTool` is
+ * injected by the caller (routes/dashboard.js) so this file stays free of
+ * direct C4C/analytics-service imports — it owns the Anthropic conversation
+ * mechanics only; actual data access is delegated.
+ */
+export async function runCustomAggregateAgent({ userRequest, baseFilters = {}, executeTool }) {
+  const systemPrompt = `You are a data analyst for Trelleborg Sealing Solutions' SAP C4C CRM data. The user asked a question that doesn't match any pre-built report — you must verify real data before answering.
+
+CRITICAL RULES — these exist because guessing produced confidently wrong answers in production:
+1. NEVER invent, guess, or assume a field name exists. If you are not certain, call list_fields first.
+2. If after checking list_fields (try multiple relevant collections if the field could be on either) you cannot find a field matching what the user asked for, STOP. Do not substitute a different metric, do not approximate. Report success: false and explain specifically what you looked for and didn't find.
+3. aggregate returning valuesFound: 0 while recordsMatched > 0 means the field name was wrong, or empty for every matched record. This is NOT a valid "the answer is 0" result — treat it as failure, try a different field name from list_fields, or give up and report success: false.
+4. Your final explanation must describe EXACTLY what the aggregate tool actually returned — never describe a filter, field, or computation you did not actually execute via a tool call.
+5. Already-known filters from the UI (use these as defaults unless the user's question overrides them): ${JSON.stringify(baseFilters)}
+6. Today's date: ${new Date().toISOString().slice(0, 10)} — resolve relative/specific periods (e.g. "2026", "start of production in 2026") to ISO dates yourself.
+
+When you have a final answer (or have given up), respond with JSON only, no markdown fences:
+{
+  "success": boolean,
+  "value": number|null,
+  "formattedValue": string|null,
+  "fieldUsed": string|null,
+  "entity": string|null,
+  "aggregation": string|null,
+  "recordsMatched": number|null,
+  "explanation": string,
+  "caveats": [string]
+}`;
+
+  const messages = [{ role: 'user', content: userRequest }];
+  const client = getClient();
+
+  for (let turn = 0; turn < CUSTOM_AGENT_MAX_TURNS; turn++) {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 2000,
+      system: systemPrompt,
+      tools: CUSTOM_AGENT_TOOLS,
+      messages,
+    });
+
+    const toolUses = response.content.filter((b) => b.type === 'tool_use');
+    if (toolUses.length === 0) {
+      const text = extractText(response);
+      try {
+        return parseJsonResponse(text);
+      } catch {
+        return { success: false, value: null, formattedValue: null, fieldUsed: null, entity: null, aggregation: null, recordsMatched: null, explanation: text || 'The agent did not return a parseable answer.', caveats: [] };
+      }
+    }
+
+    messages.push({ role: 'assistant', content: response.content });
+    const toolResults = [];
+    for (const tu of toolUses) {
+      let result;
+      try {
+        result = await executeTool(tu.name, tu.input);
+      } catch (err) {
+        result = { error: err.message };
+      }
+      toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) });
+    }
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  return {
+    success: false, value: null, formattedValue: null, fieldUsed: null, entity: null, aggregation: null, recordsMatched: null,
+    explanation: `Could not resolve this within ${CUSTOM_AGENT_MAX_TURNS} verification steps — the field or computation may not be supported yet.`,
+    caveats: [],
+  };
 }

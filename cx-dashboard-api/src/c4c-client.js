@@ -324,6 +324,15 @@ export function countRFQs(filters, userJwt) {
 // Collection fetchers — always $select only the fields needed for aggregation
 // ---------------------------------------------------------------------------
 
+const QUOTE_FIELDS = [
+  'ObjectID', 'ID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
+  'NetAmount', 'CurrencyCode', 'SalesOrganisationID', 'SalesOrganisationName',
+  'CreationDateTime', 'ValidToDate', 'BuyerPartyName', 'BuyerPartyID',
+  'ProductRecipientPartyName', 'ProductRecipientPartyID',
+  'EmployeeResponsiblePartyName', 'ZBIZTYPE',
+  'CreatedBy', 'LastChangedBy',
+];
+
 export async function fetchQuotes(filters = {}, userJwt) {
   const parts = [];
   // SalesOrganisationID is not filterable server-side (see quoteFilter) — org
@@ -333,20 +342,32 @@ export async function fetchQuotes(filters = {}, userJwt) {
   // in-process in rawQuotes too (not server-side here).
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  // extraFields lets callers (e.g. the custom-aggregate agent tool) pull a
+  // specific field not in the default set, without permanently adding it here.
+  const extra = (filters.extraFields || []).filter((f) => !QUOTE_FIELDS.includes(f));
   return fetchAllPages(
     `${ODATA_BASE}/SalesQuoteCollection`,
-    [
-      'ObjectID', 'ID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
-      'NetAmount', 'CurrencyCode', 'SalesOrganisationID', 'SalesOrganisationName',
-      'CreationDateTime', 'ValidToDate', 'BuyerPartyName', 'BuyerPartyID',
-      'ProductRecipientPartyName', 'ProductRecipientPartyID',
-      'EmployeeResponsiblePartyName', 'ZBIZTYPE',
-      'CreatedBy', 'LastChangedBy',
-    ],
+    [...QUOTE_FIELDS, ...extra],
     parts.join(' and '),
     userJwt
   );
 }
+
+const OPPORTUNITY_FIELDS = [
+  'ObjectID', 'ID', 'Name', 'SalesCyclePhaseCode', 'SalesCyclePhaseCodeText',
+  'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
+  'CreationDateTime', 'EntityLastChangedOn', 'MainEmployeeResponsiblePartyName',
+  'ProspectPartyName', 'ProspectPartyID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
+  // Value in group/base currency (EUR) — avoids mixing transaction currencies
+  'ZBaseCurrency_KUTContent_KUT', 'ZBaseCurrency_KUTcurrencyCode_KUT',
+  // Pipeline Command Center filter dimensions (confirmed from tenant payload):
+  'OriginTypeCode', 'OriginTypeCodeText',            // Opportunity Source
+  'OpportunityLevel_KUT', 'OpportunityLevel_KUTText', // Opportunity Type (level)
+  'SalesTerritoryID', 'SalesTerritoryName',          // Sales Region / Team
+  'BUS_SEG_CDE_KUT', 'BUS_SEG_CDE_KUTText',          // Industry — business segment
+  'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
+  'SalesOrganisationID', 'SalesOrganisationName',    // Sales org (for in-process filtering)
+];
 
 export async function fetchOpportunities(filters = {}, userJwt) {
   const parts = [];
@@ -355,23 +376,10 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   // applied in-process in rawOpportunities, not here.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  const extra = (filters.extraFields || []).filter((f) => !OPPORTUNITY_FIELDS.includes(f));
   return fetchAllPages(
     `${ODATA_BASE}/OpportunityCollection`,
-    [
-      'ObjectID', 'ID', 'Name', 'SalesCyclePhaseCode', 'SalesCyclePhaseCodeText',
-      'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
-      'CreationDateTime', 'EntityLastChangedOn', 'MainEmployeeResponsiblePartyName',
-      'ProspectPartyName', 'ProspectPartyID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
-      // Value in group/base currency (EUR) — avoids mixing transaction currencies
-      'ZBaseCurrency_KUTContent_KUT', 'ZBaseCurrency_KUTcurrencyCode_KUT',
-      // Pipeline Command Center filter dimensions (confirmed from tenant payload):
-      'OriginTypeCode', 'OriginTypeCodeText',            // Opportunity Source
-      'OpportunityLevel_KUT', 'OpportunityLevel_KUTText', // Opportunity Type (level)
-      'SalesTerritoryID', 'SalesTerritoryName',          // Sales Region / Team
-      'BUS_SEG_CDE_KUT', 'BUS_SEG_CDE_KUTText',          // Industry — business segment
-      'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
-      'SalesOrganisationID', 'SalesOrganisationName',    // Sales org (for in-process filtering)
-    ],
+    [...OPPORTUNITY_FIELDS, ...extra],
     parts.join(' and '),
     userJwt
   );

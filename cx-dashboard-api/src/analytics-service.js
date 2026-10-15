@@ -83,7 +83,8 @@ async function rawQuotes(filters, userJwt, userEmail) {
   // SalesOrganisationID and BuyerPartyName both fail combined with the
   // date-range filter server-side (ABAP select-option error) — fetch
   // without either (cached on date/owner only) and scope both in-process.
-  const fetchKey = { ...base, salesOrgId: undefined, account: undefined };
+  const extraFields = filters.extraFields || [];
+  const fetchKey = { ...base, salesOrgId: undefined, account: undefined, extraFields };
   const [{ data }, countryMap] = await Promise.all([
     getOrSet(userEmail, 'raw:quotes', fetchKey, () => fetchQuotes(fetchKey, userJwt)),
     getAccountCountryMap(() => fetchAccountCountries(userJwt)),
@@ -102,7 +103,8 @@ async function rawOpportunities(filters, userJwt, userEmail) {
   // SalesOrganisationID and ProspectPartyName both fail combined with the
   // date-range filter server-side (ABAP select-option error) — fetch
   // without either (cached on date/owner only) and scope both in-process.
-  const fetchKey = { ...base, salesOrgId: undefined, account: undefined };
+  const extraFields = filters.extraFields || [];
+  const fetchKey = { ...base, salesOrgId: undefined, account: undefined, extraFields };
   const { data } = await getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt));
   if (!base.salesOrgId && !base.account) return data;
   const results = data.results.filter((o) =>
@@ -110,6 +112,73 @@ async function rawOpportunities(filters, userJwt, userEmail) {
     matchesAccount(o.ProspectPartyName, base.account)
   );
   return { ...data, results, total: results.length };
+}
+
+const STATUS_FILTERS = {
+  won: (r) => isWonStatus(r.LifeCycleStatusCodeText),
+  open: (r) => isOpenStatus(r.LifeCycleStatusCodeText),
+  lost: (r) => !isOpenStatus(r.LifeCycleStatusCodeText) && !isWonStatus(r.LifeCycleStatusCodeText),
+  all: () => true,
+};
+
+/**
+ * Generic sum/count/avg of a named field, used by the custom-aggregate agent
+ * tool (claude.js) when the user's request doesn't match any pre-built
+ * endpoint. fieldName must be a real field the caller has already verified
+ * via fetchCollectionFields — this does NOT guess or validate it beyond
+ * checking the values actually parse as numbers, so an unverified/wrong
+ * field name will just silently return 0 matched values (surfaced to the
+ * caller via matchedValueCount so it can detect that case).
+ */
+export async function aggregateField({ entity, fieldName, aggregation, filters = {} }, userJwt, userEmail) {
+  const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
+  const extraFields = [fieldName, filters.secondaryDateField].filter(Boolean);
+  const fetchFilters = { ...filters, extraFields };
+  const raw = entity === 'quotes'
+    ? await rawQuotes(fetchFilters, userJwt, userEmail)
+    : await rawOpportunities(fetchFilters, userJwt, userEmail);
+
+  let rows = raw.results.filter(statusFilter);
+
+  // Optional secondary date filter on a field OTHER than CreationDateTime
+  // (e.g. "start of production" = ExpectedProcessingEndDate) — applied
+  // in-process since combining extra server-side filters already proved
+  // unreliable (ABAP select-option errors) on this tenant.
+  if (filters.secondaryDateField && (filters.secondaryDateFrom || filters.secondaryDateTo)) {
+    const from = filters.secondaryDateFrom ? new Date(filters.secondaryDateFrom) : null;
+    const to = filters.secondaryDateTo ? new Date(filters.secondaryDateTo) : null;
+    rows = rows.filter((r) => {
+      const d = parseODataDate(r[filters.secondaryDateField]);
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }
+
+  // NOTE: deliberately not using the shared toNumber() here — it coerces
+  // missing/unparsable values to 0, which would make every row "count" as
+  // valid data and hide the signal that fieldName doesn't actually exist
+  // or is empty. parseFloat + isNaN keeps that distinction visible via
+  // valuesFound below.
+  const values = rows
+    .map((r) => parseFloat(r[fieldName]))
+    .filter((v) => !isNaN(v));
+
+  const sum = values.reduce((a, b) => a + b, 0);
+  const value = aggregation === 'count' ? rows.length
+    : aggregation === 'avg' ? (values.length ? sum / values.length : null)
+    : sum; // default: sum
+
+  return {
+    value,
+    aggregation: aggregation || 'sum',
+    fieldName,
+    entity,
+    recordsMatched: rows.length,
+    valuesFound: values.length, // if 0 while recordsMatched > 0, fieldName is likely wrong/empty
+    truncated: !!raw.truncated,
+  };
 }
 
 async function rawRFQs(filters, userJwt, userEmail) {
