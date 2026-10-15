@@ -501,15 +501,19 @@ const BUSINESS_TERM_GLOSSARY = [
     fieldName: 'ZItemMarginPercent (%) / ZItemMargincontent (amount) on SalesQuoteItem',
     note: 'PRIMARY SOURCE: use SalesQuoteItem\'s own fields directly — no need to query pricing conditions (this tenant doesn\'t use standard SAP pricing). ZMarginBI_KUT is the same figure as ZItemMarginPercent, just rounded slightly differently — treat as equivalent. These margin fields are in the quote\'s own transaction currency (same as NetAmount), not a fixed currency.',
   },
+  {
+    terms: ['approval total'],
+    entity: 'quotes',
+    fieldName: 'ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b',
+    note: 'Confirmed via C4C UI model binding (/Root/ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b/content). This is a GUID-suffixed Key User Extensibility custom field — SAP\'s naming pattern for fields added via the UI "add field" wizard, NOT a hand-coded KUT/SDK field. Before using it in aggregate, call list_fields on "quotes" first to confirm this exact name is exposed in the OData service — GUID-suffixed extension fields sometimes differ slightly between the UI binding name and the actual OData property name, unlike the other entries in this glossary which are already verified end-to-end. Likely semantics (per business description, not yet independently verified): for opportunities/quotes with alternative item groups (AlternativeToItemID), only the highest-value item per group counts; otherwise equal to the item/quote total.',
+  },
+  {
+    terms: ['approval margin', 'approval margin percent'],
+    entity: 'quotes',
+    fieldName: 'ApprovalMarginPercent_106549400b2441d384f3008d5acf863e',
+    note: 'Confirmed via C4C UI model binding. Same caveat as ApprovalTotal above: GUID-suffixed Key User Extensibility field — verify via list_fields on "quotes" before using in aggregate, do not assume it matches the UI binding name exactly.',
+  },
 ];
-
-// NOT YET CONFIRMED — the user described "Approval Total" (an aggregate
-// where items sharing an AlternativeToItemID group only count their
-// highest-value item, otherwise same as the item total) but we have not
-// found a real field for this in any collection pulled so far. Do not
-// invent one. If a user asks about this, the agent must say it hasn't
-// been located yet and ask for the specific field/UI binding, same as
-// how Peak Turnover and the Cost Amount currency bug were resolved.
 
 
 // Entries where we found TWO candidate fields for the same business term and
@@ -599,7 +603,7 @@ export async function runCustomAggregateAgent({ userRequest, baseFilters = {}, e
 
 KNOWN BUSINESS-TERM ALIASES — check this list FIRST, before calling list_fields. These are confirmed mappings from business language to real field names (found by inspecting the C4C UI's model binding, since OData metadata never exposes custom UI label renames — list_fields cannot discover these on its own):
 ${glossaryText || '  (none yet)'}
-If the user's term matches one of these (even loosely — "peak turnover", "turnover", "estimated peak turnover" are all the same alias), use the mapped field directly — skip list_fields and go straight to aggregate.
+If the user's term matches one of these (even loosely — "peak turnover", "turnover", "estimated peak turnover" are all the same alias), use the mapped field directly — skip list_fields and go straight to aggregate, UNLESS that entry's own note tells you to verify via list_fields first (this applies to GUID-suffixed custom extension fields, where the UI binding name is not guaranteed to exactly match the OData property name).
 
 AMBIGUOUS TERMS — check this list too, BEFORE assuming any mapping. These are cases where we found multiple real candidate fields and do not know which one the business means:
 ${ambiguousText || '  (none yet)'}
