@@ -17,6 +17,20 @@ const DATE_PRESETS = [
   { label: 'Last 1Y', months: 12 },
 ];
 
+// Shortens a long AI-generated explanation to its first sentence (or ~110
+// chars) for default display — the full text stays available behind a
+// "Show details" toggle so the card isn't a wall of text by default.
+function shortText(text, maxLen = 110) {
+  if (!text) return { short: '', hasMore: false };
+  const firstSentenceEnd = text.search(/[.!?](\s|$)/);
+  if (firstSentenceEnd !== -1 && firstSentenceEnd < maxLen * 1.5) {
+    const short = text.slice(0, firstSentenceEnd + 1);
+    return { short, hasMore: short.length < text.length };
+  }
+  if (text.length <= maxLen) return { short: text, hasMore: false };
+  return { short: `${text.slice(0, maxLen).trimEnd()}…`, hasMore: true };
+}
+
 function builderDateRange(months) {
   const now = new Date();
   return { dateFrom: isoDate(subMonths(now, months)), dateTo: isoDate(now) };
@@ -165,6 +179,8 @@ export default function CustomBuilder() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showData, setShowData] = useState(false);
+  const [showSummaryDetails, setShowSummaryDetails] = useState(false);
+  const [showInsightDetails, setShowInsightDetails] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [overrideDateFrom, setOverrideDateFrom] = useState(null);
   const [overrideDateTo, setOverrideDateTo] = useState(null);
@@ -254,6 +270,8 @@ export default function CustomBuilder() {
     setOrgMatches([]);
     setSelectedOrgId('');
     setSelectedOrgName('');
+    setShowSummaryDetails(false);
+    setShowInsightDetails(false);
   };
 
   const exportPng = async () => {
@@ -533,7 +551,23 @@ export default function CustomBuilder() {
               <div className="chart-card-header">
                 <div>
                   <div className="chart-card-title">{result.title}</div>
-                  {result.summary && <div className="chart-card-subtitle">{result.summary}</div>}
+                  {result.summary && (() => {
+                    const { short, hasMore } = shortText(result.summary);
+                    return (
+                      <div className="chart-card-subtitle">
+                        {showSummaryDetails ? result.summary : short}
+                        {hasMore && (
+                          <button
+                            className="btn-link"
+                            style={{ marginLeft: 6, fontSize: 12 }}
+                            onClick={() => setShowSummaryDetails((v) => !v)}
+                          >
+                            {showSummaryDetails ? 'Show less' : 'Show details'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {!isTable && table.rows.length > 0 && (
@@ -595,14 +629,22 @@ export default function CustomBuilder() {
 
             {result.insights?.length > 0 && (
               <div className="card">
-                <div className="chart-card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Icon name="bulb" size={17} style={{ color: 'var(--warning)' }} />
-                  AI Insights
+                <div className="chart-card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="bulb" size={17} style={{ color: 'var(--warning)' }} />
+                    AI Insights
+                  </span>
+                  {result.insights.length > 1 && (
+                    <button className="btn-link" style={{ fontSize: 12 }} onClick={() => setShowInsightDetails((v) => !v)}>
+                      {showInsightDetails ? 'Show less' : `Show all (${result.insights.length})`}
+                    </button>
+                  )}
                 </div>
                 <ul className="insights-list">
-                  {result.insights.map((insight, i) => (
-                    <li key={i}>{insight}</li>
-                  ))}
+                  {(showInsightDetails ? result.insights : result.insights.slice(0, 1)).map((insight, i) => {
+                    const { short, hasMore } = shortText(insight, 140);
+                    return <li key={i}>{showInsightDetails ? insight : short}{!showInsightDetails && hasMore ? '…' : ''}</li>;
+                  })}
                 </ul>
               </div>
             )}

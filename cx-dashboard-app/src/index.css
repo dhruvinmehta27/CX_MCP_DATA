@@ -518,6 +518,17 @@ button { font-family: inherit; }
 }
 .chart-card-title { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
 .chart-card-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.btn-link:hover { text-decoration: underline; }
 .chart-card-actions { display: flex; gap: 2px; }
 .chart-card-body { min-height: 230px; position: relative; }
 
