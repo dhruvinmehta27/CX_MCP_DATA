@@ -489,7 +489,27 @@ const BUSINESS_TERM_GLOSSARY = [
     fieldName: 'ZSOP',
     note: 'Confirmed real dedicated field for Start of Production. Do NOT use ExpectedProcessingEndDate for this — that is a different, later date ("expected processing end"), a common mix-up. Use ZSOP as secondaryDateField when the user asks about SOP timing.',
   },
+  {
+    terms: ['quote cost', 'quote item cost', 'margin', 'quote margin', 'cost amount'],
+    entity: 'quotes',
+    fieldName: 'CostAmountContent_KUT (on SalesQuoteItem, not the quote header)',
+    note: 'Confirmed on a live record: CostAmountContent_KUT is ALWAYS in EUR (CostAmountcurrencyCode_KUT), regardless of the quote\'s own transaction currency (e.g. a GBP quote still has EUR-denominated item cost). If summing cost/margin across multiple quotes in different currencies, this is actually safe to sum directly since it\'s already EUR-normalized — but do NOT mix it with NetAmount/GrossAmount (which ARE in the quote\'s local currency) in the same calculation without converting first. Margin fields confirmed to exist: ZItemMarginPercent, ZItemMargincontent, ZItemCostcontent (these three are in the quote\'s local currency, NOT EUR — opposite of CostAmountContent_KUT).',
+  },
 ];
+
+// Entries where we found TWO candidate fields for the same business term and
+// genuinely do not know which one the business means — confirmed by hand,
+// not a guess. Unlike BUSINESS_TERM_GLOSSARY, the agent must ASK the user
+// to clarify rather than picking one, since picking wrong here is exactly
+// the failure mode this whole system exists to prevent.
+const AMBIGUOUS_TERMS = [
+  {
+    terms: ['quote probability', 'probability', 'win probability', 'order probability'],
+    entity: 'quotes',
+    note: 'TWO different fields exist on SalesQuoteCollection with different values on the same real record: ProbabilityPercent (e.g. 100%) and OrderProbability_KUT (e.g. 30%, displayed as "35%" in OrderProbability_KUTText — note even the raw value and its own text can disagree). We have not confirmed which one the business means by "probability." Do NOT pick one — ask the user to clarify which field they mean before computing anything.',
+  },
+];
+
 
 const CUSTOM_AGENT_TOOLS = [
   {
@@ -556,12 +576,19 @@ export async function runCustomAggregateAgent({ userRequest, baseFilters = {}, e
   const glossaryText = BUSINESS_TERM_GLOSSARY
     .map((g) => `  - "${g.terms.join('" / "')}" → entity: ${g.entity}, fieldName: ${g.fieldName}. ${g.note}`)
     .join('\n');
+  const ambiguousText = AMBIGUOUS_TERMS
+    .map((a) => `  - "${a.terms.join('" / "')}" (entity: ${a.entity}): ${a.note}`)
+    .join('\n');
 
   const systemPrompt = `You are a data analyst for Trelleborg Sealing Solutions' SAP C4C CRM data. The user asked a question that doesn't match any pre-built report — you must verify real data before answering.
 
 KNOWN BUSINESS-TERM ALIASES — check this list FIRST, before calling list_fields. These are confirmed mappings from business language to real field names (found by inspecting the C4C UI's model binding, since OData metadata never exposes custom UI label renames — list_fields cannot discover these on its own):
 ${glossaryText || '  (none yet)'}
 If the user's term matches one of these (even loosely — "peak turnover", "turnover", "estimated peak turnover" are all the same alias), use the mapped field directly — skip list_fields and go straight to aggregate.
+
+AMBIGUOUS TERMS — check this list too, BEFORE assuming any mapping. These are cases where we found multiple real candidate fields and do not know which one the business means:
+${ambiguousText || '  (none yet)'}
+If the user's term matches one of these, do NOT guess which field to use and do NOT pick the "more obviously named" one. Respond with success: false and a clarificationQuestion-style explanation asking the user to specify which field/number they mean, listing the real candidates you found. Picking wrong here silently is the exact failure this system exists to prevent — asking is always better than guessing.
 
 CRITICAL RULES — these exist because guessing produced confidently wrong answers in production:
 1. NEVER invent, guess, or assume a field name exists. If a term isn't in the glossary above and you are not certain, call list_fields first.
