@@ -324,6 +324,15 @@ export function countRFQs(filters, userJwt) {
 // Collection fetchers — always $select only the fields needed for aggregation
 // ---------------------------------------------------------------------------
 
+const QUOTE_FIELDS = [
+  'ObjectID', 'ID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
+  'NetAmount', 'CurrencyCode', 'SalesOrganisationID', 'SalesOrganisationName',
+  'CreationDateTime', 'ValidToDate', 'BuyerPartyName', 'BuyerPartyID',
+  'ProductRecipientPartyName', 'ProductRecipientPartyID',
+  'EmployeeResponsiblePartyName', 'ZBIZTYPE',
+  'CreatedBy', 'LastChangedBy',
+];
+
 export async function fetchQuotes(filters = {}, userJwt) {
   const parts = [];
   // SalesOrganisationID is not filterable server-side (see quoteFilter) — org
@@ -333,20 +342,33 @@ export async function fetchQuotes(filters = {}, userJwt) {
   // in-process in rawQuotes too (not server-side here).
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',EmployeeResponsiblePartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  // extraFields lets callers (e.g. the custom-aggregate agent tool) pull a
+  // specific field not in the default set, without permanently adding it here.
+  const extra = (filters.extraFields || []).filter((f) => !QUOTE_FIELDS.includes(f));
   return fetchAllPages(
     `${ODATA_BASE}/SalesQuoteCollection`,
-    [
-      'ObjectID', 'ID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
-      'NetAmount', 'CurrencyCode', 'SalesOrganisationID', 'SalesOrganisationName',
-      'CreationDateTime', 'ValidToDate', 'BuyerPartyName', 'BuyerPartyID',
-      'ProductRecipientPartyName', 'ProductRecipientPartyID',
-      'EmployeeResponsiblePartyName', 'ZBIZTYPE',
-      'CreatedBy', 'LastChangedBy',
-    ],
+    [...QUOTE_FIELDS, ...extra],
     parts.join(' and '),
     userJwt
   );
 }
+
+const OPPORTUNITY_FIELDS = [
+  'ObjectID', 'ID', 'Name', 'SalesCyclePhaseCode', 'SalesCyclePhaseCodeText',
+  'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
+  'CreationDateTime', 'EntityLastChangedOn', 'MainEmployeeResponsiblePartyName',
+  'ProspectPartyName', 'ProspectPartyID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
+  // Value in group/base currency (EUR) — avoids mixing transaction currencies
+  'ZBaseCurrency_KUTContent_KUT', 'ZBaseCurrency_KUTcurrencyCode_KUT',
+  // Pipeline Command Center filter dimensions (confirmed from tenant payload):
+  'OriginTypeCode', 'OriginTypeCodeText',            // Opportunity Source
+  'OpportunityLevel_KUT', 'OpportunityLevel_KUTText', // Opportunity Type (level)
+  'SalesTerritoryID', 'SalesTerritoryName',          // Sales Region / Team
+  'BUS_SEG_CDE_KUT', 'BUS_SEG_CDE_KUTText',          // Industry — business segment
+  'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
+  'SalesOrganisationID', 'SalesOrganisationName',    // Sales org (for in-process filtering)
+  'ZSOP',                                            // Start of Production date — distinct from ExpectedProcessingEndDate
+];
 
 export async function fetchOpportunities(filters = {}, userJwt) {
   const parts = [];
@@ -355,23 +377,58 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   // applied in-process in rawOpportunities, not here.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  const extra = (filters.extraFields || []).filter((f) => !OPPORTUNITY_FIELDS.includes(f));
   return fetchAllPages(
     `${ODATA_BASE}/OpportunityCollection`,
+    [...OPPORTUNITY_FIELDS, ...extra],
+    parts.join(' and '),
+    userJwt
+  );
+}
+
+// Standalone top-level collection (not a $expand-only navigation property) —
+// confirmed field names against a live record. TypeCode 30 = "Sales Quote",
+// BusinessTransactionDocumentRelationshipRoleCode 2 = "Successor". Used to
+// detect which opportunities have been converted to a quote — there is no
+// boolean "quote exists" flag on the Opportunity header itself (confirmed:
+// the OWL/worklist view computes this from this same reference data, not
+// from a stored field).
+export async function fetchOpportunityQuoteReferences(userJwt) {
+  return fetchAllPages(
+    `${ODATA_BASE}/OpportunityBusinessTransactionDocumentReferenceCollection`,
     [
-      'ObjectID', 'ID', 'Name', 'SalesCyclePhaseCode', 'SalesCyclePhaseCodeText',
-      'ExpectedRevenueAmount', 'ProbabilityPercent', 'ExpectedProcessingEndDate',
-      'CreationDateTime', 'EntityLastChangedOn', 'MainEmployeeResponsiblePartyName',
-      'ProspectPartyName', 'ProspectPartyID', 'LifeCycleStatusCode', 'LifeCycleStatusCodeText',
-      // Value in group/base currency (EUR) — avoids mixing transaction currencies
-      'ZBaseCurrency_KUTContent_KUT', 'ZBaseCurrency_KUTcurrencyCode_KUT',
-      // Pipeline Command Center filter dimensions (confirmed from tenant payload):
-      'OriginTypeCode', 'OriginTypeCodeText',            // Opportunity Source
-      'OpportunityLevel_KUT', 'OpportunityLevel_KUTText', // Opportunity Type (level)
-      'SalesTerritoryID', 'SalesTerritoryName',          // Sales Region / Team
-      'BUS_SEG_CDE_KUT', 'BUS_SEG_CDE_KUTText',          // Industry — business segment
-      'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
-      'SalesOrganisationID', 'SalesOrganisationName',    // Sales org (for in-process filtering)
+      'ParentObjectID', 'OpportunityID', 'ID',
+      'TypeCode', 'TypeCodeText',
+      'BusinessTransactionDocumentRelationshipRoleCode', 'BusinessTransactionDocumentRelationshipRoleCodeText',
     ],
+    `TypeCode eq '30'`, // Sales Quote only — a simple equality filter, not the substringof+date combo that fails on this tenant
+    userJwt
+  );
+}
+
+// Quote line items — confirmed field names against a live record
+// (SalesQuoteItemCollection). RFQ_IDcontent_SDK links a quote item to the
+// RFQ it generated (procurement-side RFQ, not a C4C RFQRootCollection
+// relationship we've verified separately) — confirmed to exist as a real
+// field, but every sample record we captured had it empty, so its
+// populated value format is NOT independently verified yet.
+const QUOTE_ITEM_FIELDS = [
+  'ObjectID', 'ParentObjectID', 'QuoteID', 'ItemID',
+  'ProductInternalID', 'Description',
+  'NetAmount', 'NetAmountCurrencyCode',
+  'Quantity', 'QuantityMeasureUnitCodeText',
+  'LifeCycleStatusCodeText',
+  'CreationDateTime',
+  'RFQ_IDcontent_SDK',
+];
+
+export async function fetchQuoteItems(filters = {}, userJwt) {
+  const parts = [];
+  parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  const extra = (filters.extraFields || []).filter((f) => !QUOTE_ITEM_FIELDS.includes(f));
+  return fetchAllPages(
+    `${ODATA_BASE}/SalesQuoteItemCollection`,
+    [...QUOTE_ITEM_FIELDS, ...extra],
     parts.join(' and '),
     userJwt
   );

@@ -7,7 +7,7 @@ import {
   fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
-  fetchAccountCountries,
+  fetchAccountCountries, fetchOpportunityQuoteReferences, fetchQuoteItems,
 } from './c4c-client.js';
 import { getAccountCountryMap, enrichWithCountry } from './account-cache.js';
 import {
@@ -83,7 +83,8 @@ async function rawQuotes(filters, userJwt, userEmail) {
   // SalesOrganisationID and BuyerPartyName both fail combined with the
   // date-range filter server-side (ABAP select-option error) — fetch
   // without either (cached on date/owner only) and scope both in-process.
-  const fetchKey = { ...base, salesOrgId: undefined, account: undefined };
+  const extraFields = filters.extraFields || [];
+  const fetchKey = { ...base, salesOrgId: undefined, account: undefined, extraFields };
   const [{ data }, countryMap] = await Promise.all([
     getOrSet(userEmail, 'raw:quotes', fetchKey, () => fetchQuotes(fetchKey, userJwt)),
     getAccountCountryMap(() => fetchAccountCountries(userJwt)),
@@ -102,7 +103,8 @@ async function rawOpportunities(filters, userJwt, userEmail) {
   // SalesOrganisationID and ProspectPartyName both fail combined with the
   // date-range filter server-side (ABAP select-option error) — fetch
   // without either (cached on date/owner only) and scope both in-process.
-  const fetchKey = { ...base, salesOrgId: undefined, account: undefined };
+  const extraFields = filters.extraFields || [];
+  const fetchKey = { ...base, salesOrgId: undefined, account: undefined, extraFields };
   const { data } = await getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt));
   if (!base.salesOrgId && !base.account) return data;
   const results = data.results.filter((o) =>
@@ -110,6 +112,152 @@ async function rawOpportunities(filters, userJwt, userEmail) {
     matchesAccount(o.ProspectPartyName, base.account)
   );
   return { ...data, results, total: results.length };
+}
+
+const STATUS_FILTERS = {
+  won: (r) => isWonStatus(r.LifeCycleStatusCodeText),
+  open: (r) => isOpenStatus(r.LifeCycleStatusCodeText),
+  lost: (r) => !isOpenStatus(r.LifeCycleStatusCodeText) && !isWonStatus(r.LifeCycleStatusCodeText),
+  all: () => true,
+};
+
+/**
+ * Generic sum/count/avg of a named field, used by the custom-aggregate agent
+ * tool (claude.js) when the user's request doesn't match any pre-built
+ * endpoint. fieldName must be a real field the caller has already verified
+ * via fetchCollectionFields — this does NOT guess or validate it beyond
+ * checking the values actually parse as numbers, so an unverified/wrong
+ * field name will just silently return 0 matched values (surfaced to the
+ * caller via matchedValueCount so it can detect that case).
+ */
+export async function aggregateField({ entity, fieldName, aggregation, filters = {} }, userJwt, userEmail) {
+  const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
+  const extraFields = [fieldName, filters.secondaryDateField].filter(Boolean);
+  const fetchFilters = { ...filters, extraFields };
+  const raw = entity === 'quotes'
+    ? await rawQuotes(fetchFilters, userJwt, userEmail)
+    : await rawOpportunities(fetchFilters, userJwt, userEmail);
+
+  let rows = raw.results.filter(statusFilter);
+
+  // Optional secondary date filter on a field OTHER than CreationDateTime
+  // (e.g. "start of production" = ZSOP, confirmed against a live record —
+  // NOT ExpectedProcessingEndDate, a different/later date) — applied
+  // in-process since combining extra server-side filters already proved
+  // unreliable (ABAP select-option errors) on this tenant.
+  if (filters.secondaryDateField && (filters.secondaryDateFrom || filters.secondaryDateTo)) {
+    const from = filters.secondaryDateFrom ? new Date(filters.secondaryDateFrom) : null;
+    const to = filters.secondaryDateTo ? new Date(filters.secondaryDateTo) : null;
+    rows = rows.filter((r) => {
+      const d = parseODataDate(r[filters.secondaryDateField]);
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }
+
+  // NOTE: deliberately not using the shared toNumber() here — it coerces
+  // missing/unparsable values to 0, which would make every row "count" as
+  // valid data and hide the signal that fieldName doesn't actually exist
+  // or is empty. parseFloat + isNaN keeps that distinction visible via
+  // valuesFound below.
+  const values = rows
+    .map((r) => parseFloat(r[fieldName]))
+    .filter((v) => !isNaN(v));
+
+  const sum = values.reduce((a, b) => a + b, 0);
+  const value = aggregation === 'count' ? rows.length
+    : aggregation === 'avg' ? (values.length ? sum / values.length : null)
+    : sum; // default: sum
+
+  return {
+    value,
+    aggregation: aggregation || 'sum',
+    fieldName,
+    entity,
+    recordsMatched: rows.length,
+    valuesFound: values.length, // if 0 while recordsMatched > 0, fieldName is likely wrong/empty
+    truncated: !!raw.truncated,
+  };
+}
+
+let quoteRefsCache = null; // { expiresAt, promise } — shared across users, no PII, cheap to keep warm
+async function getQuoteReferences(userJwt) {
+  if (quoteRefsCache && Date.now() < quoteRefsCache.expiresAt) return quoteRefsCache.promise;
+  const promise = fetchOpportunityQuoteReferences(userJwt);
+  quoteRefsCache = { promise, expiresAt: Date.now() + 10 * 60_000 }; // 10 min
+  return promise;
+}
+
+/**
+ * Counts opportunities that have been converted to a Sales Quote — there is
+ * no boolean flag for this on the Opportunity header; it's derived from
+ * OpportunityBusinessTransactionDocumentReference (TypeCode=30 "Sales Quote",
+ * relationship role "Successor"), confirmed against a live record. Used by
+ * the custom-aggregate agent's count_quote_conversions tool.
+ */
+export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail) {
+  const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
+  const [opps, refs] = await Promise.all([
+    rawOpportunities(filters, userJwt, userEmail),
+    getQuoteReferences(userJwt),
+  ]);
+
+  const SUCCESSOR_ROLE_CODE = '2';
+  const convertedIds = new Set(
+    refs.results
+      .filter((r) => r.BusinessTransactionDocumentRelationshipRoleCode === SUCCESSOR_ROLE_CODE)
+      .map((r) => r.OpportunityID)
+  );
+
+  const scoped = opps.results.filter(statusFilter);
+  const converted = scoped.filter((o) => convertedIds.has(o.ID));
+
+  return {
+    totalOpportunities: scoped.length,
+    convertedCount: converted.length,
+    conversionRate: scoped.length ? Math.round((converted.length / scoped.length) * 100) : null,
+    sample: converted.slice(0, 10).map((o) => ({
+      'Opportunity ID': o.ID,
+      Name: o.Name,
+      Customer: o.ProspectPartyName,
+      Status: o.LifeCycleStatusCodeText,
+    })),
+    truncated: !!opps.truncated,
+  };
+}
+
+/**
+ * Counts quote items that have a linked RFQ (RFQ_IDcontent_SDK populated),
+ * i.e. RFQs raised FROM quotes — the reverse direction of
+ * opportunitiesConvertedToQuote. Scoped by date only (CreationDateTime on
+ * the item) — org/account filtering isn't supported yet since that would
+ * require joining back to the quote header, not built for v1.
+ *
+ * CAVEAT: RFQ_IDcontent_SDK is a confirmed real field, but every sample
+ * record captured during discovery had it empty — its populated value
+ * format has not been independently verified against a real linked
+ * record. Results should be treated as provisional until validated
+ * against at least one confirmed real RFQ-linked quote item.
+ */
+export async function rfqsRaisedFromQuotes(filters, userJwt, userEmail) {
+  const fetchFilters = { dateFrom: filters.dateFrom || null, dateTo: filters.dateTo || null };
+  const { data } = await getOrSet(userEmail, 'quote-items:rfq-linked', fetchFilters, () => fetchQuoteItems(fetchFilters, userJwt));
+  const linked = data.results.filter((i) => i.RFQ_IDcontent_SDK);
+  const uniqueRFQIds = new Set(linked.map((i) => i.RFQ_IDcontent_SDK));
+
+  return {
+    quoteItemsChecked: data.total,
+    quoteItemsWithRFQLink: linked.length,
+    uniqueRFQCount: uniqueRFQIds.size,
+    sample: linked.slice(0, 10).map((i) => ({
+      'Quote ID': i.QuoteID,
+      'Item ID': i.ItemID,
+      'RFQ ID': i.RFQ_IDcontent_SDK,
+    })),
+    truncated: !!data.truncated,
+  };
 }
 
 async function rawRFQs(filters, userJwt, userEmail) {
@@ -732,7 +880,11 @@ export async function briefStats(filters, userJwt, userEmail) {
       lastActivityDate,
       sopNext12MValue: open
         .filter((o) => {
-          const d = parseODataDate(o.ExpectedProcessingEndDate);
+          // ZSOP = Start of Production — the real dedicated field, confirmed
+          // against a live record. Previously used ExpectedProcessingEndDate,
+          // which is a different (later) date — "expected processing end,"
+          // not "start of production."
+          const d = parseODataDate(o.ZSOP);
           return d && d >= now && d <= in12m;
         })
         .reduce((a, o) => a + oppValue(o), 0),

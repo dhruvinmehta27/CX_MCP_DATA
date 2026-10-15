@@ -52,6 +52,7 @@ const VALID_ENDPOINTS = [
   'opportunities/items',
   'rfqs/by-status', 'rfqs/by-account', 'rfqs/trend', 'rfqs/list',
   'quotes/top-customers', 'quotes/top-creators', 'daily-summary',
+  'custom/aggregate',
 ];
 
 // Keywords that force quotes/top-creators (ranked aggregation by owner/creator).
@@ -97,7 +98,7 @@ function hasScopeFilter(intent, userRequest) {
 }
 
 function requiresScope(intent) {
-  return intent.endpoints.some((e) => ['quotes/raw', 'opportunities/items', 'quotes/top-creators', 'rfqs/list'].includes(e));
+  return intent.endpoints.some((e) => ['quotes/raw', 'opportunities/items', 'quotes/top-creators', 'rfqs/list', 'custom/aggregate'].includes(e));
 }
 
 export function sanitizeIntent(intent = {}, userRequest = '') {
@@ -164,6 +165,9 @@ export async function parseIntent(userRequest, filters = {}) {
 }
 
 ENDPOINT SELECTION RULES — pick the most specific match:
+CRITICAL — check this FIRST, before anything else: if the user asks for a SUM, COUNT, AVERAGE, or TOTAL of a specific named metric/field that is NOT one of the standard figures covered by the rules below (win rate, pipeline value, quote count, quote status, RFQ status, product quantity/cost/price at the line-item level) — especially if the field name sounds like a custom/business-specific term you don't recognize (e.g. "Estimated Peak Turnover", "SOP value", any term with capitalized Title Case that isn't plainly "revenue" or "amount") — use "custom/aggregate" and set chartType "table". Do NOT guess which endpoint might contain this field, do NOT silently substitute opportunities/items or any other endpoint. This is critical: inventing a field mapping produces a confidently wrong answer, which is worse than asking a specialized agent to verify the field exists first. "custom/aggregate" triggers a separate verification step that checks real C4C field names before computing anything.
+ALSO use "custom/aggregate" for "how many opportunities converted to quote", "quote conversion rate", "opportunities that became quotes", or similar — there is no simple field for this, it requires checking a relationship between Opportunities and Quotes that only the custom/aggregate agent knows how to do correctly.
+ALSO use "custom/aggregate" for "how many RFQs raised from quotes", "RFQs generated from quotes this quarter", or similar — the reverse direction, same reasoning.
 IMPORTANT: If the user asks for product-level detail (Product ID, Product Category, Quantity, Cost, Price, line items, items within opportunities, specific product types like "oil seals"/"cassette seals"/"seals"), ALWAYS use "opportunities/items" — even if the word "pipeline" or "opportunity" appears. Product detail always wins over pipeline/stage views.
 - "top N users", "who created most quotes", "top reps by quote count", "most quotes by person", "ranked by quote count" → use "quotes/top-creators" and set chartType "bar". Extract limit N from the request and set filters.limit.
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
@@ -454,4 +458,256 @@ Data: ${JSON.stringify(data).slice(0, 40_000)}`;
     messages: [{ role: 'user', content: prompt }],
   });
   return parseJsonResponse(extractText(response));
+}
+
+// ---------------------------------------------------------------------------
+// Custom aggregate agent — handles requests that mention a specific metric/
+// field not covered by any pre-built endpoint. Instead of guessing which
+// endpoint/field to use (the failure mode that produced confidently wrong
+// answers), this runs a tool-calling loop: the agent can look up real field
+// names (list_fields) before computing anything (aggregate), and the system
+// prompt forbids it from claiming success unless a tool call actually
+// confirmed the field and returned real matched values.
+// ---------------------------------------------------------------------------
+
+// Known business-term -> real-field mappings, confirmed by hand (e.g. via
+// C4C's "View Model Attributes" UI panel showing the model binding behind a
+// screen label). list_fields can NEVER discover these on its own — OData
+// metadata only exposes technical field names, not custom UI label renames,
+// so a term like "Estimated Peak Turnover" (a renamed label for
+// ExpectedRevenueAmount in this tenant's UI) has no way to be found by
+// searching field names alone. Add entries here as more are confirmed.
+const BUSINESS_TERM_GLOSSARY = [
+  {
+    terms: ['estimated peak turnover', 'peak turnover', 'expected peak turnover'],
+    entity: 'opportunities',
+    fieldName: 'ExpectedRevenueAmount',
+    note: 'Confirmed via C4C UI model binding (/Root/ExpectedRevenueAmount/content) — this is a renamed UI label, not a separate field. ExpectedRevenueAmount is in the deal\'s original transaction currency (varies per record). If the user asks for a sum specifically "in EUR"/"in €", use ZBaseCurrency_KUTContent_KUT instead — the already EUR-converted figure — not raw ExpectedRevenueAmount, to avoid mixing currencies in the sum.',
+  },
+  {
+    terms: ['start of production', 'sop', 'sop date', 'production start'],
+    entity: 'opportunities',
+    fieldName: 'ZSOP',
+    note: 'Confirmed real dedicated field for Start of Production. Do NOT use ExpectedProcessingEndDate for this — that is a different, later date ("expected processing end"), a common mix-up. Use ZSOP as secondaryDateField when the user asks about SOP timing.',
+  },
+  {
+    terms: ['quote cost', 'quote item cost', 'cost amount', 'cost estimate'],
+    entity: 'quotes',
+    fieldName: 'ZItemCostcontent (total) or CostAmountContent_KUT (per-unit) on SalesQuoteItem',
+    note: 'PRIMARY SOURCE: use SalesQuoteItem\'s own fields directly (ZItemCostcontent, CostAmountContent_KUT) — this tenant does not use SAP\'s standard pricing procedure, so there is normally no need to query SalesQuotePriceItem condition rows for routine cost/margin questions. CostAmountContent_KUT is a PER-UNIT rate; ZItemCostcontent is the TOTAL for the item (verified: 388.82 × Quantity 5 = 1944.10 = ZItemCostcontent on a live record). IMPORTANT currency warning (confirmed by one-off verification, not something to re-check routinely): CostAmountcurrencyCode_KUT can be mislabeled — on the same verified record it said "EUR" while the real transaction currency was GBP (the quote\'s own/customer currency). Do not trust that currency label; assume cost figures are in the quote\'s own transaction currency (same as NetAmount) unless told otherwise.',
+  },
+  {
+    terms: ['margin', 'quote margin', 'item margin', 'margin bi', 'profit margin'],
+    entity: 'quotes',
+    fieldName: 'ZItemMarginPercent (%) / ZItemMargincontent (amount) on SalesQuoteItem',
+    note: 'PRIMARY SOURCE: use SalesQuoteItem\'s own fields directly — no need to query pricing conditions (this tenant doesn\'t use standard SAP pricing). ZMarginBI_KUT is the same figure as ZItemMarginPercent, just rounded slightly differently — treat as equivalent. These margin fields are in the quote\'s own transaction currency (same as NetAmount), not a fixed currency.',
+  },
+  {
+    terms: ['approval total'],
+    entity: 'quotes',
+    fieldName: 'ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b',
+    note: 'Confirmed via C4C UI model binding (/Root/ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b/content). This is a GUID-suffixed Key User Extensibility custom field — SAP\'s naming pattern for fields added via the UI "add field" wizard, NOT a hand-coded KUT/SDK field. Before using it in aggregate, call list_fields on "quotes" first to confirm this exact name is exposed in the OData service — GUID-suffixed extension fields sometimes differ slightly between the UI binding name and the actual OData property name, unlike the other entries in this glossary which are already verified end-to-end. Likely semantics (per business description, not yet independently verified): for opportunities/quotes with alternative item groups (AlternativeToItemID), only the highest-value item per group counts; otherwise equal to the item/quote total.',
+  },
+  {
+    terms: ['approval margin', 'approval margin percent'],
+    entity: 'quotes',
+    fieldName: 'ApprovalMarginPercent_106549400b2441d384f3008d5acf863e',
+    note: 'Confirmed via C4C UI model binding. Same caveat as ApprovalTotal above: GUID-suffixed Key User Extensibility field — verify via list_fields on "quotes" before using in aggregate, do not assume it matches the UI binding name exactly.',
+  },
+];
+
+// Fields we've been told are coming soon but are NOT YET LIVE in the
+// system. If a user asks about one of these, the agent should explain
+// it's planned but not yet available — NOT silently fail, NOT guess a
+// substitute, and NOT assume it's already deployed just because it's in
+// this list. Move an entry to BUSINESS_TERM_GLOSSARY once confirmed live
+// via list_fields.
+const PENDING_FIELDS = [
+  {
+    terms: ['lost total', 'quote lost total', 'total lost'],
+    entity: 'quotes',
+    fieldName: 'ZLostTotal_SDK_e660a65186d74f1fa49c5c15c52392a9',
+    note: 'Confirmed field name via UI model binding (/Root/ZLostTotal_SDK_e660a65186d74f1fa49c5c15c52392a9/content), but NOT YET LIVE — announced as coming soon, not yet deployed to the system as of this writing. Likely represents the total value of lost quote items/lines, based on the name, but this has not been confirmed. When this comes up, call list_fields on "quotes" to check if it now exists — if not found, tell the user it\'s planned but not yet available rather than failing silently or guessing a substitute metric.',
+  },
+  {
+    terms: ['open total', 'quote open total', 'total open'],
+    entity: 'quotes',
+    fieldName: 'ZOpenTotal_SDK_dd2271b3b5214c838c51b902b5a1ee6f',
+    note: 'Confirmed field name via UI model binding (/Root/ZOpenTotal_SDK_dd2271b3b5214c838c51b902b5a1ee6f/content), but NOT YET LIVE — same status as ZLostTotal_SDK above (coming soon, not yet deployed). Likely represents the total value of open/not-yet-decided quote items/lines, based on the name, but not confirmed. Check list_fields on "quotes" when this comes up; if not found, tell the user it\'s planned but not yet available.',
+  },
+];
+
+
+// Entries where we found TWO candidate fields for the same business term and
+// genuinely do not know which one the business means — confirmed by hand,
+// not a guess. Unlike BUSINESS_TERM_GLOSSARY, the agent must ASK the user
+// to clarify rather than picking one, since picking wrong here is exactly
+// the failure mode this whole system exists to prevent.
+const AMBIGUOUS_TERMS = [
+  {
+    terms: ['quote probability', 'probability', 'win probability', 'order probability'],
+    entity: 'quotes',
+    note: 'TWO different fields exist on SalesQuoteCollection with different values on the same real record: ProbabilityPercent (e.g. 100%) and OrderProbability_KUT (e.g. 30%, displayed as "35%" in OrderProbability_KUTText — note even the raw value and its own text can disagree). We have not confirmed which one the business means by "probability." Do NOT pick one — ask the user to clarify which field they mean before computing anything.',
+  },
+];
+
+
+const CUSTOM_AGENT_TOOLS = [
+  {
+    name: 'list_fields',
+    description: 'List all real field names available on a C4C collection. Use this BEFORE aggregate whenever you are not 100% certain a field name exists exactly as the user described it — never guess or invent a field name.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        collection: {
+          type: 'string',
+          enum: ['opportunities', 'opportunity-items', 'quotes', 'quote-items', 'rfqs'],
+          description: 'Which collection to inspect. Use "opportunities" or "quotes" for header-level fields, the "-items" variants for line-item fields.',
+        },
+      },
+      required: ['collection'],
+    },
+  },
+  {
+    name: 'aggregate',
+    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities or Quotes, with optional filters. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero."',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: { type: 'string', enum: ['opportunities', 'quotes'] },
+        fieldName: { type: 'string', description: 'The exact field name as returned by list_fields.' },
+        aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter by opportunity lifecycle outcome. Only meaningful for entity="opportunities". Default "all".' },
+        salesOrgId: { type: 'string', description: 'Sales org ID or name substring, if the user specified one.' },
+        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        dateFrom: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
+        secondaryDateField: { type: 'string', description: 'A different date field to also filter on, e.g. ZSOP for "start of production" (see glossary). Must be a real field confirmed via list_fields or the glossary.' },
+        secondaryDateFrom: { type: 'string' },
+        secondaryDateTo: { type: 'string' },
+      },
+      required: ['entity', 'fieldName', 'aggregation'],
+    },
+  },
+  {
+    name: 'count_quote_conversions',
+    description: 'Counts opportunities that have been converted to a Sales Quote (i.e. have a successor Sales Quote document). Use this for any question about "opportunities converted to quote", "quote conversion rate", "which opportunities became quotes", etc. There is NO boolean flag for this on the Opportunity header — it is derived from the OpportunityBusinessTransactionDocumentReference relationship data, which this tool already handles internally. Do not try to answer quote-conversion questions via aggregate/list_fields — use this tool directly.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome before checking conversion. Default "all".' },
+        salesOrgId: { type: 'string', description: 'Sales org ID or name substring, if the user specified one.' },
+        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+      },
+    },
+  },
+  {
+    name: 'count_rfqs_from_quotes',
+    description: 'Counts RFQs that have been raised FROM quotes (the reverse direction of count_quote_conversions) — i.e. quote line items that reference an RFQ they generated. Use this for "how many RFQs have been raised from quotes this quarter", "RFQs generated from quotes", etc. There is no boolean flag for this — it is derived from RFQ_IDcontent_SDK on SalesQuoteItem, which this tool handles internally. CAVEAT you must pass on to the user if the result is 0 or looks surprising: this field has not been seen populated in any sample record during development — if the count is 0, say that plainly rather than treating it as a confident "no RFQs were raised," since it could also mean this field isn\'t actually being populated by the current process. Only supports date filtering (no org/account filter yet).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        dateFrom: { type: 'string', description: 'ISO date, filters quote items on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters quote items on CreationDateTime.' },
+      },
+    },
+  },
+];
+
+const CUSTOM_AGENT_MAX_TURNS = 6;
+
+/**
+ * Runs the tool-calling loop for a custom-metric request. `executeTool` is
+ * injected by the caller (routes/dashboard.js) so this file stays free of
+ * direct C4C/analytics-service imports — it owns the Anthropic conversation
+ * mechanics only; actual data access is delegated.
+ */
+export async function runCustomAggregateAgent({ userRequest, baseFilters = {}, executeTool }) {
+  const glossaryText = BUSINESS_TERM_GLOSSARY
+    .map((g) => `  - "${g.terms.join('" / "')}" → entity: ${g.entity}, fieldName: ${g.fieldName}. ${g.note}`)
+    .join('\n');
+  const ambiguousText = AMBIGUOUS_TERMS
+    .map((a) => `  - "${a.terms.join('" / "')}" (entity: ${a.entity}): ${a.note}`)
+    .join('\n');
+  const pendingText = PENDING_FIELDS
+    .map((p) => `  - "${p.terms.join('" / "')}" → entity: ${p.entity}, fieldName: ${p.fieldName}. ${p.note}`)
+    .join('\n');
+
+  const systemPrompt = `You are a data analyst for Trelleborg Sealing Solutions' SAP C4C CRM data. The user asked a question that doesn't match any pre-built report — you must verify real data before answering.
+
+KNOWN BUSINESS-TERM ALIASES — check this list FIRST, before calling list_fields. These are confirmed mappings from business language to real field names (found by inspecting the C4C UI's model binding, since OData metadata never exposes custom UI label renames — list_fields cannot discover these on its own):
+${glossaryText || '  (none yet)'}
+If the user's term matches one of these (even loosely — "peak turnover", "turnover", "estimated peak turnover" are all the same alias), use the mapped field directly — skip list_fields and go straight to aggregate, UNLESS that entry's own note tells you to verify via list_fields first (this applies to GUID-suffixed custom extension fields, where the UI binding name is not guaranteed to exactly match the OData property name).
+
+PENDING FIELDS — known field names that are NOT YET LIVE (coming soon). If the user's term matches one of these, call list_fields to check if it has gone live yet. If not found, tell the user it's planned but not yet available — do not guess a substitute or fail silently:
+${pendingText || '  (none yet)'}
+
+AMBIGUOUS TERMS — check this list too, BEFORE assuming any mapping. These are cases where we found multiple real candidate fields and do not know which one the business means:
+${ambiguousText || '  (none yet)'}
+If the user's term matches one of these, do NOT guess which field to use and do NOT pick the "more obviously named" one. Respond with success: false and a clarificationQuestion-style explanation asking the user to specify which field/number they mean, listing the real candidates you found. Picking wrong here silently is the exact failure this system exists to prevent — asking is always better than guessing.
+
+CRITICAL RULES — these exist because guessing produced confidently wrong answers in production:
+1. NEVER invent, guess, or assume a field name exists. If a term isn't in the glossary above and you are not certain, call list_fields first.
+2. If after checking list_fields (try multiple relevant collections if the field could be on either) you cannot find a field matching what the user asked for, STOP. Do not substitute a different metric, do not approximate. Report success: false and explain specifically what you looked for and didn't find.
+3. aggregate returning valuesFound: 0 while recordsMatched > 0 means the field name was wrong, or empty for every matched record. This is NOT a valid "the answer is 0" result — treat it as failure, try a different field name from list_fields, or give up and report success: false.
+4. Your final explanation must describe EXACTLY what the tool(s) you called actually returned — never describe a filter, field, or computation you did not actually execute via a tool call.
+5. Already-known filters from the UI (use these as defaults unless the user's question overrides them): ${JSON.stringify(baseFilters)}
+6. Today's date: ${new Date().toISOString().slice(0, 10)} — resolve relative/specific periods (e.g. "2026", "start of production in 2026") to ISO dates yourself.
+
+When you have a final answer (or have given up), respond with JSON only, no markdown fences:
+{
+  "success": boolean,
+  "value": number|null,
+  "formattedValue": string|null,
+  "fieldUsed": string|null,
+  "entity": string|null,
+  "aggregation": string|null,
+  "recordsMatched": number|null,
+  "explanation": string,
+  "caveats": [string]
+}`;
+
+  const messages = [{ role: 'user', content: userRequest }];
+  const client = getClient();
+
+  for (let turn = 0; turn < CUSTOM_AGENT_MAX_TURNS; turn++) {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 2000,
+      system: systemPrompt,
+      tools: CUSTOM_AGENT_TOOLS,
+      messages,
+    });
+
+    const toolUses = response.content.filter((b) => b.type === 'tool_use');
+    if (toolUses.length === 0) {
+      const text = extractText(response);
+      try {
+        return parseJsonResponse(text);
+      } catch {
+        return { success: false, value: null, formattedValue: null, fieldUsed: null, entity: null, aggregation: null, recordsMatched: null, explanation: text || 'The agent did not return a parseable answer.', caveats: [] };
+      }
+    }
+
+    messages.push({ role: 'assistant', content: response.content });
+    const toolResults = [];
+    for (const tu of toolUses) {
+      let result;
+      try {
+        result = await executeTool(tu.name, tu.input);
+      } catch (err) {
+        result = { error: err.message };
+      }
+      toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) });
+    }
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  return {
+    success: false, value: null, formattedValue: null, fieldUsed: null, entity: null, aggregation: null, recordsMatched: null,
+    explanation: `Could not resolve this within ${CUSTOM_AGENT_MAX_TURNS} verification steps — the field or computation may not be supported yet.`,
+    caveats: [],
+  };
 }

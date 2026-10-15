@@ -4,8 +4,9 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent } from '../claude.js';
-import { ENDPOINT_HANDLERS, briefStats, briefData } from '../analytics-service.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent } from '../claude.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes } from '../analytics-service.js';
+import { fetchCollectionFields } from '../c4c-client.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
 const router = Router();
@@ -13,6 +14,46 @@ const router = Router();
 function pickFilters(source = {}) {
   const { salesOrgId, ownerId, dateFrom, dateTo, account } = source;
   return { salesOrgId, ownerId, dateFrom, dateTo, account };
+}
+
+// Executes the custom-aggregate agent's tool calls against real C4C data.
+// Injected into runCustomAggregateAgent so claude.js stays free of
+// C4C/analytics-service imports.
+function executeCustomAgentTool(req) {
+  return async (name, input) => {
+    if (name === 'list_fields') {
+      const fields = await fetchCollectionFields(input.collection, req.userJwt);
+      return { collection: input.collection, fields };
+    }
+    if (name === 'aggregate') {
+      const { entity, fieldName, aggregation, ...rest } = input;
+      const filters = {
+        salesOrgId: rest.salesOrgId || null,
+        account: rest.account || null,
+        dateFrom: rest.dateFrom || null,
+        dateTo: rest.dateTo || null,
+        status: rest.status || 'all',
+        secondaryDateField: rest.secondaryDateField || null,
+        secondaryDateFrom: rest.secondaryDateFrom || null,
+        secondaryDateTo: rest.secondaryDateTo || null,
+      };
+      return aggregateField({ entity, fieldName, aggregation, filters }, req.userJwt, req.userEmail);
+    }
+    if (name === 'count_quote_conversions') {
+      const filters = {
+        salesOrgId: input.salesOrgId || null,
+        account: input.account || null,
+        dateFrom: input.dateFrom || null,
+        dateTo: input.dateTo || null,
+        status: input.status || 'all',
+      };
+      return opportunitiesConvertedToQuote(filters, req.userJwt, req.userEmail);
+    }
+    if (name === 'count_rfqs_from_quotes') {
+      return rfqsRaisedFromQuotes({ dateFrom: input.dateFrom || null, dateTo: input.dateTo || null }, req.userJwt, req.userEmail);
+    }
+    throw new Error(`Unknown tool: ${name}`);
+  };
 }
 
 // Headline numbers for the Sales Brief "data included" panel
@@ -90,6 +131,35 @@ router.post('/generate', async (req, res, next) => {
       : await parseIntent(userRequest, filters);
     // UI-supplied dates (builder range chips) always win over AI-parsed dates
     const mergedFilters = { ...(intent.filters || {}), ...filters };
+
+    // 1b. Custom-metric requests go through the verification agent instead of
+    // a fixed endpoint — see runCustomAggregateAgent for why (prevents
+    // confidently-wrong answers for fields/metrics we don't have pre-built).
+    if (intent.endpoints.includes('custom/aggregate')) {
+      const agentResult = await runCustomAggregateAgent({
+        userRequest,
+        baseFilters: mergedFilters,
+        executeTool: executeCustomAgentTool(req),
+      });
+      const row = agentResult.success
+        ? {
+            Metric: userRequest,
+            Value: agentResult.formattedValue || agentResult.value,
+            'Field used': agentResult.fieldUsed,
+            'Records matched': agentResult.recordsMatched,
+          }
+        : {
+            Metric: userRequest,
+            Result: 'Could not compute — see explanation',
+          };
+      return res.json({
+        charts: [],
+        rawData: { 'custom/aggregate': { total: 1, rows: [row] } },
+        title: intent.title || 'Custom Query Result',
+        summary: agentResult.explanation,
+        insights: agentResult.caveats || [],
+      });
+    }
 
     // 2. Call the identified analytics endpoints (in-process, same caching)
     const rawData = {};

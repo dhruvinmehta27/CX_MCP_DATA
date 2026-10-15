@@ -58,6 +58,7 @@ const ENDPOINT_LABELS = {
   'quotes/raw': 'All quotes (raw detail)',
   'rfqs/by-status': 'RFQs by status',
   'daily-summary': 'Daily operations summary',
+  'custom/aggregate': 'Custom metric (verified via live field lookup)',
 };
 
 function Stepper({ current }) {
