@@ -367,6 +367,7 @@ const OPPORTUNITY_FIELDS = [
   'BUS_SEG_CDE_KUT', 'BUS_SEG_CDE_KUTText',          // Industry — business segment
   'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
   'SalesOrganisationID', 'SalesOrganisationName',    // Sales org (for in-process filtering)
+  'ZSOP',                                            // Start of Production date — distinct from ExpectedProcessingEndDate
 ];
 
 export async function fetchOpportunities(filters = {}, userJwt) {

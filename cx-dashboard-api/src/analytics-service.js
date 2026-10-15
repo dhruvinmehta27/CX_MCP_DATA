@@ -141,7 +141,8 @@ export async function aggregateField({ entity, fieldName, aggregation, filters =
   let rows = raw.results.filter(statusFilter);
 
   // Optional secondary date filter on a field OTHER than CreationDateTime
-  // (e.g. "start of production" = ExpectedProcessingEndDate) — applied
+  // (e.g. "start of production" = ZSOP, confirmed against a live record —
+  // NOT ExpectedProcessingEndDate, a different/later date) — applied
   // in-process since combining extra server-side filters already proved
   // unreliable (ABAP select-option errors) on this tenant.
   if (filters.secondaryDateField && (filters.secondaryDateFrom || filters.secondaryDateTo)) {
@@ -801,7 +802,11 @@ export async function briefStats(filters, userJwt, userEmail) {
       lastActivityDate,
       sopNext12MValue: open
         .filter((o) => {
-          const d = parseODataDate(o.ExpectedProcessingEndDate);
+          // ZSOP = Start of Production — the real dedicated field, confirmed
+          // against a live record. Previously used ExpectedProcessingEndDate,
+          // which is a different (later) date — "expected processing end,"
+          // not "start of production."
+          const d = parseODataDate(o.ZSOP);
           return d && d >= now && d <= in12m;
         })
         .reduce((a, o) => a + oppValue(o), 0),

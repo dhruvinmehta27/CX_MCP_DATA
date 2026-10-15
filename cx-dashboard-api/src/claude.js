@@ -482,6 +482,12 @@ const BUSINESS_TERM_GLOSSARY = [
     fieldName: 'ExpectedRevenueAmount',
     note: 'Confirmed via C4C UI model binding (/Root/ExpectedRevenueAmount/content) — this is a renamed UI label, not a separate field. ExpectedRevenueAmount is in the deal\'s original transaction currency (varies per record). If the user asks for a sum specifically "in EUR"/"in €", use ZBaseCurrency_KUTContent_KUT instead — the already EUR-converted figure — not raw ExpectedRevenueAmount, to avoid mixing currencies in the sum.',
   },
+  {
+    terms: ['start of production', 'sop', 'sop date', 'production start'],
+    entity: 'opportunities',
+    fieldName: 'ZSOP',
+    note: 'Confirmed real dedicated field for Start of Production. Do NOT use ExpectedProcessingEndDate for this — that is a different, later date ("expected processing end"), a common mix-up. Use ZSOP as secondaryDateField when the user asks about SOP timing.',
+  },
 ];
 
 const CUSTOM_AGENT_TOOLS = [
@@ -514,7 +520,7 @@ const CUSTOM_AGENT_TOOLS = [
         account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
         dateFrom: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
-        secondaryDateField: { type: 'string', description: 'A different date field to also filter on, e.g. ExpectedProcessingEndDate for "start of production". Must be a real field confirmed via list_fields.' },
+        secondaryDateField: { type: 'string', description: 'A different date field to also filter on, e.g. ZSOP for "start of production" (see glossary). Must be a real field confirmed via list_fields or the glossary.' },
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
       },
