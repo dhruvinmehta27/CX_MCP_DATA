@@ -229,6 +229,20 @@ function dateFilter(field, dateFrom, dateTo) {
   return parts;
 }
 
+// Key User Extensibility custom date fields (e.g. ZSOP) are exposed as plain
+// Edm.DateTime, not Edm.DateTimeOffset — confirmed live: filtering ZSOP with
+// the datetimeoffset'' literal used for system date fields returns HTTP 400
+// "Invalid parametertype used at function 'ge'" (the same error system
+// fields throw when given the WRONG literal type, in reverse). The fix is
+// the datetime'' literal (no Z/offset suffix), not abandoning server-side
+// filtering — that would reintroduce the MAX_RECORDS truncation false-zero.
+function kutDateFilter(field, dateFrom, dateTo) {
+  const parts = [];
+  if (dateFrom) parts.push(`${field} ge datetime'${dateFrom}T00:00:00'`);
+  if (dateTo) parts.push(`${field} le datetime'${dateTo}T23:59:59'`);
+  return parts;
+}
+
 // ---------------------------------------------------------------------------
 // Exact counts via OData inline count ($inlinecount=allpages) — returns the
 // real __count of a filtered query WITHOUT fetching the records, so counts are
@@ -386,16 +400,36 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   // directly also avoids the workaround of stacking a CreationDateTime range
   // on top, which double-restricts and undercounts (an opportunity created
   // in 2024 with 2026 SOP would be wrongly excluded).
-  if (filters.secondaryDateField) {
-    parts.push(...dateFilter(filters.secondaryDateField, filters.secondaryDateFrom, filters.secondaryDateTo));
-  }
   const extra = (filters.extraFields || []).filter((f) => !OPPORTUNITY_FIELDS.includes(f));
-  return fetchAllPages(
-    `${ODATA_BASE}/OpportunityCollection`,
-    [...OPPORTUNITY_FIELDS, ...extra],
-    parts.join(' and '),
-    userJwt
-  );
+  const select = [...OPPORTUNITY_FIELDS, ...extra];
+
+  if (!filters.secondaryDateField) {
+    return fetchAllPages(`${ODATA_BASE}/OpportunityCollection`, select, parts.join(' and '), userJwt);
+  }
+
+  // The exact EDM type of a KUT custom date field isn't knowable ahead of
+  // time (varies by field/tenant) — try the literal formats in order of
+  // likelihood, since picking the wrong one 400s rather than failing softly.
+  // Only fall back to no server-side secondary-date filter (truncation risk
+  // restored) as an absolute last resort, so a type mismatch degrades
+  // gracefully instead of hard-erroring the whole query.
+  const { secondaryDateField: f, secondaryDateFrom: from, secondaryDateTo: to } = filters;
+  const attempts = [
+    () => kutDateFilter(f, from, to),                                   // Edm.DateTime
+    () => dateFilter(f, from, to),                                      // Edm.DateTimeOffset
+    () => [from ? `${f} ge '${from}'` : null, to ? `${f} le '${to}'` : null].filter(Boolean), // Edm.String
+  ];
+  let lastErr;
+  for (const buildParts of attempts) {
+    try {
+      const filterString = [...parts, ...buildParts()].join(' and ');
+      return await fetchAllPages(`${ODATA_BASE}/OpportunityCollection`, select, filterString, userJwt);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  console.warn(`fetchOpportunities: all secondaryDateField ('${f}') filter formats failed, falling back to unfiltered fetch (truncation risk). Last error: ${lastErr?.message}`);
+  return fetchAllPages(`${ODATA_BASE}/OpportunityCollection`, select, parts.join(' and '), userJwt);
 }
 
 // Standalone top-level collection (not a $expand-only navigation property) —
