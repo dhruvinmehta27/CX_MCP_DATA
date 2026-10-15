@@ -490,12 +490,27 @@ const BUSINESS_TERM_GLOSSARY = [
     note: 'Confirmed real dedicated field for Start of Production. Do NOT use ExpectedProcessingEndDate for this — that is a different, later date ("expected processing end"), a common mix-up. Use ZSOP as secondaryDateField when the user asks about SOP timing.',
   },
   {
-    terms: ['quote cost', 'quote item cost', 'margin', 'quote margin', 'cost amount'],
+    terms: ['quote cost', 'quote item cost', 'cost amount', 'cost estimate'],
     entity: 'quotes',
-    fieldName: 'CostAmountContent_KUT (on SalesQuoteItem, not the quote header)',
-    note: 'Confirmed on a live record: CostAmountContent_KUT is ALWAYS in EUR (CostAmountcurrencyCode_KUT), regardless of the quote\'s own transaction currency (e.g. a GBP quote still has EUR-denominated item cost). If summing cost/margin across multiple quotes in different currencies, this is actually safe to sum directly since it\'s already EUR-normalized — but do NOT mix it with NetAmount/GrossAmount (which ARE in the quote\'s local currency) in the same calculation without converting first. Margin fields confirmed to exist: ZItemMarginPercent, ZItemMargincontent, ZItemCostcontent (these three are in the quote\'s local currency, NOT EUR — opposite of CostAmountContent_KUT).',
+    fieldName: 'ZItemCostcontent (total) on SalesQuoteItem — see note for per-unit and verification',
+    note: 'CORRECTED after verification — an earlier version of this note wrongly said CostAmountContent_KUT is "always EUR." It is NOT. Confirmed on a live record (Quote 321344, item 10): SalesQuoteItem.CostAmountContent_KUT = 388.82 with CostAmountcurrencyCode_KUT labeled "EUR" — but the real pricing condition behind it (SalesQuoteItem/SalesQuotePriceItem, TypeCode=\'0009\', Description="Cost Estimate") shows the SAME number (RateDecimalValue=388.82) with RateCurrencyCode="GBP" — the quote\'s actual transaction/customer currency. The CostAmountcurrencyCode_KUT field\'s currency label cannot be trusted. Real currency = the quote\'s own transaction currency (customer currency), not a fixed EUR. CostAmountContent_KUT is a PER-UNIT rate; ZItemCostcontent is the TOTAL for the item (verified: 388.82 × Quantity 5 = 1944.10 = ZItemCostcontent, matching the Cost Estimate condition\'s CalculatedAmount). General SalesQuotePriceItem condition formula, also verified: unit value = RateDecimalValue / RateBaseDecimalValue (base is usually 1 or 100, varies — always check it, do not assume); CalculatedAmount = unit value × item Quantity.',
+  },
+  {
+    terms: ['margin', 'quote margin', 'item margin', 'margin bi', 'profit margin'],
+    entity: 'quotes',
+    fieldName: 'ZItemMarginPercent (%) / ZItemMargincontent (amount) on SalesQuoteItem',
+    note: 'Confirmed via the real SalesQuotePriceItem condition rows on the same item: "Z02 Profit Margin (%)" condition has RateDecimalValue=50.732, exactly matching ZItemMarginPercent. "Z01 Profit Margin" condition has CalculatedAmount=2001.85 = Price(3945.95) − Cost(1944.10), matching ZItemMargincontent. ZMarginBI_KUT (50.73) is the same figure rounded differently — treat as equivalent to ZItemMarginPercent. These margin fields are in the quote\'s own transaction currency (same as NetAmount), NOT a fixed currency.',
   },
 ];
+
+// NOT YET CONFIRMED — the user described "Approval Total" (an aggregate
+// where items sharing an AlternativeToItemID group only count their
+// highest-value item, otherwise same as the item total) but we have not
+// found a real field for this in any collection pulled so far. Do not
+// invent one. If a user asks about this, the agent must say it hasn't
+// been located yet and ask for the specific field/UI binding, same as
+// how Peak Turnover and the Cost Amount currency bug were resolved.
+
 
 // Entries where we found TWO candidate fields for the same business term and
 // genuinely do not know which one the business means — confirmed by hand,
