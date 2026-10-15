@@ -492,14 +492,14 @@ const BUSINESS_TERM_GLOSSARY = [
   {
     terms: ['quote cost', 'quote item cost', 'cost amount', 'cost estimate'],
     entity: 'quotes',
-    fieldName: 'ZItemCostcontent (total) on SalesQuoteItem — see note for per-unit and verification',
-    note: 'CORRECTED after verification — an earlier version of this note wrongly said CostAmountContent_KUT is "always EUR." It is NOT. Confirmed on a live record (Quote 321344, item 10): SalesQuoteItem.CostAmountContent_KUT = 388.82 with CostAmountcurrencyCode_KUT labeled "EUR" — but the real pricing condition behind it (SalesQuoteItem/SalesQuotePriceItem, TypeCode=\'0009\', Description="Cost Estimate") shows the SAME number (RateDecimalValue=388.82) with RateCurrencyCode="GBP" — the quote\'s actual transaction/customer currency. The CostAmountcurrencyCode_KUT field\'s currency label cannot be trusted. Real currency = the quote\'s own transaction currency (customer currency), not a fixed EUR. CostAmountContent_KUT is a PER-UNIT rate; ZItemCostcontent is the TOTAL for the item (verified: 388.82 × Quantity 5 = 1944.10 = ZItemCostcontent, matching the Cost Estimate condition\'s CalculatedAmount). General SalesQuotePriceItem condition formula, also verified: unit value = RateDecimalValue / RateBaseDecimalValue (base is usually 1 or 100, varies — always check it, do not assume); CalculatedAmount = unit value × item Quantity.',
+    fieldName: 'ZItemCostcontent (total) or CostAmountContent_KUT (per-unit) on SalesQuoteItem',
+    note: 'PRIMARY SOURCE: use SalesQuoteItem\'s own fields directly (ZItemCostcontent, CostAmountContent_KUT) — this tenant does not use SAP\'s standard pricing procedure, so there is normally no need to query SalesQuotePriceItem condition rows for routine cost/margin questions. CostAmountContent_KUT is a PER-UNIT rate; ZItemCostcontent is the TOTAL for the item (verified: 388.82 × Quantity 5 = 1944.10 = ZItemCostcontent on a live record). IMPORTANT currency warning (confirmed by one-off verification, not something to re-check routinely): CostAmountcurrencyCode_KUT can be mislabeled — on the same verified record it said "EUR" while the real transaction currency was GBP (the quote\'s own/customer currency). Do not trust that currency label; assume cost figures are in the quote\'s own transaction currency (same as NetAmount) unless told otherwise.',
   },
   {
     terms: ['margin', 'quote margin', 'item margin', 'margin bi', 'profit margin'],
     entity: 'quotes',
     fieldName: 'ZItemMarginPercent (%) / ZItemMargincontent (amount) on SalesQuoteItem',
-    note: 'Confirmed via the real SalesQuotePriceItem condition rows on the same item: "Z02 Profit Margin (%)" condition has RateDecimalValue=50.732, exactly matching ZItemMarginPercent. "Z01 Profit Margin" condition has CalculatedAmount=2001.85 = Price(3945.95) − Cost(1944.10), matching ZItemMargincontent. ZMarginBI_KUT (50.73) is the same figure rounded differently — treat as equivalent to ZItemMarginPercent. These margin fields are in the quote\'s own transaction currency (same as NetAmount), NOT a fixed currency.',
+    note: 'PRIMARY SOURCE: use SalesQuoteItem\'s own fields directly — no need to query pricing conditions (this tenant doesn\'t use standard SAP pricing). ZMarginBI_KUT is the same figure as ZItemMarginPercent, just rounded slightly differently — treat as equivalent. These margin fields are in the quote\'s own transaction currency (same as NetAmount), not a fixed currency.',
   },
 ];
 
