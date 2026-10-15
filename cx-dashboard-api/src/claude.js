@@ -515,6 +515,21 @@ const BUSINESS_TERM_GLOSSARY = [
   },
 ];
 
+// Fields we've been told are coming soon but are NOT YET LIVE in the
+// system. If a user asks about one of these, the agent should explain
+// it's planned but not yet available — NOT silently fail, NOT guess a
+// substitute, and NOT assume it's already deployed just because it's in
+// this list. Move an entry to BUSINESS_TERM_GLOSSARY once confirmed live
+// via list_fields.
+const PENDING_FIELDS = [
+  {
+    terms: ['lost total', 'quote lost total', 'total lost'],
+    entity: 'quotes',
+    fieldName: 'ZLostTotal_SDK_e660a65186d74f1fa49c5c15c52392a9',
+    note: 'Confirmed field name via UI model binding (/Root/ZLostTotal_SDK_e660a65186d74f1fa49c5c15c52392a9/content), but NOT YET LIVE — announced as coming soon, not yet deployed to the system as of this writing. Likely represents the total value of lost quote items/lines, based on the name, but this has not been confirmed. When this comes up, call list_fields on "quotes" to check if it now exists — if not found, tell the user it\'s planned but not yet available rather than failing silently or guessing a substitute metric.',
+  },
+];
+
 
 // Entries where we found TWO candidate fields for the same business term and
 // genuinely do not know which one the business means — confirmed by hand,
@@ -598,12 +613,18 @@ export async function runCustomAggregateAgent({ userRequest, baseFilters = {}, e
   const ambiguousText = AMBIGUOUS_TERMS
     .map((a) => `  - "${a.terms.join('" / "')}" (entity: ${a.entity}): ${a.note}`)
     .join('\n');
+  const pendingText = PENDING_FIELDS
+    .map((p) => `  - "${p.terms.join('" / "')}" → entity: ${p.entity}, fieldName: ${p.fieldName}. ${p.note}`)
+    .join('\n');
 
   const systemPrompt = `You are a data analyst for Trelleborg Sealing Solutions' SAP C4C CRM data. The user asked a question that doesn't match any pre-built report — you must verify real data before answering.
 
 KNOWN BUSINESS-TERM ALIASES — check this list FIRST, before calling list_fields. These are confirmed mappings from business language to real field names (found by inspecting the C4C UI's model binding, since OData metadata never exposes custom UI label renames — list_fields cannot discover these on its own):
 ${glossaryText || '  (none yet)'}
 If the user's term matches one of these (even loosely — "peak turnover", "turnover", "estimated peak turnover" are all the same alias), use the mapped field directly — skip list_fields and go straight to aggregate, UNLESS that entry's own note tells you to verify via list_fields first (this applies to GUID-suffixed custom extension fields, where the UI binding name is not guaranteed to exactly match the OData property name).
+
+PENDING FIELDS — known field names that are NOT YET LIVE (coming soon). If the user's term matches one of these, call list_fields to check if it has gone live yet. If not found, tell the user it's planned but not yet available — do not guess a substitute or fail silently:
+${pendingText || '  (none yet)'}
 
 AMBIGUOUS TERMS — check this list too, BEFORE assuming any mapping. These are cases where we found multiple real candidate fields and do not know which one the business means:
 ${ambiguousText || '  (none yet)'}
