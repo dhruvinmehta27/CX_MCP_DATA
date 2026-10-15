@@ -386,6 +386,26 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   );
 }
 
+// Standalone top-level collection (not a $expand-only navigation property) —
+// confirmed field names against a live record. TypeCode 30 = "Sales Quote",
+// BusinessTransactionDocumentRelationshipRoleCode 2 = "Successor". Used to
+// detect which opportunities have been converted to a quote — there is no
+// boolean "quote exists" flag on the Opportunity header itself (confirmed:
+// the OWL/worklist view computes this from this same reference data, not
+// from a stored field).
+export async function fetchOpportunityQuoteReferences(userJwt) {
+  return fetchAllPages(
+    `${ODATA_BASE}/OpportunityBusinessTransactionDocumentReferenceCollection`,
+    [
+      'ParentObjectID', 'OpportunityID', 'ID',
+      'TypeCode', 'TypeCodeText',
+      'BusinessTransactionDocumentRelationshipRoleCode', 'BusinessTransactionDocumentRelationshipRoleCodeText',
+    ],
+    `TypeCode eq '30'`, // Sales Quote only — a simple equality filter, not the substringof+date combo that fails on this tenant
+    userJwt
+  );
+}
+
 const OPPORTUNITY_ITEM_FIELDS = [
   'ObjectID', 'ParentObjectID', 'OpportunityID', 'ID',
   'ProductID', 'ProductIDDescription',

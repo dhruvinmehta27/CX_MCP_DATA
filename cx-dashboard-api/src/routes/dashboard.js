@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent } from '../claude.js';
-import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField } from '../analytics-service.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote } from '../analytics-service.js';
 import { fetchCollectionFields } from '../c4c-client.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -38,6 +38,16 @@ function executeCustomAgentTool(req) {
         secondaryDateTo: rest.secondaryDateTo || null,
       };
       return aggregateField({ entity, fieldName, aggregation, filters }, req.userJwt, req.userEmail);
+    }
+    if (name === 'count_quote_conversions') {
+      const filters = {
+        salesOrgId: input.salesOrgId || null,
+        account: input.account || null,
+        dateFrom: input.dateFrom || null,
+        dateTo: input.dateTo || null,
+        status: input.status || 'all',
+      };
+      return opportunitiesConvertedToQuote(filters, req.userJwt, req.userEmail);
     }
     throw new Error(`Unknown tool: ${name}`);
   };

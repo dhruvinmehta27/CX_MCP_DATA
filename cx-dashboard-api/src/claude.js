@@ -166,6 +166,7 @@ export async function parseIntent(userRequest, filters = {}) {
 
 ENDPOINT SELECTION RULES — pick the most specific match:
 CRITICAL — check this FIRST, before anything else: if the user asks for a SUM, COUNT, AVERAGE, or TOTAL of a specific named metric/field that is NOT one of the standard figures covered by the rules below (win rate, pipeline value, quote count, quote status, RFQ status, product quantity/cost/price at the line-item level) — especially if the field name sounds like a custom/business-specific term you don't recognize (e.g. "Estimated Peak Turnover", "SOP value", any term with capitalized Title Case that isn't plainly "revenue" or "amount") — use "custom/aggregate" and set chartType "table". Do NOT guess which endpoint might contain this field, do NOT silently substitute opportunities/items or any other endpoint. This is critical: inventing a field mapping produces a confidently wrong answer, which is worse than asking a specialized agent to verify the field exists first. "custom/aggregate" triggers a separate verification step that checks real C4C field names before computing anything.
+ALSO use "custom/aggregate" for "how many opportunities converted to quote", "quote conversion rate", "opportunities that became quotes", or similar — there is no simple field for this, it requires checking a relationship between Opportunities and Quotes that only the custom/aggregate agent knows how to do correctly.
 IMPORTANT: If the user asks for product-level detail (Product ID, Product Category, Quantity, Cost, Price, line items, items within opportunities, specific product types like "oil seals"/"cassette seals"/"seals"), ALWAYS use "opportunities/items" — even if the word "pipeline" or "opportunity" appears. Product detail always wins over pipeline/stage views.
 - "top N users", "who created most quotes", "top reps by quote count", "most quotes by person", "ranked by quote count" → use "quotes/top-creators" and set chartType "bar". Extract limit N from the request and set filters.limit.
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
@@ -527,6 +528,20 @@ const CUSTOM_AGENT_TOOLS = [
       required: ['entity', 'fieldName', 'aggregation'],
     },
   },
+  {
+    name: 'count_quote_conversions',
+    description: 'Counts opportunities that have been converted to a Sales Quote (i.e. have a successor Sales Quote document). Use this for any question about "opportunities converted to quote", "quote conversion rate", "which opportunities became quotes", etc. There is NO boolean flag for this on the Opportunity header — it is derived from the OpportunityBusinessTransactionDocumentReference relationship data, which this tool already handles internally. Do not try to answer quote-conversion questions via aggregate/list_fields — use this tool directly.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome before checking conversion. Default "all".' },
+        salesOrgId: { type: 'string', description: 'Sales org ID or name substring, if the user specified one.' },
+        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+      },
+    },
+  },
 ];
 
 const CUSTOM_AGENT_MAX_TURNS = 6;
@@ -552,7 +567,7 @@ CRITICAL RULES — these exist because guessing produced confidently wrong answe
 1. NEVER invent, guess, or assume a field name exists. If a term isn't in the glossary above and you are not certain, call list_fields first.
 2. If after checking list_fields (try multiple relevant collections if the field could be on either) you cannot find a field matching what the user asked for, STOP. Do not substitute a different metric, do not approximate. Report success: false and explain specifically what you looked for and didn't find.
 3. aggregate returning valuesFound: 0 while recordsMatched > 0 means the field name was wrong, or empty for every matched record. This is NOT a valid "the answer is 0" result — treat it as failure, try a different field name from list_fields, or give up and report success: false.
-4. Your final explanation must describe EXACTLY what the aggregate tool actually returned — never describe a filter, field, or computation you did not actually execute via a tool call.
+4. Your final explanation must describe EXACTLY what the tool(s) you called actually returned — never describe a filter, field, or computation you did not actually execute via a tool call.
 5. Already-known filters from the UI (use these as defaults unless the user's question overrides them): ${JSON.stringify(baseFilters)}
 6. Today's date: ${new Date().toISOString().slice(0, 10)} — resolve relative/specific periods (e.g. "2026", "start of production in 2026") to ISO dates yourself.
 

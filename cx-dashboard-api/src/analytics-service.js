@@ -7,7 +7,7 @@ import {
   fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
-  fetchAccountCountries,
+  fetchAccountCountries, fetchOpportunityQuoteReferences,
 } from './c4c-client.js';
 import { getAccountCountryMap, enrichWithCountry } from './account-cache.js';
 import {
@@ -179,6 +179,52 @@ export async function aggregateField({ entity, fieldName, aggregation, filters =
     recordsMatched: rows.length,
     valuesFound: values.length, // if 0 while recordsMatched > 0, fieldName is likely wrong/empty
     truncated: !!raw.truncated,
+  };
+}
+
+let quoteRefsCache = null; // { expiresAt, promise } — shared across users, no PII, cheap to keep warm
+async function getQuoteReferences(userJwt) {
+  if (quoteRefsCache && Date.now() < quoteRefsCache.expiresAt) return quoteRefsCache.promise;
+  const promise = fetchOpportunityQuoteReferences(userJwt);
+  quoteRefsCache = { promise, expiresAt: Date.now() + 10 * 60_000 }; // 10 min
+  return promise;
+}
+
+/**
+ * Counts opportunities that have been converted to a Sales Quote — there is
+ * no boolean flag for this on the Opportunity header; it's derived from
+ * OpportunityBusinessTransactionDocumentReference (TypeCode=30 "Sales Quote",
+ * relationship role "Successor"), confirmed against a live record. Used by
+ * the custom-aggregate agent's count_quote_conversions tool.
+ */
+export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail) {
+  const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
+  const [opps, refs] = await Promise.all([
+    rawOpportunities(filters, userJwt, userEmail),
+    getQuoteReferences(userJwt),
+  ]);
+
+  const SUCCESSOR_ROLE_CODE = '2';
+  const convertedIds = new Set(
+    refs.results
+      .filter((r) => r.BusinessTransactionDocumentRelationshipRoleCode === SUCCESSOR_ROLE_CODE)
+      .map((r) => r.OpportunityID)
+  );
+
+  const scoped = opps.results.filter(statusFilter);
+  const converted = scoped.filter((o) => convertedIds.has(o.ID));
+
+  return {
+    totalOpportunities: scoped.length,
+    convertedCount: converted.length,
+    conversionRate: scoped.length ? Math.round((converted.length / scoped.length) * 100) : null,
+    sample: converted.slice(0, 10).map((o) => ({
+      'Opportunity ID': o.ID,
+      Name: o.Name,
+      Customer: o.ProspectPartyName,
+      Status: o.LifeCycleStatusCodeText,
+    })),
+    truncated: !!opps.truncated,
   };
 }
 
