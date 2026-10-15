@@ -57,8 +57,8 @@ function suggestCategories(keywords, items) {
  * exhausted memory on wide date ranges.
  */
 function baseFilters(filters = {}) {
-  const { salesOrgId, ownerId, dateFrom, dateTo, account } = filters;
-  return { salesOrgId, ownerId, dateFrom, dateTo, account };
+  const { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo } = filters;
+  return { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo };
 }
 
 // Words too generic to use as an org-matching token on their own (would

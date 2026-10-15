@@ -377,6 +377,18 @@ export async function fetchOpportunities(filters = {}, userJwt) {
   // applied in-process in rawOpportunities, not here.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',MainEmployeeResponsiblePartyName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  // A secondary date concept (e.g. ZSOP for "start of production") filtered
+  // server-side too — without this, a query that only cares about ZSOP (not
+  // CreationDateTime) had no server-side filter at all, pulled the entire
+  // OpportunityCollection, and silently truncated at MAX_RECORDS (sorted by
+  // ObjectID) before ever reaching the matching rows: a real "0 results"
+  // caused by truncation, not a genuine empty answer. Filtering ZSOP here
+  // directly also avoids the workaround of stacking a CreationDateTime range
+  // on top, which double-restricts and undercounts (an opportunity created
+  // in 2024 with 2026 SOP would be wrongly excluded).
+  if (filters.secondaryDateField) {
+    parts.push(...dateFilter(filters.secondaryDateField, filters.secondaryDateFrom, filters.secondaryDateTo));
+  }
   const extra = (filters.extraFields || []).filter((f) => !OPPORTUNITY_FIELDS.includes(f));
   return fetchAllPages(
     `${ODATA_BASE}/OpportunityCollection`,
