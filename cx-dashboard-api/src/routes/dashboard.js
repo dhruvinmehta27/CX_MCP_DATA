@@ -220,33 +220,47 @@ router.post('/generate', async (req, res, next) => {
         executeTool: executeCustomAgentTool(req, mergedFilters.salesOrgId),
       });
 
-      let rows;
+      // resultKind drives dedicated UI on the frontend (a headline stat card
+      // for one number, a chart + table for a rollup) instead of squeezing
+      // every custom-aggregate answer into the same cramped one-row table —
+      // rawData/rows are still included for CSV export and as a fallback.
+      let resultKind, metric = null, breakdown = null, total = null, rows;
+
       if (agentResult.success && Array.isArray(agentResult.breakdown) && agentResult.breakdown.length > 0) {
-        // Multi-org rollup — show a proper per-org breakdown table instead of
-        // squeezing a region-wide answer into one row (a 0-result org stays
-        // visible as its own row, not a caveat someone has to expand to find).
-        rows = [
-          ...agentResult.breakdown,
-          { Org: 'Total', Value: agentResult.value, 'Records matched': agentResult.recordsMatched },
-        ];
+        resultKind = 'breakdown';
+        breakdown = agentResult.breakdown;
+        total = {
+          value: agentResult.value,
+          formattedValue: sanitizeFormattedValue(agentResult),
+          fieldLabel: getFieldDisplayLabel(agentResult.fieldUsed),
+          recordsMatched: agentResult.recordsMatched,
+        };
+        rows = [...breakdown, { Org: 'Total', Value: agentResult.value, 'Records matched': agentResult.recordsMatched }];
+      } else if (agentResult.success) {
+        resultKind = 'metric';
+        const noDataFound = agentResult.recordsMatched === 0;
+        metric = {
+          value: noDataFound ? null : agentResult.value,
+          formattedValue: noDataFound ? 'No matching records found' : sanitizeFormattedValue(agentResult),
+          fieldLabel: getFieldDisplayLabel(agentResult.fieldUsed),
+          recordsMatched: agentResult.recordsMatched,
+        };
+        rows = [{
+          Metric: userRequest,
+          Value: metric.formattedValue,
+          'Field used': metric.fieldLabel,
+          'Records matched': metric.recordsMatched,
+        }];
       } else {
-        const noDataFound = agentResult.success && agentResult.recordsMatched === 0;
-        rows = [
-          agentResult.success
-            ? {
-                Metric: userRequest,
-                Value: noDataFound ? 'No matching records found' : sanitizeFormattedValue(agentResult),
-                'Field used': getFieldDisplayLabel(agentResult.fieldUsed),
-                'Records matched': agentResult.recordsMatched,
-              }
-            : {
-                Metric: userRequest,
-                Result: 'Could not compute — see explanation',
-              },
-        ];
+        resultKind = 'failed';
+        rows = [{ Metric: userRequest, Result: 'Could not compute — see explanation' }];
       }
 
       return res.json({
+        resultKind,
+        metric,
+        breakdown,
+        total,
         charts: [],
         rawData: { 'custom/aggregate': { total: rows.length, rows } },
         title: intent.title || 'Custom Query Result',
