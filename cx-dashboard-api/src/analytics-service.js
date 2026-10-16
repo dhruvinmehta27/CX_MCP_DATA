@@ -9,7 +9,7 @@ import {
   countQuotes, countOpportunities, countRFQs,
   fetchAccountCountries, fetchOpportunityQuoteReferences, fetchQuoteItems, fetchSalesOrgs,
 } from './c4c-client.js';
-import { getAccountCountryMap, enrichWithCountry } from './account-cache.js';
+import { getAccountCountryMap, enrichWithCountry, enrichOpportunitiesWithAccountClassification } from './account-cache.js';
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
   quotesByDayThisWeek, isOpenStatus, isWonStatus, isRfqOpen, parseODataDate, toNumber,
@@ -57,8 +57,8 @@ function suggestCategories(keywords, items) {
  * exhausted memory on wide date ranges.
  */
 function baseFilters(filters = {}) {
-  const { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo } = filters;
-  return { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo };
+  const { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo, segment, application, marketSegmentGroup, strategicAccount } = filters;
+  return { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo, segment, application, marketSegmentGroup, strategicAccount };
 }
 
 // Words too generic to use as an org-matching token on their own (would
@@ -90,6 +90,70 @@ function matchesAccount(accountName, filterValue) {
   return !!accountName && accountName.toLowerCase().includes(filterValue.trim().toLowerCase());
 }
 
+// Business segment (BUS_SEG_CDE) — confirmed real master-data code table
+// (not guessed): AER/AUT/HM/IND are the live codes (HEA is disabled, HM
+// replaced it). BUS_SEG_CDE_KUT/BUS_SEG_CDE_KUTText are already fetched on
+// every opportunity (OPPORTUNITY_FIELDS), so this is a pure in-process
+// filter — no new OData call needed.
+const BUSINESS_SEGMENTS = {
+  AER: 'Aerospace',
+  AUT: 'Automotive',
+  HM: 'Healthcare & Medical',
+  IND: 'Industrial',
+};
+
+function matchesSegment(segCode, segText, filterValue) {
+  if (!filterValue) return true;
+  const v = filterValue.trim().toLowerCase();
+  const codeLower = (segCode || '').toLowerCase();
+  const textLower = (segText || '').toLowerCase();
+  // Resolve the filter term to a known code first (exact code, or a
+  // description match/substring against the confirmed table) — falls back to
+  // a direct substring check against the record's own text so an unexpected
+  // but real value still matches instead of silently excluding everything.
+  const matchedCode = Object.entries(BUSINESS_SEGMENTS).find(
+    ([code, desc]) => code.toLowerCase() === v || desc.toLowerCase() === v || desc.toLowerCase().includes(v)
+  )?.[0];
+  if (matchedCode) return codeLower === matchedCode.toLowerCase();
+  return textLower.includes(v) || codeLower === v;
+}
+
+// Strategic Account classification (StrategicAccount_KUT, on the Account
+// entity) — confirmed real master-data code table, including legacy/disabled
+// codes (a record saved while a code was active keeps it, so matching still
+// needs to recognize e.g. "Hunting" even though it's since been retired).
+const STRATEGIC_ACCOUNT_TYPES = {
+  101: 'Strategic Prospect',
+  111: 'Hunting',
+  121: 'Farming',
+  131: 'Housed Account',
+  141: 'Managed Account',
+  151: 'Focus Account',
+  161: 'Not Assigned',
+};
+
+function matchesCodeTable(code, text, filterValue, table) {
+  if (!filterValue) return true;
+  const v = filterValue.trim().toLowerCase();
+  const codeLower = String(code || '').toLowerCase();
+  const textLower = (text || '').toLowerCase();
+  const matchedCode = Object.entries(table).find(
+    ([c, desc]) => String(c).toLowerCase() === v || desc.toLowerCase() === v || desc.toLowerCase().includes(v)
+  )?.[0];
+  if (matchedCode) return codeLower === String(matchedCode).toLowerCase();
+  return textLower.includes(v) || codeLower === v;
+}
+
+// Application and Market Segment Group have ~100/~50 real codes each (too
+// many to usefully hardcode for exact matching) — resolved by substring
+// against the account's own description text instead, same pattern as
+// matchesAccount. Real, confirmed field names (AccountApplicationCodeText,
+// AccountMktSegGrpCodeText) via enrichOpportunitiesWithAccountClassification.
+function matchesText(text, filterValue) {
+  if (!filterValue) return true;
+  return !!text && text.toLowerCase().includes(filterValue.trim().toLowerCase());
+}
+
 // ---------------------------------------------------------------------------
 // Org/region master data — replaces letting the custom-aggregate agent guess
 // which real org(s) a free-text term like "Europe" or "Hungary" means. The
@@ -99,7 +163,7 @@ function matchesAccount(accountName, filterValue) {
 // ---------------------------------------------------------------------------
 
 let salesOrgsCache = null; // { expiresAt, promise } — shared across users, no PII
-async function getSalesOrgs(userJwt) {
+export async function getSalesOrgs(userJwt) {
   if (salesOrgsCache && Date.now() < salesOrgsCache.expiresAt) return salesOrgsCache.promise;
   const promise = fetchSalesOrgs(null, userJwt);
   salesOrgsCache = { promise, expiresAt: Date.now() + 60 * 60_000 }; // 1h — org master data changes rarely
@@ -241,11 +305,20 @@ async function rawOpportunities(filters, userJwt, userEmail) {
   // without either (cached on date/owner only) and scope both in-process.
   const extraFields = filters.extraFields || [];
   const fetchKey = { ...base, salesOrgId: undefined, account: undefined, extraFields };
-  const { data } = await getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt));
-  if (!base.salesOrgId && !base.account) return data;
-  const results = data.results.filter((o) =>
+  const needsAccountJoin = !!(base.application || base.marketSegmentGroup || base.strategicAccount);
+  const [{ data }, accountMap] = await Promise.all([
+    getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt)),
+    needsAccountJoin ? getAccountCountryMap(() => fetchAccountCountries(userJwt)) : Promise.resolve(null),
+  ]);
+  const enriched = needsAccountJoin ? enrichOpportunitiesWithAccountClassification(data.results, accountMap) : data.results;
+  if (!base.salesOrgId && !base.account && !base.segment && !needsAccountJoin) return data;
+  const results = enriched.filter((o) =>
     matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId) &&
-    matchesAccount(o.ProspectPartyName, base.account)
+    matchesAccount(o.ProspectPartyName, base.account) &&
+    matchesSegment(o.BUS_SEG_CDE_KUT, o.BUS_SEG_CDE_KUTText, base.segment) &&
+    matchesText(o.AccountApplicationCodeText, base.application) &&
+    matchesText(o.AccountMktSegGrpCodeText, base.marketSegmentGroup) &&
+    matchesCodeTable(o.AccountStrategicCode, o.AccountStrategicText, base.strategicAccount, STRATEGIC_ACCOUNT_TYPES)
   );
   return { ...data, results, total: results.length };
 }

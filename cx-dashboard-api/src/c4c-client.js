@@ -622,10 +622,22 @@ export async function fetchAppointments(filters = {}, userJwt) {
  * Fetch all accounts with their country — used to build the account country cache.
  * Paginated the same way as other collections; no user-scoped filter needed here.
  */
+// Also pulls account-level classification fields (confirmed real field names
+// from a live CorporateAccountCollection record) used to enrich Opportunities
+// with dimensions that aren't copied onto the Opportunity itself: Market
+// Segment Group, Application, and Strategic Account classification.
+// BUS_SEG_CDE/MKT_SEG_CODE are NOT pulled here — Opportunity already carries
+// its own copies of those two (BUS_SEG_CDE_KUT/MKT_SEG_CODE), which take
+// precedence as the more specific, per-opportunity value.
 export async function fetchAccountCountries(userJwt) {
   return fetchAllPages(
     `${ODATA_BASE}/CorporateAccountCollection`,
-    ['AccountID', 'CountryCode', 'CountryCodeText'],
+    [
+      'AccountID', 'CountryCode', 'CountryCodeText',
+      'ApplicationCode', 'ApplicationCodeText',
+      'MKT_SEG_GRP_CDE', 'MKT_SEG_GRP_CDEText',
+      'StrategicAccount_KUT', 'StrategicAccount_KUTText',
+    ],
     '',
     userJwt
   );
