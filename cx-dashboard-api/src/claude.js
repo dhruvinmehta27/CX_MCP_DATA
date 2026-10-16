@@ -138,6 +138,19 @@ function needsItemsEndpoint(userRequest) {
   return ITEMS_KEYWORDS.some((k) => lower.includes(k));
 }
 
+// Subset of ITEMS_KEYWORDS that specifically signals the user wants raw,
+// ungrouped rows (not a count/breakdown chart) — the only case where forcing
+// chartType to 'table' is actually correct. "product category" alone does
+// NOT belong here: "count of product categories in a pie chart" is asking
+// for a grouped breakdown chart, and forcing it to a table regardless of
+// this explicit request was a real bug observed live.
+const RAW_ROW_KEYWORDS = ["dont group", "don't group", 'do not group', 'ungrouped', 'one row per'];
+
+function needsRawRows(userRequest) {
+  const lower = (userRequest || '').toLowerCase();
+  return RAW_ROW_KEYWORDS.some((k) => lower.includes(k));
+}
+
 // Returns true when the user explicitly said they want all orgs / no filter
 function userWantsAll(userRequest) {
   const lower = (userRequest || '').toLowerCase();
@@ -164,9 +177,16 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
   if (intent.endpoints.length === 0) intent.endpoints = ['quotes/by-status'];
 
   // Hard override: product-level keywords always force the line-item endpoint
+  // as the DATA SOURCE (opportunities/items has the real Product ID/Category
+  // fields) — but that doesn't mean the user wants raw ungrouped rows. Only
+  // force chartType to 'table' when they explicitly signaled that (e.g.
+  // "ungrouped", "one row per"); otherwise respect whatever chart type was
+  // actually requested — "count of product categories in a pie chart" must
+  // stay a pie chart, not get silently flattened into a raw table (observed
+  // live: this previously ignored an explicit pie-chart request outright).
   if (needsItemsEndpoint(userRequest)) {
     intent.endpoints = ['opportunities/items'];
-    intent.chartType = 'table';
+    if (needsRawRows(userRequest)) intent.chartType = 'table';
   }
 
   // Hard override: "top N users/reps by quote count" → aggregated endpoint, never raw
@@ -229,7 +249,7 @@ ALSO use "custom/aggregate" for "how many RFQs raised from quotes", "RFQs genera
 IMPORTANT: If the user asks for product-level detail (Product ID, Product Category, Quantity, Cost, Price, line items, items within opportunities, specific product types like "oil seals"/"cassette seals"/"seals"), ALWAYS use "opportunities/items" — even if the word "pipeline" or "opportunity" appears. Product detail always wins over pipeline/stage views.
 - "top N users", "who created most quotes", "top reps by quote count", "most quotes by person", "ranked by quote count" → use "quotes/top-creators" and set chartType "bar". Extract limit N from the request and set filters.limit.
 - "list quotes", "show me quotes", "give me all quotes", "export quotes", "raw quote data", "quote details", "quotes with country/owner/created by" → use "quotes/raw" and set chartType "table"
-- ANY of: "product ID", "product category", "product description", "line items", "opportunity items", "opportunity products", "items in opportunities", "opportunity line", "show me products", "oil seals", "cassette seals", "glyd ring", "seals", "quantity", "cost per item", "unit price", "net amount per item", "customer details per product", "don't group", "ungrouped", "one row per" → use "opportunities/items" and set chartType "table". Extract any product category keyword the user mentions and set filters.productCategory to it.
+- ANY of: "product ID", "product category", "product description", "line items", "opportunity items", "opportunity products", "items in opportunities", "opportunity line", "show me products", "oil seals", "cassette seals", "glyd ring", "seals", "quantity", "cost per item", "unit price", "net amount per item", "customer details per product" → use "opportunities/items" as the endpoint (it has the real Product ID/Category fields). Only set chartType "table" if the user ALSO said "don't group"/"ungrouped"/"one row per" (they explicitly want raw unaggregated rows) — otherwise set chartType to whatever they actually asked for ("pie", "bar", etc.), e.g. "count of product categories in a pie chart" must produce a pie chart of category counts, NOT a raw table — forcing table regardless of an explicit chart request is a confirmed bug, not a safe default. Extract any product category keyword the user mentions and set filters.productCategory to it.
 - "how many opportunities created", "count of opportunities", "opportunities created in last X" → use "opportunities/created-trend"
 - "pipeline by stage", "pipeline health", "stage breakdown", "open pipeline", "weighted pipeline" → use "opportunities/pipeline"
 - "opportunities by sales org", "which org has most opportunities", "org performance" → use "opportunities/by-sales-org"
