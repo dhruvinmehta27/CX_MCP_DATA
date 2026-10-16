@@ -195,6 +195,7 @@ export default function CustomBuilder() {
   const [busy, setBusy] = useState(false);
   const [showData, setShowData] = useState(false);
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);
+  const [activeTab, setActiveTab] = useState('answer');
   const [showInsightDetails, setShowInsightDetails] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [overrideDateFrom, setOverrideDateFrom] = useState(null);
@@ -266,6 +267,7 @@ export default function CustomBuilder() {
       const buildIntent = { ...intent, title: editedTitle || intent?.title };
       const res = await generateDashboard(request, buildFilters, buildIntent);
       setResult({ ...res, title: res.title || buildIntent.title });
+      setActiveTab('answer');
       setStep(3);
     } catch (err) {
       setError(err);
@@ -552,6 +554,7 @@ export default function CustomBuilder() {
       {/* ---------- Step 4: REPORT ---------- */}
       {step === 3 && result && (() => {
         const isTable = intent?.chartType === 'table' || (!result.charts?.length && table.rows.length > 0);
+        const isCustomResult = result.resultKind === 'metric' || result.resultKind === 'breakdown';
         const PREVIEW_LIMIT = 50;
         const categorySuggestions = result.rawData?.['opportunities/items']?.categorySuggestions || [];
 
@@ -590,7 +593,7 @@ export default function CustomBuilder() {
               <div className="chart-card-header">
                 <div>
                   <div className="chart-card-title">{result.title}</div>
-                  {result.summary && (() => {
+                  {!isCustomResult && result.summary && (() => {
                     const { short, hasMore } = shortText(result.summary);
                     return (
                       <div className="chart-card-subtitle">
@@ -634,8 +637,33 @@ export default function CustomBuilder() {
                 </div>
               </div>
 
-              {/* Table mode */}
-              {result.resultKind === 'metric' ? (
+              {isCustomResult && (
+                <div className="result-tabs">
+                  <button
+                    className={`result-tab${activeTab === 'answer' ? ' active' : ''}`}
+                    onClick={() => setActiveTab('answer')}
+                  >
+                    Answer
+                  </button>
+                  <button
+                    className={`result-tab${activeTab === 'explanation' ? ' active' : ''}`}
+                    onClick={() => setActiveTab('explanation')}
+                  >
+                    Explanation{result.insights?.length > 0 ? ` (${result.insights.length})` : ''}
+                  </button>
+                </div>
+              )}
+
+              {isCustomResult && activeTab === 'explanation' ? (
+                <div className="result-explanation">
+                  {result.summary && <p>{result.summary}</p>}
+                  {result.insights?.length > 0 && (
+                    <ul className="insights-list" style={{ marginTop: 12 }}>
+                      {result.insights.map((insight, i) => <li key={i}>{insight}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ) : result.resultKind === 'metric' ? (
                 <MetricCard
                   title={result.metric?.fieldLabel || 'Result'}
                   value={result.metric?.formattedValue ?? '—'}
@@ -699,7 +727,7 @@ export default function CustomBuilder() {
               )}
             </div>
 
-            {result.insights?.length > 0 && (
+            {!isCustomResult && result.insights?.length > 0 && (
               <div className="card">
                 <div className="chart-card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
