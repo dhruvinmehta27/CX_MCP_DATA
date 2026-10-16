@@ -22,6 +22,14 @@ const DATE_PRESETS = [
 // Shortens a long AI-generated explanation to its first sentence (or ~110
 // chars) for default display — the full text stays available behind a
 // "Show details" toggle so the card isn't a wall of text by default.
+// aggregateByOrgs always forces the EUR-converted field for a multi-org
+// breakdown (see CURRENCY_SAFE_FIELD_MAP server-side), so € is always the
+// correct symbol here — not just a guess.
+function formatEUR(v) {
+  if (typeof v !== 'number') return v;
+  return `€${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
+
 function shortText(text, maxLen = 110) {
   if (!text) return { short: '', hasMore: false };
   const firstSentenceEnd = text.search(/[.!?](\s|$)/);
@@ -688,12 +696,21 @@ export default function CustomBuilder() {
                         bars={[{ key: 'Value', color: 'var(--primary)' }]}
                         layout="vertical"
                         height={Math.max(220, (result.breakdown || []).length * 30)}
-                        valueFormatter={(v) => (typeof v === 'number' ? v.toLocaleString() : v)}
+                        valueFormatter={formatEUR}
                       />
                     </div>
                   )}
                   <div style={{ overflowX: 'auto', marginTop: 16 }}>
-                    <DataTable columns={table.columns} data={table.rows} pageSize={table.rows.length || 1} />
+                    <DataTable
+                      columns={[
+                        { key: 'Org', label: 'Org', type: 'text' },
+                        { key: 'Value', label: 'Value (€)', type: 'currency', render: (v) => formatEUR(v) },
+                        { key: 'Records matched', label: 'Records matched', type: 'number' },
+                      ]}
+                      data={[...result.breakdown].sort((a, b) => (b.Value || 0) - (a.Value || 0))}
+                      sortable
+                      pageSize={20}
+                    />
                   </div>
                 </div>
               ) : isTable ? (
