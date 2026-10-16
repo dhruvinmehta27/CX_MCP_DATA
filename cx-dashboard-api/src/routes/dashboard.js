@@ -143,6 +143,28 @@ router.post('/plan', async (req, res, next) => {
       return res.status(400).json({ error: 'userRequest is required' });
     }
     const intent = await parseIntent(userRequest, filters);
+
+    // For a custom-metric request with a detected org/region term, resolve it
+    // against real org data NOW — on the understanding/confirm screen — rather
+    // than letting the agent discover an ambiguity only after Build is clicked.
+    // Reuses the same clarificationNeeded/clarificationQuestion UI the rest of
+    // the plan step already uses, so no new frontend pattern is needed.
+    if (intent.endpoints?.includes('custom/aggregate') && intent.detectedOrgName && !intent.detectedOrgName.includes(',')) {
+      const scope = await resolveOrgScopeTool({ term: intent.detectedOrgName }, req.userJwt);
+      if (scope.matchType === 'ambiguous') {
+        const names = (scope.candidates || []).slice(0, 6).map((o) => o.name).join(', ');
+        intent.clarificationNeeded = true;
+        intent.clarificationQuestion = names
+          ? `"${intent.detectedOrgName}" matches more than one real scope: ${names}${(scope.candidates || []).length > 6 ? ', ...' : ''}. Which did you mean?`
+          : `"${intent.detectedOrgName}" doesn't match a known org — could you clarify which org/region you mean?`;
+      } else if (scope.matchType === 'region' || scope.matchType === 'multiple') {
+        // Resolved to several real orgs — pass them through as the exact
+        // comma-separated ID list, so build() doesn't need to re-resolve it.
+        intent.filters = { ...intent.filters, salesOrgId: scope.orgs.map((o) => o.id).join(',') };
+        intent.resolvedOrgs = scope.orgs;
+      }
+    }
+
     res.json({ intent });
   } catch (err) {
     next(err);

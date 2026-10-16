@@ -432,8 +432,19 @@ export default function CustomBuilder() {
                   <Icon name="target" size={13} />
                   Sales org filter — AI detected: <strong>{intent.detectedOrgName || intent.filters.salesOrgId}</strong>
                 </div>
-                {/* If AI returned comma-separated org IDs, show them directly as chips without needing C4C lookup */}
-                {orgMatches.length === 0 && intent.filters?.salesOrgId?.includes(',') ? (
+                {/* Resolved against the real org catalog server-side (resolveOrgScope) — show readable names */}
+                {orgMatches.length === 0 && intent.resolvedOrgs?.length > 0 ? (
+                  <div>
+                    <p className="plan-org-nomatch" style={{ marginBottom: 6 }}>
+                      Resolved to these real org(s) — filter will apply all of them:
+                    </p>
+                    <div className="plan-org-chips">
+                      {intent.resolvedOrgs.map((org) => (
+                        <span key={org.id} className="plan-chip">{org.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : orgMatches.length === 0 && intent.filters?.salesOrgId?.includes(',') ? (
                   <div>
                     <p className="plan-org-nomatch" style={{ marginBottom: 6 }}>
                       AI identified these org IDs — filter will apply all of them:
