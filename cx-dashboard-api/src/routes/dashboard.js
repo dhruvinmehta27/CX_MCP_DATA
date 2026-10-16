@@ -15,16 +15,15 @@ const router = Router();
 // a prompt rule, not a guarantee — sanitize server-side so a malformed value
 // (e.g. embedded prose) never reaches the UI's Value column. Falls back to
 // formatting the raw numeric value if formattedValue doesn't look clean.
-function sanitizeFormattedValue(agentResult) {
-  const raw = agentResult.formattedValue;
+function sanitizeFormattedValue({ formattedValue: raw, value }) {
   if (typeof raw === 'string') {
     const match = raw.match(/^[\s]*[€$£]?\s?-?[\d,]+(\.\d+)?%?/);
     if (match && match[0].trim()) return match[0].trim();
   }
-  if (typeof agentResult.value === 'number') {
-    return agentResult.value.toLocaleString();
+  if (typeof value === 'number') {
+    return value.toLocaleString();
   }
-  return raw ?? agentResult.value ?? null;
+  return raw ?? value ?? null;
 }
 
 function pickFilters(source = {}) {
@@ -301,7 +300,7 @@ router.post('/generate', async (req, res, next) => {
       // for one number, a chart + table for a rollup) instead of squeezing
       // every custom-aggregate answer into the same cramped one-row table —
       // rawData/rows are still included for CSV export and as a fallback.
-      let resultKind, metric = null, breakdown = null, total = null, rows;
+      let resultKind, metric = null, breakdown = null, total = null, secondaryMetric = null, rows;
 
       if (agentResult.success && Array.isArray(agentResult.breakdown) && agentResult.breakdown.length > 0) {
         resultKind = 'breakdown';
@@ -330,6 +329,19 @@ router.post('/generate', async (req, res, next) => {
           'Field used': metric.fieldLabel,
           'Records matched': metric.recordsMatched,
         }];
+        // Only trusted when it has a real numeric value — the model can set
+        // this field, but a malformed/incomplete secondaryMetric just isn't
+        // shown rather than rendering a broken second stat tile.
+        const sm = agentResult.secondaryMetric;
+        if (sm && typeof sm.value === 'number') {
+          secondaryMetric = {
+            value: sm.value,
+            formattedValue: sanitizeFormattedValue(sm),
+            label: typeof sm.label === 'string' && sm.label.trim() ? sm.label.trim() : 'Secondary metric',
+            unit: ['currency', 'count', 'percent'].includes(sm.unit) ? sm.unit : 'currency',
+            recordsMatched: typeof sm.recordsMatched === 'number' ? sm.recordsMatched : null,
+          };
+        }
       } else {
         resultKind = 'failed';
         rows = [{ Metric: userRequest, Result: 'Could not compute — see explanation' }];
@@ -340,6 +352,7 @@ router.post('/generate', async (req, res, next) => {
         metric,
         breakdown,
         total,
+        secondaryMetric,
         appliedFilters,
         charts: [],
         rawData: { 'custom/aggregate': { total: rows.length, rows } },
