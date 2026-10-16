@@ -6,9 +6,11 @@ import { planReport, generateDashboard } from '../api/dashboard';
 import { getSalesOrgs } from '../api/analytics';
 import { isoDate } from '../utils/formatters';
 import DynamicChart from '../components/charts/DynamicChart';
+import BarChart from '../components/charts/BarChart';
 import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
+import MetricCard from '../components/ui/MetricCard';
 
 const DATE_PRESETS = [
   { label: 'Last 1M', months: 1 },
@@ -633,7 +635,40 @@ export default function CustomBuilder() {
               </div>
 
               {/* Table mode */}
-              {isTable ? (
+              {result.resultKind === 'metric' ? (
+                <MetricCard
+                  title={result.metric?.fieldLabel || 'Result'}
+                  value={result.metric?.formattedValue ?? '—'}
+                  subtitle={result.metric?.value != null ? `${(result.metric.recordsMatched ?? 0).toLocaleString()} records matched` : undefined}
+                  icon="bar-chart-2"
+                  accent={result.metric?.value != null ? 'primary' : 'warning'}
+                />
+              ) : result.resultKind === 'breakdown' ? (
+                <div>
+                  <MetricCard
+                    title={`Total — ${result.total?.fieldLabel || ''}`}
+                    value={result.total?.formattedValue ?? '—'}
+                    subtitle={`${(result.breakdown || []).length} orgs · ${(result.total?.recordsMatched ?? 0).toLocaleString()} records matched`}
+                    icon="bar-chart-2"
+                    accent="success"
+                  />
+                  {(result.breakdown || []).length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <BarChart
+                        data={[...result.breakdown].sort((a, b) => (b.Value || 0) - (a.Value || 0))}
+                        xKey="Org"
+                        bars={[{ key: 'Value', color: 'var(--primary)' }]}
+                        layout="vertical"
+                        height={Math.max(220, (result.breakdown || []).length * 30)}
+                        valueFormatter={(v) => (typeof v === 'number' ? v.toLocaleString() : v)}
+                      />
+                    </div>
+                  )}
+                  <div style={{ overflowX: 'auto', marginTop: 16 }}>
+                    <DataTable columns={table.columns} data={table.rows} pageSize={table.rows.length || 1} />
+                  </div>
+                </div>
+              ) : isTable ? (
                 <div>
                   {table.total > PREVIEW_LIMIT && (
                     <div className="date-conflict-banner" style={{ marginBottom: 12 }}>
