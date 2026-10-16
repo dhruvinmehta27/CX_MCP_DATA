@@ -719,7 +719,7 @@ const CUSTOM_AGENT_TOOLS = [
   },
   {
     name: 'count_quote_conversions',
-    description: 'Counts opportunities that have been converted to a Sales Quote (i.e. have a successor Sales Quote document). Use this for any question about "opportunities converted to quote", "quote conversion rate", "which opportunities became quotes", etc. Internally prefers the direct ZQuoteExist_KUT flag on the Opportunity header when it looks populated for the scope, falling back to the OpportunityBusinessTransactionDocumentReference relationship data otherwise — the result includes a "method" field telling you which one was actually used; mention it in your explanation. Do not try to answer quote-conversion questions via aggregate/list_fields — use this tool directly.',
+    description: 'Counts opportunities that have been converted to a Sales Quote (i.e. have a successor Sales Quote document), scoped to AT MOST ONE org. Use this for any question about "opportunities converted to quote", "quote conversion rate", "which opportunities became quotes", etc. Internally prefers the direct ZQuoteExist_KUT flag on the Opportunity header when it looks populated for the scope, falling back to the OpportunityBusinessTransactionDocumentReference relationship data otherwise — the result includes a "method" field telling you which one was actually used; mention it in your explanation. For more than one org (a region, or several named orgs), use count_quote_conversions_by_org instead, after resolve_org_scope — same rule as aggregate vs aggregate_by_org. Do not try to answer quote-conversion questions via aggregate/list_fields — use this tool directly.',
     input_schema: {
       type: 'object',
       properties: {
@@ -728,7 +728,38 @@ const CUSTOM_AGENT_TOOLS = [
         account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
         dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial).' },
+        application: { type: 'string', description: 'Account-level Application classification, matched by substring against the description.' },
+        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group, matched by substring against the description.' },
+        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned.' },
       },
+    },
+  },
+  {
+    name: 'count_quote_conversions_by_org',
+    description: 'Same as count_quote_conversions but across MULTIPLE orgs in one call — use this whenever the user asks about more than one org/region for quote conversion. Runs the count once per org server-side with one consistent method, returning a per-org breakdown (Org, Total opportunities, Converted to quote, Conversion rate) plus the combined total — the correct way to answer a rollup question, instead of calling count_quote_conversions once per org yourself.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        orgs: {
+          type: 'array',
+          description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
+          items: {
+            type: 'object',
+            properties: { id: { type: 'string' }, name: { type: 'string' } },
+            required: ['id', 'name'],
+          },
+        },
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Default "all".' },
+        account: { type: 'string' },
+        dateFrom: { type: 'string' },
+        dateTo: { type: 'string' },
+        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial).' },
+        application: { type: 'string', description: 'Account-level Application classification, matched by substring against the description.' },
+        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group, matched by substring against the description.' },
+        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned.' },
+      },
+      required: ['orgs'],
     },
   },
   {
@@ -794,10 +825,10 @@ CRITICAL RULES — these exist because guessing produced confidently wrong answe
 6. If a call returns recordsMatched: 0 and you passed BOTH dateFrom/dateTo AND secondaryDateField/secondaryDateFrom/secondaryDateTo, retry the SAME call with dateFrom/dateTo removed before concluding the answer is really 0 — this isolates whether the creation-date default caused the false zero. Only report a confident "0" after this retry also returns 0, and say in your explanation that you checked this.
 7. Today's date: ${new Date().toISOString().slice(0, 10)} — resolve relative/specific periods (e.g. "2026", "start of production in 2026") to ISO dates yourself.
 8. formattedValue must contain ONLY the formatted number (e.g. "€10,351,526") — never append a parenthetical, caveat, or "(see...)" note to it. Anything the user needs to understand about the number (which filter was used, what's missing, what's uncertain) belongs in explanation or caveats, never jammed into formattedValue — it is rendered as a standalone number in the UI and breaks visually if it isn't one.
-9. A region or country name the user mentions (e.g. "Europe", "APAC", "Hungary") is NOT itself a verified salesOrgId — NEVER pass it straight into aggregate's salesOrgId and trust whatever it happens to match. If baseFilters.salesOrgId is empty, ALWAYS call resolve_org_scope(term) first (see rule 5 for when baseFilters.salesOrgId is already set — skip this call entirely in that case). Then: matchType "single" → safe to use that one org directly (aggregate or aggregate_by_org with one org). matchType "multiple" or "region" → the user's term covers more than one real org — use aggregate_by_org with the exact orgs array resolve_org_scope returned (never hand-build or guess an org list yourself, even for a region you think you recognize). matchType "ambiguous" or "none" → report success: false and ask the user to pick from the "candidates" resolve_org_scope returned — do not guess.
+9. A region or country name the user mentions (e.g. "Europe", "APAC", "Hungary") is NOT itself a verified salesOrgId — NEVER pass it straight into aggregate's salesOrgId and trust whatever it happens to match. If baseFilters.salesOrgId is empty, ALWAYS call resolve_org_scope(term) first (see rule 5 for when baseFilters.salesOrgId is already set — skip this call entirely in that case). Then: matchType "single" → safe to use that one org directly (aggregate/count_quote_conversions or aggregate_by_org/count_quote_conversions_by_org with one org). matchType "multiple" or "region" → the user's term covers more than one real org — use aggregate_by_org or count_quote_conversions_by_org (whichever matches what's being computed) with the exact orgs array resolve_org_scope returned (never hand-build or guess an org list yourself, even for a region you think you recognize). matchType "ambiguous" or "none" → report success: false and ask the user to pick from the "candidates" resolve_org_scope returned — do not guess.
 10. If a per-org call inside an aggregate_by_org breakdown returns 0 while others succeed (e.g. one country in a multi-country sum didn't match), that org still appears as its own row in the breakdown — do not omit it or explain it away as unimportant; mention in your explanation if a 0 looks surprising (e.g. "United Kingdom returned 0 records — verify this org has data for the period asked").
 
-When you have a final answer (or have given up), respond with JSON only — no markdown fences, no prose before or after it, and critically: do NOT restate the per-org breakdown as a markdown table or bullet list before the JSON. The UI renders "breakdown" as a proper chart and table on its own — repeating the same data as text is pure waste and risks truncating the response before the JSON closes (observed live: a 31-org breakdown's response got cut off mid-JSON because the explanation repeated the whole table first). Keep "explanation" to 1-3 plain sentences summarizing what was computed, not a restatement of every row. "caveats" is shown to the user as "AI Insights" — use it for genuinely useful analytical observations computed from the data you already fetched (e.g. "the top 3 orgs account for X% of the total", "TSS Switzerland's average deal size is notably higher than the rest despite fewer records", a concentration or outlier worth flagging), NOT just technical disclaimers about field names or filters — those belong in "explanation" if needed at all. Only state an insight you can actually verify from the numbers in front of you (the breakdown/aggregate result) — never invent a trend, a win/loss comparison, or any figure you did not compute via a tool call this turn. If nothing analytically interesting stands out, leave caveats as a short, genuinely useful list rather than padding it. If you used aggregate_by_org (more than one org), set "breakdown" to its breakdown array and "value"/"recordsMatched" to its total/totalRecordsMatched; otherwise leave "breakdown" null:
+When you have a final answer (or have given up), respond with JSON only — no markdown fences, no prose before or after it, and critically: do NOT restate the per-org breakdown as a markdown table or bullet list before the JSON. The UI renders "breakdown" as a proper chart and table on its own — repeating the same data as text is pure waste and risks truncating the response before the JSON closes (observed live: a 31-org breakdown's response got cut off mid-JSON because the explanation repeated the whole table first). Keep "explanation" to 1-3 plain sentences summarizing what was computed, not a restatement of every row. "caveats" is shown to the user as "AI Insights" — use it for genuinely useful analytical observations computed from the data you already fetched (e.g. "the top 3 orgs account for X% of the total", "TSS Switzerland's average deal size is notably higher than the rest despite fewer records", a concentration or outlier worth flagging), NOT just technical disclaimers about field names or filters — those belong in "explanation" if needed at all. Only state an insight you can actually verify from the numbers in front of you (the breakdown/aggregate result) — never invent a trend, a win/loss comparison, or any figure you did not compute via a tool call this turn. If nothing analytically interesting stands out, leave caveats as a short, genuinely useful list rather than padding it. If you used aggregate_by_org (more than one org), set "breakdown" to its breakdown array and "value"/"recordsMatched" to its total/totalRecordsMatched. If you used count_quote_conversions_by_org, the tool's breakdown rows use different column names ({Org, "Total opportunities", "Converted to quote", "Conversion rate"}) — you MUST remap each row into the exact shape below ({"Org": org name, "Value": that row's "Converted to quote" count, "Records matched": that row's "Total opportunities"}) before putting it in "breakdown"; set "value" to the tool's convertedCount and "recordsMatched" to its totalOpportunities. Otherwise leave "breakdown" null:
 {
   "success": boolean,
   "value": number|null,

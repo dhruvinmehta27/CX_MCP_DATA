@@ -482,6 +482,36 @@ export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail)
   };
 }
 
+// Runs opportunitiesConvertedToQuote once per resolved org, same pattern as
+// aggregateByOrgs — a per-org breakdown instead of one number flattened
+// across every org, and the LLM never has to loop this itself.
+export async function countQuoteConversionsByOrgs({ orgs, filters = {} }, userJwt, userEmail) {
+  const breakdown = [];
+  let totalOpportunities = 0;
+  let totalConverted = 0;
+  let method = null;
+  for (const org of orgs) {
+    const result = await opportunitiesConvertedToQuote({ ...filters, salesOrgId: org.id }, userJwt, userEmail);
+    breakdown.push({
+      Org: org.name,
+      'Total opportunities': result.totalOpportunities,
+      'Converted to quote': result.convertedCount,
+      'Conversion rate': result.conversionRate,
+    });
+    totalOpportunities += result.totalOpportunities;
+    totalConverted += result.convertedCount;
+    method = result.method; // same method for every org in a given scope
+  }
+
+  return {
+    totalOpportunities,
+    convertedCount: totalConverted,
+    conversionRate: totalOpportunities ? Math.round((totalConverted / totalOpportunities) * 100) : null,
+    method,
+    breakdown,
+  };
+}
+
 /**
  * Counts quote items that have a linked RFQ (RFQ_IDcontent_SDK populated),
  * i.e. RFQs raised FROM quotes — the reverse direction of

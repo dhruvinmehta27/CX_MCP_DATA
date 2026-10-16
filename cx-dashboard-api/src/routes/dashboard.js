@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent, getFieldDisplayLabel } from '../claude.js';
-import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes, resolveOrgScopeTool, aggregateByOrgs, getSalesOrgs } from '../analytics-service.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes, resolveOrgScopeTool, aggregateByOrgs, getSalesOrgs, countQuoteConversionsByOrgs } from '../analytics-service.js';
 import { fetchCollectionFields } from '../c4c-client.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -97,8 +97,34 @@ function executeCustomAgentTool(req, resolvedSalesOrgId, appliedFilters = {}) {
         dateFrom: input.dateFrom || null,
         dateTo: input.dateTo || null,
         status: input.status || 'all',
+        segment: input.segment || null,
+        application: input.application || null,
+        marketSegmentGroup: input.marketSegmentGroup || null,
+        strategicAccount: input.strategicAccount || null,
       };
+      if (input.segment) appliedFilters.segment = input.segment;
+      if (input.application) appliedFilters.application = input.application;
+      if (input.marketSegmentGroup) appliedFilters.marketSegmentGroup = input.marketSegmentGroup;
+      if (input.strategicAccount) appliedFilters.strategicAccount = input.strategicAccount;
       return opportunitiesConvertedToQuote(filters, req.userJwt, req.userEmail);
+    }
+    if (name === 'count_quote_conversions_by_org') {
+      const { orgs, ...rest } = input;
+      const filters = {
+        account: rest.account || null,
+        dateFrom: rest.dateFrom || null,
+        dateTo: rest.dateTo || null,
+        status: rest.status || 'all',
+        segment: rest.segment || null,
+        application: rest.application || null,
+        marketSegmentGroup: rest.marketSegmentGroup || null,
+        strategicAccount: rest.strategicAccount || null,
+      };
+      if (rest.segment) appliedFilters.segment = rest.segment;
+      if (rest.application) appliedFilters.application = rest.application;
+      if (rest.marketSegmentGroup) appliedFilters.marketSegmentGroup = rest.marketSegmentGroup;
+      if (rest.strategicAccount) appliedFilters.strategicAccount = rest.strategicAccount;
+      return countQuoteConversionsByOrgs({ orgs, filters }, req.userJwt, req.userEmail);
     }
     if (name === 'count_rfqs_from_quotes') {
       return rfqsRaisedFromQuotes({ dateFrom: input.dateFrom || null, dateTo: input.dateTo || null }, req.userJwt, req.userEmail);
