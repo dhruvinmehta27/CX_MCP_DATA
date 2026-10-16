@@ -685,6 +685,9 @@ const CUSTOM_AGENT_TOOLS = [
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
         segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it (e.g. "Industrial", "Automotive", "AUT") — resolved deterministically against this fixed, confirmed table, only applies to entity="opportunities".' },
+        application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
       },
       required: ['entity', 'fieldName', 'aggregation', 'orgs'],
     },
@@ -707,6 +710,9 @@ const CUSTOM_AGENT_TOOLS = [
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
         segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it — resolved deterministically against this fixed, confirmed table. Only applies to entity="opportunities".' },
+        application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
       },
       required: ['entity', 'fieldName', 'aggregation'],
     },
@@ -775,11 +781,7 @@ AMBIGUOUS TERMS — check this list too, BEFORE assuming any mapping. These are 
 ${ambiguousText || '  (none yet)'}
 If the user's term matches one of these, do NOT guess which field to use and do NOT pick the "more obviously named" one. Respond with success: false and a clarificationQuestion-style explanation asking the user to specify which field/number they mean, listing the real candidates you found. Picking wrong here silently is the exact failure this system exists to prevent — asking is always better than guessing.
 
-REAL BUT UNVERIFIED CLASSIFICATION DIMENSIONS — these are confirmed, real business concepts in this tenant (verified from real master-data code tables), but their exact OData field name on Opportunity/Quote is NOT yet confirmed, unlike "segment" (BUS_SEG_CDE) above which IS confirmed:
-  - Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Building & Construction" — MKT_SEG_GRP_CDE code table)
-  - Application (e.g. "Mechanical Seals", "Landing Gear" — ApplicationCode code table)
-  - Strategic Account classification (e.g. "Hunting", "Farming", "Housed Account", "Managed Account", "Focus Account" — StrategicAccount code table)
-If the user asks to filter/group by one of these, call list_fields on "opportunities" (and "opportunity-items" if relevant) to check for a matching field FIRST. If you find one, treat it as confirmed and use it (note the field name you used in your explanation, since it's being used for the first time). If you do NOT find a matching field, do not guess a field name or silently drop the filter — report success: false and explain that this classification isn't yet wired up as a filterable field in this system.
+ACCOUNT-LEVEL CLASSIFICATION DIMENSIONS — business segment (BUS_SEG_CDE), Market Segment Group, Application, and Strategic Account classification are all confirmed real fields now (verified from real master-data code tables and a live Account record) and are available as filter params on aggregate/aggregate_by_org: segment, marketSegmentGroup, application, strategicAccount. Note that marketSegmentGroup, application, and strategicAccount live on the ACCOUNT entity (joined in-process via ProspectPartyID), not the Opportunity itself — pass the user's term straight through to the matching param; the resolution happens server-side. If the user asks about any OTHER classification dimension not covered by one of these four params, do not guess a field name — call list_fields first, and if nothing matches, report success: false rather than silently dropping the filter.
 
 CRITICAL RULES — these exist because guessing produced confidently wrong answers in production:
 1. NEVER invent, guess, or assume a field name exists. If a term isn't in the glossary above and you are not certain, call list_fields first.

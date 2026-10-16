@@ -73,6 +73,9 @@ function executeCustomAgentTool(req, resolvedSalesOrgId) {
         secondaryDateFrom: rest.secondaryDateFrom || null,
         secondaryDateTo: rest.secondaryDateTo || null,
         segment: rest.segment || null,
+        application: rest.application || null,
+        marketSegmentGroup: rest.marketSegmentGroup || null,
+        strategicAccount: rest.strategicAccount || null,
       };
       return aggregateField({ entity, fieldName, aggregation, filters }, req.userJwt, req.userEmail);
     }
@@ -102,6 +105,9 @@ function executeCustomAgentTool(req, resolvedSalesOrgId) {
         secondaryDateFrom: rest.secondaryDateFrom || null,
         secondaryDateTo: rest.secondaryDateTo || null,
         segment: rest.segment || null,
+        application: rest.application || null,
+        marketSegmentGroup: rest.marketSegmentGroup || null,
+        strategicAccount: rest.strategicAccount || null,
       };
       return aggregateByOrgs({ entity, fieldName, aggregation, orgs, filters }, req.userJwt, req.userEmail);
     }
