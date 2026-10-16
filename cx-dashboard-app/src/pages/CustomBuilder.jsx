@@ -6,11 +6,9 @@ import { planReport, generateDashboard } from '../api/dashboard';
 import { getSalesOrgs } from '../api/analytics';
 import { isoDate } from '../utils/formatters';
 import DynamicChart from '../components/charts/DynamicChart';
-import BarChart from '../components/charts/BarChart';
 import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import Icon from '../components/ui/Icon';
-import MetricCard from '../components/ui/MetricCard';
 
 const DATE_PRESETS = [
   { label: 'Last 1M', months: 1 },
@@ -674,70 +672,55 @@ export default function CustomBuilder() {
                   )}
                 </div>
               ) : result.resultKind === 'metric' ? (
-                <MetricCard
-                  title={result.metric?.fieldLabel || 'Result'}
-                  value={result.metric?.formattedValue ?? '—'}
-                  subtitle={result.metric?.value != null ? `${(result.metric.recordsMatched ?? 0).toLocaleString()} records matched` : undefined}
-                  icon="bar-chart-2"
-                  accent={result.metric?.value != null ? 'primary' : 'warning'}
-                />
-              ) : result.resultKind === 'breakdown' ? (
-                <div>
-                  <MetricCard
-                    title={`Total — ${result.total?.fieldLabel || ''}`}
-                    value={result.total?.formattedValue ?? '—'}
-                    subtitle={`${(result.breakdown || []).filter((r) => (r['Records matched'] || 0) > 0).length} of ${(result.breakdown || []).length} orgs with data · ${(result.total?.recordsMatched ?? 0).toLocaleString()} records matched`}
-                    icon="bar-chart-2"
-                    accent="success"
-                  />
-                  {(() => {
-                    const all = result.breakdown || [];
-                    const matched = all.filter((r) => (r['Records matched'] || 0) > 0).sort((a, b) => (b.Value || 0) - (a.Value || 0));
-                    const unmatched = all.filter((r) => !((r['Records matched'] || 0) > 0));
-                    return (
-                      <>
-                        {matched.length > 0 && (
-                          <div style={{ marginTop: 16 }}>
-                            <BarChart
-                              data={matched}
-                              xKey="Org"
-                              bars={[{ key: 'Value', color: 'var(--primary)' }]}
-                              layout="vertical"
-                              height={Math.max(220, matched.length * 30)}
-                              valueFormatter={formatEUR}
-                            />
-                          </div>
-                        )}
-                        <div style={{ overflowX: 'auto', marginTop: 16 }}>
-                          <DataTable
-                            columns={[
-                              { key: 'Org', label: 'Org', type: 'text' },
-                              { key: 'Value', label: 'Value (€)', type: 'currency', render: (v) => formatEUR(v) },
-                              { key: 'Records matched', label: 'Records matched', type: 'number' },
-                            ]}
-                            data={matched}
-                            sortable
-                            pageSize={20}
-                          />
-                        </div>
-                        {unmatched.length > 0 && (
-                          <div style={{ marginTop: 12 }}>
-                            <button className="btn-link" style={{ fontSize: 12.5 }} onClick={() => setShowUnmatchedOrgs((v) => !v)}>
-                              {showUnmatchedOrgs ? 'Hide' : 'Show'} {unmatched.length} org(s) with no matching records in this period
-                            </button>
-                            {showUnmatchedOrgs && (
-                              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {unmatched.map((r) => (
-                                  <span key={r.Org} className="plan-chip">{r.Org}</span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
+                <div className="editorial-hero">
+                  <div className="editorial-hero-value">{result.metric?.formattedValue ?? '—'}</div>
+                  <div className="editorial-hero-sub">
+                    {result.metric?.fieldLabel}
+                    {result.metric?.value != null && ` · ${(result.metric.recordsMatched ?? 0).toLocaleString()} records`}
+                  </div>
                 </div>
+              ) : result.resultKind === 'breakdown' ? (
+                (() => {
+                  const all = result.breakdown || [];
+                  const matched = all.filter((r) => (r['Records matched'] || 0) > 0).sort((a, b) => (b.Value || 0) - (a.Value || 0));
+                  const unmatched = all.filter((r) => !((r['Records matched'] || 0) > 0));
+                  const max = matched.length > 0 ? matched[0].Value || 1 : 1;
+                  return (
+                    <div className="editorial-breakdown">
+                      <p className="editorial-lead">
+                        Total <strong>{result.total?.formattedValue ?? '—'}</strong> in {result.total?.fieldLabel || 'value'},
+                        spanning <strong>{matched.length}</strong> org{matched.length === 1 ? '' : 's'} with data and{' '}
+                        <strong>{(result.total?.recordsMatched ?? 0).toLocaleString()}</strong> records.
+                      </p>
+                      <div className="editorial-list">
+                        {matched.map((row, i) => (
+                          <div className="editorial-row" key={row.Org}>
+                            <div className="editorial-rank">{i + 1}</div>
+                            <div className="editorial-org">{row.Org}</div>
+                            <svg width="100%" height="10" viewBox="0 0 420 10" preserveAspectRatio="none" className="editorial-spark">
+                              <rect x="0" y="1" width="420" height="8" rx="4" className="editorial-spark-track" />
+                              <rect x="0" y="1" width={Math.max(4, Math.round(((row.Value || 0) / max) * 420))} height="8" rx="4" className="editorial-spark-fill" />
+                            </svg>
+                            <div className="editorial-value">{formatEUR(row.Value)}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {unmatched.length > 0 && (
+                        <p className="editorial-footnote">
+                          {unmatched.length} additional org{unmatched.length === 1 ? '' : 's'} had no matching records in this period —{' '}
+                          <button className="btn-link" style={{ fontSize: 'inherit' }} onClick={() => setShowUnmatchedOrgs((v) => !v)}>
+                            {showUnmatchedOrgs ? 'hide them' : 'show them'}
+                          </button>.
+                          {showUnmatchedOrgs && (
+                            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                              {unmatched.map((r) => <span key={r.Org} className="plan-chip">{r.Org}</span>)}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()
               ) : isTable ? (
                 <div>
                   {table.total > PREVIEW_LIMIT && (
