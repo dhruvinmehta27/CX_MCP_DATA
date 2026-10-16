@@ -566,6 +566,12 @@ button { font-family: inherit; }
 }
 .editorial-hero-sub { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
 
+.editorial-hero-group {
+  display: flex; flex-wrap: wrap; gap: 48px;
+}
+.editorial-hero-stat { min-width: 160px; }
+.editorial-hero-value-secondary { color: var(--text-secondary); }
+
 .editorial-breakdown { padding: 4px 4px 8px; }
 .editorial-lead {
   margin: 0 0 24px;

@@ -690,10 +690,23 @@ export default function CustomBuilder() {
                 </div>
               ) : result.resultKind === 'metric' ? (
                 <div className="editorial-hero">
-                  <div className="editorial-hero-value">{result.metric?.formattedValue ?? '—'}</div>
-                  <div className="editorial-hero-sub">
-                    {result.metric?.fieldLabel}
-                    {result.metric?.value != null && ` · ${(result.metric.recordsMatched ?? 0).toLocaleString()} records`}
+                  <div className={result.secondaryMetric ? 'editorial-hero-group' : undefined}>
+                    <div className="editorial-hero-stat">
+                      <div className="editorial-hero-value">{result.metric?.formattedValue ?? '—'}</div>
+                      <div className="editorial-hero-sub">
+                        {result.metric?.fieldLabel}
+                        {result.metric?.value != null && ` · ${(result.metric.recordsMatched ?? 0).toLocaleString()} records`}
+                      </div>
+                    </div>
+                    {result.secondaryMetric && (
+                      <div className="editorial-hero-stat">
+                        <div className="editorial-hero-value editorial-hero-value-secondary">{result.secondaryMetric.formattedValue ?? '—'}</div>
+                        <div className="editorial-hero-sub">
+                          {result.secondaryMetric.label}
+                          {result.secondaryMetric.recordsMatched != null && ` · ${result.secondaryMetric.recordsMatched.toLocaleString()} records`}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {result.insights?.length > 0 && (
                     <ul className="editorial-insights">
