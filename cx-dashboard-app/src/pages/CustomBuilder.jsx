@@ -665,11 +665,6 @@ export default function CustomBuilder() {
               {isCustomResult && activeTab === 'explanation' ? (
                 <div className="result-explanation">
                   {result.summary && <p>{result.summary}</p>}
-                  {result.insights?.length > 0 && (
-                    <ul className="insights-list" style={{ marginTop: 12 }}>
-                      {result.insights.map((insight, i) => <li key={i}>{insight}</li>)}
-                    </ul>
-                  )}
                 </div>
               ) : result.resultKind === 'metric' ? (
                 <div className="editorial-hero">
@@ -678,6 +673,11 @@ export default function CustomBuilder() {
                     {result.metric?.fieldLabel}
                     {result.metric?.value != null && ` · ${(result.metric.recordsMatched ?? 0).toLocaleString()} records`}
                   </div>
+                  {result.insights?.length > 0 && (
+                    <ul className="editorial-insights">
+                      {result.insights.map((insight, i) => <li key={i}>{insight}</li>)}
+                    </ul>
+                  )}
                 </div>
               ) : result.resultKind === 'breakdown' ? (
                 (() => {
@@ -692,6 +692,11 @@ export default function CustomBuilder() {
                         spanning <strong>{matched.length}</strong> org{matched.length === 1 ? '' : 's'} with data and{' '}
                         <strong>{(result.total?.recordsMatched ?? 0).toLocaleString()}</strong> records.
                       </p>
+                      {result.insights?.length > 0 && (
+                        <ul className="editorial-insights">
+                          {result.insights.map((insight, i) => <li key={i}>{insight}</li>)}
+                        </ul>
+                      )}
                       <div className="editorial-list">
                         {matched.map((row, i) => (
                           <div className="editorial-row" key={row.Org}>

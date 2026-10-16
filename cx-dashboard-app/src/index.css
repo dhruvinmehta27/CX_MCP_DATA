@@ -555,11 +555,14 @@ button { font-family: inherit; }
 /* Editorial result presentation: a narrative lead + ranked list, rather than
    a dashboard widget — single-number and multi-org-breakdown custom/aggregate
    answers both read as a short written finding. */
+/* Serif (Playfair) carries the narrative prose; all actual NUMBERS use the
+   app's sans body font with tabular numerals instead — Playfair's numeral
+   shapes are stylized and hard to read at a glance for financial figures. */
 .editorial-hero { padding: 24px 4px 12px; }
 .editorial-hero-value {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 44px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1;
+  font-size: 42px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1;
   color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 .editorial-hero-sub { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
 
@@ -570,7 +573,10 @@ button { font-family: inherit; }
   font-size: 18px; line-height: 1.6; color: var(--text);
   max-width: 640px;
 }
-.editorial-lead strong { font-weight: 600; }
+.editorial-lead strong {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 600; font-variant-numeric: tabular-nums;
+}
 
 .editorial-list { display: flex; flex-direction: column; }
 .editorial-row {
@@ -582,16 +588,15 @@ button { font-family: inherit; }
 }
 .editorial-row:first-child { border-top: none; }
 .editorial-rank {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 13px; color: var(--text-muted); text-align: right;
+  font-size: 12.5px; font-weight: 600; color: var(--text-muted); text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .editorial-org { font-size: 13.5px; font-weight: 500; color: var(--text); }
 .editorial-spark { display: block; }
 .editorial-spark-track { fill: var(--border); }
 .editorial-spark-fill { fill: var(--primary); }
 .editorial-value {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 14px; font-weight: 600; text-align: right;
+  font-size: 14px; font-weight: 700; text-align: right;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
@@ -599,6 +604,22 @@ button { font-family: inherit; }
 .editorial-footnote {
   margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--border);
   font-size: 12px; color: var(--text-muted);
+}
+
+.editorial-insights {
+  margin: 16px 0 24px; padding: 14px 16px;
+  background: var(--primary-tint, rgba(0,112,242,0.06));
+  border-radius: 8px;
+  list-style: none;
+}
+.editorial-insights li {
+  font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+  padding-left: 16px; position: relative;
+}
+.editorial-insights li + li { margin-top: 6px; }
+.editorial-insights li::before {
+  content: '●'; position: absolute; left: 0; top: 1px;
+  font-size: 7px; color: var(--primary);
 }
 
 /* ---------- Modal (full-screen chart) ---------- */

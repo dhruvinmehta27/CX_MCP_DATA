@@ -99,7 +99,7 @@ function matchesAccount(accountName, filterValue) {
 // ---------------------------------------------------------------------------
 
 let salesOrgsCache = null; // { expiresAt, promise } — shared across users, no PII
-async function getSalesOrgs(userJwt) {
+export async function getSalesOrgs(userJwt) {
   if (salesOrgsCache && Date.now() < salesOrgsCache.expiresAt) return salesOrgsCache.promise;
   const promise = fetchSalesOrgs(null, userJwt);
   salesOrgsCache = { promise, expiresAt: Date.now() + 60 * 60_000 }; // 1h — org master data changes rarely

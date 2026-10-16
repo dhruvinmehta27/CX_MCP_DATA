@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent, getFieldDisplayLabel } from '../claude.js';
-import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes, resolveOrgScopeTool, aggregateByOrgs } from '../analytics-service.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes, resolveOrgScopeTool, aggregateByOrgs, getSalesOrgs } from '../analytics-service.js';
 import { fetchCollectionFields } from '../c4c-client.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -44,9 +44,15 @@ function executeCustomAgentTool(req, resolvedSalesOrgId) {
   return async (name, input) => {
     if (name === 'resolve_org_scope' && resolvedSalesOrgId) {
       const ids = resolvedSalesOrgId.split(',').map((s) => s.trim()).filter(Boolean);
+      // Look up real display names for these IDs so the breakdown shows
+      // "TSS Switzerland" instead of the raw code "TSSSWITZERLAND" — the
+      // short-circuit must stay deterministic for SCOPE (never re-ask), but
+      // that doesn't mean losing the readable name that's already known.
+      const catalog = await getSalesOrgs(req.userJwt).catch(() => []);
+      const nameById = new Map(catalog.map((o) => [o.id, o.name]));
       return {
         matchType: ids.length > 1 ? 'multiple' : 'single',
-        orgs: ids.map((id) => ({ id, name: id })),
+        orgs: ids.map((id) => ({ id, name: nameById.get(id) || id })),
         alreadyResolved: true,
         note: 'This was already resolved on the Confirm screen — use it as-is, do not ask the user again.',
       };
