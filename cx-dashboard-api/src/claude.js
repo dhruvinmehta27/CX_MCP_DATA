@@ -507,39 +507,62 @@ const BUSINESS_TERM_GLOSSARY = [
     terms: ['estimated peak turnover', 'peak turnover', 'expected peak turnover'],
     entity: 'opportunities',
     fieldName: 'ExpectedRevenueAmount',
-    note: 'Confirmed via C4C UI model binding (/Root/ExpectedRevenueAmount/content) — this is a renamed UI label, not a separate field. ExpectedRevenueAmount is in the deal\'s original transaction currency (varies per record). If the user asks for a sum specifically "in EUR"/"in €", use ZBaseCurrency_KUTContent_KUT instead — the already EUR-converted figure — not raw ExpectedRevenueAmount, to avoid mixing currencies in the sum.',
+    displayLabel: 'Estimated Peak Turnover',
+    note: 'Confirmed via C4C UI model binding (/Root/ExpectedRevenueAmount/content) — this is a renamed UI label, not a separate field. ExpectedRevenueAmount is in the deal\'s original transaction currency (varies per record). Use ZBaseCurrency_KUTContent_KUT (the already EUR-converted figure) instead of raw ExpectedRevenueAmount whenever: (a) the user asks for a sum specifically "in EUR"/"in €", OR (b) the sum spans more than one sales org/country/region (e.g. "Europe", "all orgs", multiple named countries) — summing ExpectedRevenueAmount across different orgs silently mixes currencies (EUR, GBP, SEK, CHF, ...) into one meaningless number even if the user never said "€". Only use raw ExpectedRevenueAmount for a single-org query where the user did not ask for EUR specifically.',
   },
   {
     terms: ['start of production', 'sop', 'sop date', 'production start'],
     entity: 'opportunities',
     fieldName: 'ZSOP',
+    displayLabel: 'Start of Production',
     note: 'Confirmed real dedicated field for Start of Production. Do NOT use ExpectedProcessingEndDate for this — that is a different, later date ("expected processing end"), a common mix-up. Use ZSOP as secondaryDateField when the user asks about SOP timing.',
   },
   {
     terms: ['quote cost', 'quote item cost', 'cost amount', 'cost estimate'],
     entity: 'quotes',
     fieldName: 'ZItemCostcontent (total) or CostAmountContent_KUT (per-unit) on SalesQuoteItem',
+    displayLabel: 'Quote Item Cost',
     note: 'PRIMARY SOURCE: use SalesQuoteItem\'s own fields directly (ZItemCostcontent, CostAmountContent_KUT) — this tenant does not use SAP\'s standard pricing procedure, so there is normally no need to query SalesQuotePriceItem condition rows for routine cost/margin questions. CostAmountContent_KUT is a PER-UNIT rate; ZItemCostcontent is the TOTAL for the item (verified: 388.82 × Quantity 5 = 1944.10 = ZItemCostcontent on a live record). IMPORTANT currency warning (confirmed by one-off verification, not something to re-check routinely): CostAmountcurrencyCode_KUT can be mislabeled — on the same verified record it said "EUR" while the real transaction currency was GBP (the quote\'s own/customer currency). Do not trust that currency label; assume cost figures are in the quote\'s own transaction currency (same as NetAmount) unless told otherwise.',
   },
   {
     terms: ['margin', 'quote margin', 'item margin', 'margin bi', 'profit margin'],
     entity: 'quotes',
     fieldName: 'ZItemMarginPercent (%) / ZItemMargincontent (amount) on SalesQuoteItem',
+    displayLabel: 'Quote Item Margin',
     note: 'PRIMARY SOURCE: use SalesQuoteItem\'s own fields directly — no need to query pricing conditions (this tenant doesn\'t use standard SAP pricing). ZMarginBI_KUT is the same figure as ZItemMarginPercent, just rounded slightly differently — treat as equivalent. These margin fields are in the quote\'s own transaction currency (same as NetAmount), not a fixed currency.',
   },
   {
     terms: ['approval total'],
     entity: 'quotes',
     fieldName: 'ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b',
+    displayLabel: 'Approval Total',
     note: 'Confirmed via C4C UI model binding (/Root/ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b/content). This is a GUID-suffixed Key User Extensibility custom field — SAP\'s naming pattern for fields added via the UI "add field" wizard, NOT a hand-coded KUT/SDK field. Before using it in aggregate, call list_fields on "quotes" first to confirm this exact name is exposed in the OData service — GUID-suffixed extension fields sometimes differ slightly between the UI binding name and the actual OData property name, unlike the other entries in this glossary which are already verified end-to-end. Likely semantics (per business description, not yet independently verified): for opportunities/quotes with alternative item groups (AlternativeToItemID), only the highest-value item per group counts; otherwise equal to the item/quote total.',
   },
   {
     terms: ['approval margin', 'approval margin percent'],
     entity: 'quotes',
     fieldName: 'ApprovalMarginPercent_106549400b2441d384f3008d5acf863e',
+    displayLabel: 'Approval Margin %',
     note: 'Confirmed via C4C UI model binding. Same caveat as ApprovalTotal above: GUID-suffixed Key User Extensibility field — verify via list_fields on "quotes" before using in aggregate, do not assume it matches the UI binding name exactly.',
   },
 ];
+
+// Human-readable label for a raw field name, for display in the UI — raw
+// names like ZBaseCurrency_KUTContent_KUT mean nothing to a business user.
+// Looked up server-side (not trusted from the LLM) so it's always correct
+// for known fields; falls back to a humanized version of the raw name for
+// anything not yet in the glossary, so the UI never shows a hard "unknown".
+export function getFieldDisplayLabel(fieldName) {
+  if (!fieldName) return fieldName;
+  const entry = BUSINESS_TERM_GLOSSARY.find((g) => g.fieldName === fieldName);
+  if (entry?.displayLabel) return entry.displayLabel;
+  if (fieldName === 'ZBaseCurrency_KUTContent_KUT') return 'Estimated Peak Turnover (EUR)';
+  return fieldName
+    .replace(/_KUT.*$|_SDK.*$|content$/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^Z/, '')
+    .trim();
+}
 
 // Fields we've been told are coming soon but are NOT YET LIVE in the
 // system. If a user asks about one of these, the agent should explain
@@ -594,8 +617,47 @@ const CUSTOM_AGENT_TOOLS = [
     },
   },
   {
+    name: 'resolve_org_scope',
+    description: 'Resolves a free-text org/country/region term (e.g. "Hungary", "Europe", "DACH") against the REAL sales org catalog in C4C. ALWAYS call this before using any org/region term as a filter — never pass a region name straight into aggregate\'s salesOrgId yourself. Returns matchType: "single" (one real org, safe to use directly), "multiple" (more than one real org matched the term directly), "region" (a recognized region resolved to its member orgs — use the returned orgs list, do not invent the country list yourself), "ambiguous" or "none" (no confident match — report success: false and ask the user to pick from "candidates", do not guess).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        term: { type: 'string', description: 'The org/country/region text exactly as the user said it, e.g. "Hungary" or "Europe".' },
+      },
+      required: ['term'],
+    },
+  },
+  {
+    name: 'aggregate_by_org',
+    description: 'Computes a per-org breakdown AND total of sum/count/avg for a field across MULTIPLE orgs in one call — use this whenever the user asks about more than one org/country/region (e.g. a region rollup from resolve_org_scope, or several named countries), instead of calling aggregate once per org yourself. This guarantees the SAME field/currency is used consistently across every org (it automatically switches to the EUR-converted field when summing a currency-amount field across >1 org, same as aggregate does) and returns a proper per-org breakdown table instead of one flattened number — this is the correct way to answer a rollup question, and keeps a 0-result org visible instead of silently folded into the total.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: { type: 'string', enum: ['opportunities', 'quotes'] },
+        fieldName: { type: 'string', description: 'The exact field name (from the glossary or list_fields). May be auto-upgraded to the EUR-converted equivalent for currency safety.' },
+        aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
+        orgs: {
+          type: 'array',
+          description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
+          items: {
+            type: 'object',
+            properties: { id: { type: 'string' }, name: { type: 'string' } },
+            required: ['id', 'name'],
+          },
+        },
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Default "all".' },
+        dateFrom: { type: 'string' },
+        dateTo: { type: 'string' },
+        secondaryDateField: { type: 'string' },
+        secondaryDateFrom: { type: 'string' },
+        secondaryDateTo: { type: 'string' },
+      },
+      required: ['entity', 'fieldName', 'aggregation', 'orgs'],
+    },
+  },
+  {
     name: 'aggregate',
-    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities or Quotes, with optional filters. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero."',
+    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities or Quotes, with optional filters, scoped to AT MOST ONE org. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero." For more than one org, use aggregate_by_org instead, after resolve_org_scope.',
     input_schema: {
       type: 'object',
       properties: {
@@ -687,8 +749,11 @@ CRITICAL RULES — these exist because guessing produced confidently wrong answe
    IMPORTANT: these UI filters' dateFrom/dateTo apply to CreationDateTime. If the user's question is about a DIFFERENT date concept (e.g. "start of production", resolved via secondaryDateField), do NOT also pass the UI's dateFrom/dateTo as the aggregate call's dateFrom/dateTo unless the user ALSO explicitly wants creation-date scoping — stacking both silently over-restricts the result (an opportunity created in 2025 with 2026 SOP would be wrongly excluded by also requiring CreationDateTime in 2026) and can produce a false "0 records" answer that looks like a real zero. When in doubt, leave dateFrom/dateTo unset and use only secondaryDateFrom/secondaryDateTo for the date concept the user actually asked about.
 6. If a call returns recordsMatched: 0 and you passed BOTH dateFrom/dateTo AND secondaryDateField/secondaryDateFrom/secondaryDateTo, retry the SAME call with dateFrom/dateTo removed before concluding the answer is really 0 — this isolates whether the creation-date default caused the false zero. Only report a confident "0" after this retry also returns 0, and say in your explanation that you checked this.
 7. Today's date: ${new Date().toISOString().slice(0, 10)} — resolve relative/specific periods (e.g. "2026", "start of production in 2026") to ISO dates yourself.
+8. formattedValue must contain ONLY the formatted number (e.g. "€10,351,526") — never append a parenthetical, caveat, or "(see...)" note to it. Anything the user needs to understand about the number (which filter was used, what's missing, what's uncertain) belongs in explanation or caveats, never jammed into formattedValue — it is rendered as a standalone number in the UI and breaks visually if it isn't one.
+9. A region or country name the user mentions (e.g. "Europe", "APAC", "Hungary") is NOT itself a verified salesOrgId — NEVER pass it straight into aggregate's salesOrgId and trust whatever it happens to match. ALWAYS call resolve_org_scope(term) first. Then: matchType "single" → safe to use that one org directly (aggregate or aggregate_by_org with one org). matchType "multiple" or "region" → the user's term covers more than one real org — use aggregate_by_org with the exact orgs array resolve_org_scope returned (never hand-build or guess an org list yourself, even for a region you think you recognize). matchType "ambiguous" or "none" → report success: false and ask the user to pick from the "candidates" resolve_org_scope returned — do not guess.
+10. If a per-org call inside an aggregate_by_org breakdown returns 0 while others succeed (e.g. one country in a multi-country sum didn't match), that org still appears as its own row in the breakdown — do not omit it or explain it away as unimportant; mention in your explanation if a 0 looks surprising (e.g. "United Kingdom returned 0 records — verify this org has data for the period asked").
 
-When you have a final answer (or have given up), respond with JSON only, no markdown fences:
+When you have a final answer (or have given up), respond with JSON only, no markdown fences. If you used aggregate_by_org (more than one org), set "breakdown" to its breakdown array and "value"/"recordsMatched" to its total/totalRecordsMatched; otherwise leave "breakdown" null:
 {
   "success": boolean,
   "value": number|null,
@@ -697,6 +762,7 @@ When you have a final answer (or have given up), respond with JSON only, no mark
   "entity": string|null,
   "aggregation": string|null,
   "recordsMatched": number|null,
+  "breakdown": [{"Org": string, "Value": number, "Records matched": number}]|null,
   "explanation": string,
   "caveats": [string]
 }`;

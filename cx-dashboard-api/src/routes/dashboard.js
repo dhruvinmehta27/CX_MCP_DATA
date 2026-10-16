@@ -4,12 +4,28 @@
  * /inline   — data → self-contained ECharts HTML for Copilot Studio (Mode 2)
  */
 import { Router } from 'express';
-import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent } from '../claude.js';
-import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes } from '../analytics-service.js';
+import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent, getFieldDisplayLabel } from '../claude.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes, resolveOrgScopeTool, aggregateByOrgs } from '../analytics-service.js';
 import { fetchCollectionFields } from '../c4c-client.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
 const router = Router();
+
+// The agent is instructed to keep formattedValue to a bare number, but that's
+// a prompt rule, not a guarantee — sanitize server-side so a malformed value
+// (e.g. embedded prose) never reaches the UI's Value column. Falls back to
+// formatting the raw numeric value if formattedValue doesn't look clean.
+function sanitizeFormattedValue(agentResult) {
+  const raw = agentResult.formattedValue;
+  if (typeof raw === 'string') {
+    const match = raw.match(/^[\s]*[€$£]?\s?-?[\d,]+(\.\d+)?%?/);
+    if (match && match[0].trim()) return match[0].trim();
+  }
+  if (typeof agentResult.value === 'number') {
+    return agentResult.value.toLocaleString();
+  }
+  return raw ?? agentResult.value ?? null;
+}
 
 function pickFilters(source = {}) {
   const { salesOrgId, ownerId, dateFrom, dateTo, account } = source;
@@ -51,6 +67,21 @@ function executeCustomAgentTool(req) {
     }
     if (name === 'count_rfqs_from_quotes') {
       return rfqsRaisedFromQuotes({ dateFrom: input.dateFrom || null, dateTo: input.dateTo || null }, req.userJwt, req.userEmail);
+    }
+    if (name === 'resolve_org_scope') {
+      return resolveOrgScopeTool({ term: input.term }, req.userJwt);
+    }
+    if (name === 'aggregate_by_org') {
+      const { entity, fieldName, aggregation, orgs, ...rest } = input;
+      const filters = {
+        dateFrom: rest.dateFrom || null,
+        dateTo: rest.dateTo || null,
+        status: rest.status || 'all',
+        secondaryDateField: rest.secondaryDateField || null,
+        secondaryDateFrom: rest.secondaryDateFrom || null,
+        secondaryDateTo: rest.secondaryDateTo || null,
+      };
+      return aggregateByOrgs({ entity, fieldName, aggregation, orgs, filters }, req.userJwt, req.userEmail);
     }
     throw new Error(`Unknown tool: ${name}`);
   };
@@ -141,21 +172,36 @@ router.post('/generate', async (req, res, next) => {
         baseFilters: mergedFilters,
         executeTool: executeCustomAgentTool(req),
       });
-      const noDataFound = agentResult.success && agentResult.recordsMatched === 0;
-      const row = agentResult.success
-        ? {
-            Metric: userRequest,
-            Value: noDataFound ? 'No matching records found' : (agentResult.formattedValue || agentResult.value),
-            'Field used': agentResult.fieldUsed,
-            'Records matched': agentResult.recordsMatched,
-          }
-        : {
-            Metric: userRequest,
-            Result: 'Could not compute — see explanation',
-          };
+
+      let rows;
+      if (agentResult.success && Array.isArray(agentResult.breakdown) && agentResult.breakdown.length > 0) {
+        // Multi-org rollup — show a proper per-org breakdown table instead of
+        // squeezing a region-wide answer into one row (a 0-result org stays
+        // visible as its own row, not a caveat someone has to expand to find).
+        rows = [
+          ...agentResult.breakdown,
+          { Org: 'Total', Value: agentResult.value, 'Records matched': agentResult.recordsMatched },
+        ];
+      } else {
+        const noDataFound = agentResult.success && agentResult.recordsMatched === 0;
+        rows = [
+          agentResult.success
+            ? {
+                Metric: userRequest,
+                Value: noDataFound ? 'No matching records found' : sanitizeFormattedValue(agentResult),
+                'Field used': getFieldDisplayLabel(agentResult.fieldUsed),
+                'Records matched': agentResult.recordsMatched,
+              }
+            : {
+                Metric: userRequest,
+                Result: 'Could not compute — see explanation',
+              },
+        ];
+      }
+
       return res.json({
         charts: [],
-        rawData: { 'custom/aggregate': { total: 1, rows: [row] } },
+        rawData: { 'custom/aggregate': { total: rows.length, rows } },
         title: intent.title || 'Custom Query Result',
         summary: agentResult.explanation,
         insights: agentResult.caveats || [],
