@@ -719,7 +719,7 @@ const CUSTOM_AGENT_TOOLS = [
   },
   {
     name: 'count_quote_conversions',
-    description: 'Counts opportunities that have been converted to a Sales Quote (i.e. have a successor Sales Quote document). Use this for any question about "opportunities converted to quote", "quote conversion rate", "which opportunities became quotes", etc. There is NO boolean flag for this on the Opportunity header — it is derived from the OpportunityBusinessTransactionDocumentReference relationship data, which this tool already handles internally. Do not try to answer quote-conversion questions via aggregate/list_fields — use this tool directly.',
+    description: 'Counts opportunities that have been converted to a Sales Quote (i.e. have a successor Sales Quote document). Use this for any question about "opportunities converted to quote", "quote conversion rate", "which opportunities became quotes", etc. Internally prefers the direct ZQuoteExist_KUT flag on the Opportunity header when it looks populated for the scope, falling back to the OpportunityBusinessTransactionDocumentReference relationship data otherwise — the result includes a "method" field telling you which one was actually used; mention it in your explanation. Do not try to answer quote-conversion questions via aggregate/list_fields — use this tool directly.',
     input_schema: {
       type: 'object',
       properties: {

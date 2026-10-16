@@ -382,6 +382,7 @@ const OPPORTUNITY_FIELDS = [
   'MKT_SEG_CODE', 'MKT_SEG_CODEText',                // Industry — market sub-segment
   'SalesOrganisationID', 'SalesOrganisationName',    // Sales org (for in-process filtering)
   'ZSOP',                                            // Start of Production date — distinct from ExpectedProcessingEndDate
+  'ZQuoteExist_KUT',                                 // Direct quote-exists flag — newly exposed specifically to simplify quote-conversion counting
 ];
 
 export async function fetchOpportunities(filters = {}, userJwt) {
