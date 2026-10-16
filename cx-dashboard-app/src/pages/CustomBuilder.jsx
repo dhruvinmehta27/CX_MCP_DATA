@@ -127,7 +127,7 @@ function exportCsv(columns, rows, filename) {
   URL.revokeObjectURL(url);
 }
 
-function ClarificationInput({ question, onSubmit, onAllOrgs }) {
+function ClarificationInput({ question, options, onOption, onSubmit, onAllOrgs }) {
   const [value, setValue] = useState('');
   return (
     <div style={{ background: 'rgba(231,101,0,0.06)', border: '1px solid rgba(231,101,0,0.22)', borderRadius: 10, padding: '14px 16px' }}>
@@ -135,6 +135,19 @@ function ClarificationInput({ question, onSubmit, onAllOrgs }) {
         <Icon name="alert-triangle" size={15} style={{ color: '#b84f00', flexShrink: 0, marginTop: 2 }} />
         <span style={{ fontSize: 13, color: '#7a3800' }}><strong>Clarification needed:</strong> {question}</span>
       </div>
+      {options?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {options.map((opt) => (
+            <button
+              key={opt.label}
+              className="builder-range-chip"
+              onClick={() => onOption(opt)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           autoFocus
@@ -490,9 +503,22 @@ export default function CustomBuilder() {
             {intent.clarificationNeeded && intent.clarificationQuestion && (
               <ClarificationInput
                 question={intent.clarificationQuestion}
+                options={intent.clarificationOptions}
+                onOption={(opt) => {
+                  // Resolved locally — the option already carries the exact
+                  // org ID list from resolveOrgScope, no need to re-plan.
+                  setIntent((prev) => ({
+                    ...prev,
+                    clarificationNeeded: false,
+                    clarificationQuestion: null,
+                    clarificationOptions: null,
+                    filters: { ...prev.filters, salesOrgId: opt.salesOrgId },
+                    resolvedOrgs: opt.orgs,
+                  }));
+                }}
                 onSubmit={(extra) => plan(`${baseRequest} — ${extra}`, true)}
                 onAllOrgs={() => {
-                  setIntent((prev) => ({ ...prev, clarificationNeeded: false, clarificationQuestion: null }));
+                  setIntent((prev) => ({ ...prev, clarificationNeeded: false, clarificationQuestion: null, clarificationOptions: null }));
                 }}
               />
             )}

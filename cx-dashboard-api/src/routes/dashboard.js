@@ -157,6 +157,17 @@ router.post('/plan', async (req, res, next) => {
         intent.clarificationQuestion = names
           ? `"${intent.detectedOrgName}" matches more than one real scope: ${names}${(scope.candidates || []).length > 6 ? ', ...' : ''}. Which did you mean?`
           : `"${intent.detectedOrgName}" doesn't match a known org — could you clarify which org/region you mean?`;
+        // One-click options instead of making the user retype their answer —
+        // each carries the exact resolved org ID list to apply directly.
+        if (scope.directOrgs?.length && scope.regionOrgs?.length) {
+          intent.clarificationOptions = [
+            { label: `${intent.detectedOrgName} orgs only (${scope.directOrgs.length})`, salesOrgId: scope.directOrgs.map((o) => o.id).join(','), orgs: scope.directOrgs },
+            { label: `All ${scope.region || 'country-level'} orgs (${scope.regionOrgs.length})`, salesOrgId: scope.regionOrgs.map((o) => o.id).join(','), orgs: scope.regionOrgs },
+            { label: 'Both', salesOrgId: [...scope.directOrgs, ...scope.regionOrgs].map((o) => o.id).join(','), orgs: [...scope.directOrgs, ...scope.regionOrgs] },
+          ];
+        } else if (scope.candidates?.length) {
+          intent.clarificationOptions = scope.candidates.slice(0, 6).map((o) => ({ label: o.name, salesOrgId: o.id, orgs: [o] }));
+        }
       } else if (scope.matchType === 'region' || scope.matchType === 'multiple') {
         // Resolved to several real orgs — pass them through as the exact
         // comma-separated ID list, so build() doesn't need to re-resolve it.
