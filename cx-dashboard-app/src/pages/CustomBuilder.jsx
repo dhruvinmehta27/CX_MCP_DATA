@@ -603,6 +603,15 @@ export default function CustomBuilder() {
               <div className="chart-card-header">
                 <div>
                   <div className="chart-card-title">{result.title}</div>
+                  {isCustomResult && result.appliedFilters && Object.keys(result.appliedFilters).length > 0 && (
+                    <div className="applied-filter-chips">
+                      {Object.entries(result.appliedFilters).map(([key, value]) => (
+                        <span key={key} className="plan-chip">
+                          {{ segment: 'Segment', application: 'Application', marketSegmentGroup: 'Market Segment Group', strategicAccount: 'Strategic Account' }[key] || key}: {value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {!isCustomResult && result.summary && (() => {
                     const { short, hasMore } = shortText(result.summary);
                     return (
@@ -718,7 +727,10 @@ export default function CustomBuilder() {
                                   <rect x="0" y="1" width="420" height="8" rx="4" className="editorial-spark-track" />
                                   <rect x="0" y="1" width={Math.max(4, Math.round(((row.Value || 0) / max) * 420))} height="8" rx="4" className="editorial-spark-fill" />
                                 </svg>
-                                <div className="editorial-value">{formatEUR(row.Value)}</div>
+                                <div className="editorial-value-group">
+                                  <div className="editorial-value">{formatEUR(row.Value)}</div>
+                                  <div className="editorial-records">{records.toLocaleString()} rec.</div>
+                                </div>
                               </button>
                               {isOpen && (
                                 <div className="editorial-detail">

@@ -40,8 +40,19 @@ function pickFilters(source = {}) {
 // not just discouraged by a prompt rule — this makes it structurally
 // impossible for the agent to re-discover and re-ask an org ambiguity the
 // user already answered, regardless of whether it reads/follows that rule.
-function executeCustomAgentTool(req, resolvedSalesOrgId) {
+// appliedFilters: a mutable object the closure below fills in as the agent
+// actually calls aggregate/aggregate_by_org, so the UI can show exactly what
+// was applied (e.g. "Segment: Industrial") instead of trusting the agent's
+// own prose to mention it — same principle as everything else forced into
+// code rather than left to the model to remember to state.
+function executeCustomAgentTool(req, resolvedSalesOrgId, appliedFilters = {}) {
   return async (name, input) => {
+    if (name === 'aggregate' || name === 'aggregate_by_org') {
+      if (input.segment) appliedFilters.segment = input.segment;
+      if (input.application) appliedFilters.application = input.application;
+      if (input.marketSegmentGroup) appliedFilters.marketSegmentGroup = input.marketSegmentGroup;
+      if (input.strategicAccount) appliedFilters.strategicAccount = input.strategicAccount;
+    }
     if (name === 'resolve_org_scope' && resolvedSalesOrgId) {
       const ids = resolvedSalesOrgId.split(',').map((s) => s.trim()).filter(Boolean);
       // Look up real display names for these IDs so the breakdown shows
@@ -228,10 +239,11 @@ router.post('/generate', async (req, res, next) => {
     // a fixed endpoint — see runCustomAggregateAgent for why (prevents
     // confidently-wrong answers for fields/metrics we don't have pre-built).
     if (intent.endpoints.includes('custom/aggregate')) {
+      const appliedFilters = {};
       const agentResult = await runCustomAggregateAgent({
         userRequest,
         baseFilters: mergedFilters,
-        executeTool: executeCustomAgentTool(req, mergedFilters.salesOrgId),
+        executeTool: executeCustomAgentTool(req, mergedFilters.salesOrgId, appliedFilters),
       });
 
       // resultKind drives dedicated UI on the frontend (a headline stat card
@@ -275,6 +287,7 @@ router.post('/generate', async (req, res, next) => {
         metric,
         breakdown,
         total,
+        appliedFilters,
         charts: [],
         rawData: { 'custom/aggregate': { total: rows.length, rows } },
         title: intent.title || 'Custom Query Result',
