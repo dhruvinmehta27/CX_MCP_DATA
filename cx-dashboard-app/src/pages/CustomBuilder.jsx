@@ -204,6 +204,7 @@ export default function CustomBuilder() {
   const [showData, setShowData] = useState(false);
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);
   const [activeTab, setActiveTab] = useState('answer');
+  const [showUnmatchedOrgs, setShowUnmatchedOrgs] = useState(false);
   const [showInsightDetails, setShowInsightDetails] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [overrideDateFrom, setOverrideDateFrom] = useState(null);
@@ -276,6 +277,7 @@ export default function CustomBuilder() {
       const res = await generateDashboard(request, buildFilters, buildIntent);
       setResult({ ...res, title: res.title || buildIntent.title });
       setActiveTab('answer');
+      setShowUnmatchedOrgs(false);
       setStep(3);
     } catch (err) {
       setError(err);
@@ -684,34 +686,57 @@ export default function CustomBuilder() {
                   <MetricCard
                     title={`Total — ${result.total?.fieldLabel || ''}`}
                     value={result.total?.formattedValue ?? '—'}
-                    subtitle={`${(result.breakdown || []).length} orgs · ${(result.total?.recordsMatched ?? 0).toLocaleString()} records matched`}
+                    subtitle={`${(result.breakdown || []).filter((r) => (r['Records matched'] || 0) > 0).length} of ${(result.breakdown || []).length} orgs with data · ${(result.total?.recordsMatched ?? 0).toLocaleString()} records matched`}
                     icon="bar-chart-2"
                     accent="success"
                   />
-                  {(result.breakdown || []).length > 0 && (
-                    <div style={{ marginTop: 16 }}>
-                      <BarChart
-                        data={[...result.breakdown].sort((a, b) => (b.Value || 0) - (a.Value || 0))}
-                        xKey="Org"
-                        bars={[{ key: 'Value', color: 'var(--primary)' }]}
-                        layout="vertical"
-                        height={Math.max(220, (result.breakdown || []).length * 30)}
-                        valueFormatter={formatEUR}
-                      />
-                    </div>
-                  )}
-                  <div style={{ overflowX: 'auto', marginTop: 16 }}>
-                    <DataTable
-                      columns={[
-                        { key: 'Org', label: 'Org', type: 'text' },
-                        { key: 'Value', label: 'Value (€)', type: 'currency', render: (v) => formatEUR(v) },
-                        { key: 'Records matched', label: 'Records matched', type: 'number' },
-                      ]}
-                      data={[...result.breakdown].sort((a, b) => (b.Value || 0) - (a.Value || 0))}
-                      sortable
-                      pageSize={20}
-                    />
-                  </div>
+                  {(() => {
+                    const all = result.breakdown || [];
+                    const matched = all.filter((r) => (r['Records matched'] || 0) > 0).sort((a, b) => (b.Value || 0) - (a.Value || 0));
+                    const unmatched = all.filter((r) => !((r['Records matched'] || 0) > 0));
+                    return (
+                      <>
+                        {matched.length > 0 && (
+                          <div style={{ marginTop: 16 }}>
+                            <BarChart
+                              data={matched}
+                              xKey="Org"
+                              bars={[{ key: 'Value', color: 'var(--primary)' }]}
+                              layout="vertical"
+                              height={Math.max(220, matched.length * 30)}
+                              valueFormatter={formatEUR}
+                            />
+                          </div>
+                        )}
+                        <div style={{ overflowX: 'auto', marginTop: 16 }}>
+                          <DataTable
+                            columns={[
+                              { key: 'Org', label: 'Org', type: 'text' },
+                              { key: 'Value', label: 'Value (€)', type: 'currency', render: (v) => formatEUR(v) },
+                              { key: 'Records matched', label: 'Records matched', type: 'number' },
+                            ]}
+                            data={matched}
+                            sortable
+                            pageSize={20}
+                          />
+                        </div>
+                        {unmatched.length > 0 && (
+                          <div style={{ marginTop: 12 }}>
+                            <button className="btn-link" style={{ fontSize: 12.5 }} onClick={() => setShowUnmatchedOrgs((v) => !v)}>
+                              {showUnmatchedOrgs ? 'Hide' : 'Show'} {unmatched.length} org(s) with no matching records in this period
+                            </button>
+                            {showUnmatchedOrgs && (
+                              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {unmatched.map((r) => (
+                                  <span key={r.Org} className="plan-chip">{r.Org}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               ) : isTable ? (
                 <div>
