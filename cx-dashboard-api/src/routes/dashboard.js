@@ -45,13 +45,33 @@ function pickFilters(source = {}) {
 // was applied (e.g. "Segment: Industrial") instead of trusting the agent's
 // own prose to mention it — same principle as everything else forced into
 // code rather than left to the model to remember to state.
-function executeCustomAgentTool(req, resolvedSalesOrgId, appliedFilters = {}) {
+function executeCustomAgentTool(req, resolvedSalesOrgId, appliedFilters = {}, unitTracker = {}) {
   return async (name, input) => {
     if (name === 'aggregate' || name === 'aggregate_by_org') {
       if (input.segment) appliedFilters.segment = input.segment;
       if (input.application) appliedFilters.application = input.application;
       if (input.marketSegmentGroup) appliedFilters.marketSegmentGroup = input.marketSegmentGroup;
       if (input.strategicAccount) appliedFilters.strategicAccount = input.strategicAccount;
+      // Deterministic unit, not left to the model to set correctly in its
+      // final JSON — overwritten on each call so it reflects whichever
+      // aggregate/count call actually produced the answer, since a 'currency'
+      // mislabel on a count tool renders literal nonsense like '€1,027'
+      // (observed live on a quote-conversion breakdown).
+      unitTracker.value = input.aggregation === 'count' ? 'count' : 'currency';
+    }
+    if (name === 'count_quote_conversions' || name === 'count_quote_conversions_by_org') {
+      unitTracker.value = 'count';
+      // Deterministic field label too — the model picking its own label for
+      // these tools produced the raw method/collection name verbatim
+      // ('OpportunityBusinessTransactionDocumentReference') as the field
+      // label in a live result, which humanizes into a garbled title. These
+      // tools only ever answer one thing, so there's no need to leave this
+      // to the model at all.
+      unitTracker.label = 'Opportunities Converted to Quote';
+    }
+    if (name === 'count_rfqs_from_quotes') {
+      unitTracker.value = 'count';
+      unitTracker.label = 'RFQs Raised from Quotes';
     }
     if (name === 'resolve_org_scope' && resolvedSalesOrgId) {
       const ids = resolvedSalesOrgId.split(',').map((s) => s.trim()).filter(Boolean);
@@ -266,11 +286,16 @@ router.post('/generate', async (req, res, next) => {
     // confidently-wrong answers for fields/metrics we don't have pre-built).
     if (intent.endpoints.includes('custom/aggregate')) {
       const appliedFilters = {};
+      const unitTracker = {};
       const agentResult = await runCustomAggregateAgent({
         userRequest,
         baseFilters: mergedFilters,
-        executeTool: executeCustomAgentTool(req, mergedFilters.salesOrgId, appliedFilters),
+        executeTool: executeCustomAgentTool(req, mergedFilters.salesOrgId, appliedFilters, unitTracker),
       });
+      // Deterministic, not trusted from the model's own "unit" field — a
+      // count tool mislabeled "currency" renders literal nonsense like
+      // "€1,027" for a conversion count (observed live).
+      const unit = unitTracker.value || agentResult.unit || 'currency';
 
       // resultKind drives dedicated UI on the frontend (a headline stat card
       // for one number, a chart + table for a rollup) instead of squeezing
@@ -284,8 +309,9 @@ router.post('/generate', async (req, res, next) => {
         total = {
           value: agentResult.value,
           formattedValue: sanitizeFormattedValue(agentResult),
-          fieldLabel: getFieldDisplayLabel(agentResult.fieldUsed),
+          fieldLabel: unitTracker.label || getFieldDisplayLabel(agentResult.fieldUsed),
           recordsMatched: agentResult.recordsMatched,
+          unit,
         };
         rows = [...breakdown, { Org: 'Total', Value: agentResult.value, 'Records matched': agentResult.recordsMatched }];
       } else if (agentResult.success) {
@@ -294,8 +320,9 @@ router.post('/generate', async (req, res, next) => {
         metric = {
           value: noDataFound ? null : agentResult.value,
           formattedValue: noDataFound ? 'No matching records found' : sanitizeFormattedValue(agentResult),
-          fieldLabel: getFieldDisplayLabel(agentResult.fieldUsed),
+          fieldLabel: unitTracker.label || getFieldDisplayLabel(agentResult.fieldUsed),
           recordsMatched: agentResult.recordsMatched,
+          unit,
         };
         rows = [{
           Metric: userRequest,

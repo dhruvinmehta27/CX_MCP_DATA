@@ -633,6 +633,41 @@ const AMBIGUOUS_TERMS = [
 ];
 
 
+// --- Shared filter-param fragments ---------------------------------------
+// Single source of truth, spread into every tool below that needs them.
+// This exists specifically so a new counting/aggregation tool can't quietly
+// omit one of these the way count_rfqs_from_quotes did (date-only for weeks
+// while every other tool gained org/segment/account support) — and so a
+// wording fix only has to happen in one place, not five.
+//
+// NOTE: a tool's input_schema spreading these is a promise the BACKEND
+// handler actually implements them — never add these to a tool whose
+// executeCustomAgentTool handler doesn't honor them yet, that would be worse
+// than not having the param (silently accepted, silently ignored).
+const CUSTOM_AGENT_CLASSIFICATION_PARAMS = {
+  segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it (e.g. "Industrial", "Automotive", "AUT") — resolved deterministically against this fixed, confirmed table. Only applies to entity="opportunities".' },
+  application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+  marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+  strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
+};
+const CUSTOM_AGENT_SINGLE_ORG_PARAM = {
+  salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
+};
+const CUSTOM_AGENT_ACCOUNT_PARAM = {
+  account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+};
+const CUSTOM_AGENT_MULTI_ORG_PARAM = {
+  orgs: {
+    type: 'array',
+    description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
+    items: {
+      type: 'object',
+      properties: { id: { type: 'string' }, name: { type: 'string' } },
+      required: ['id', 'name'],
+    },
+  },
+};
+
 const CUSTOM_AGENT_TOOLS = [
   {
     name: 'list_fields',
@@ -669,25 +704,14 @@ const CUSTOM_AGENT_TOOLS = [
         entity: { type: 'string', enum: ['opportunities', 'quotes'] },
         fieldName: { type: 'string', description: 'The exact field name (from the glossary or list_fields). May be auto-upgraded to the EUR-converted equivalent for currency safety.' },
         aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
-        orgs: {
-          type: 'array',
-          description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
-          items: {
-            type: 'object',
-            properties: { id: { type: 'string' }, name: { type: 'string' } },
-            required: ['id', 'name'],
-          },
-        },
+        ...CUSTOM_AGENT_MULTI_ORG_PARAM,
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Default "all".' },
         dateFrom: { type: 'string' },
         dateTo: { type: 'string' },
         secondaryDateField: { type: 'string' },
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it (e.g. "Industrial", "Automotive", "AUT") — resolved deterministically against this fixed, confirmed table, only applies to entity="opportunities".' },
-        application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
       required: ['entity', 'fieldName', 'aggregation', 'orgs'],
     },
@@ -702,17 +726,14 @@ const CUSTOM_AGENT_TOOLS = [
         fieldName: { type: 'string', description: 'The exact field name as returned by list_fields.' },
         aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter by opportunity lifecycle outcome. Only meaningful for entity="opportunities". Default "all".' },
-        salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
-        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
         secondaryDateField: { type: 'string', description: 'A different date field to also filter on, e.g. ZSOP for "start of production" (see glossary). Must be a real field confirmed via list_fields or the glossary.' },
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it — resolved deterministically against this fixed, confirmed table. Only applies to entity="opportunities".' },
-        application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
       required: ['entity', 'fieldName', 'aggregation'],
     },
@@ -724,14 +745,11 @@ const CUSTOM_AGENT_TOOLS = [
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome before checking conversion. Default "all".' },
-        salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
-        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial).' },
-        application: { type: 'string', description: 'Account-level Application classification, matched by substring against the description.' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group, matched by substring against the description.' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned.' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
     },
   },
@@ -741,23 +759,12 @@ const CUSTOM_AGENT_TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        orgs: {
-          type: 'array',
-          description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
-          items: {
-            type: 'object',
-            properties: { id: { type: 'string' }, name: { type: 'string' } },
-            required: ['id', 'name'],
-          },
-        },
+        ...CUSTOM_AGENT_MULTI_ORG_PARAM,
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Default "all".' },
-        account: { type: 'string' },
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string' },
         dateTo: { type: 'string' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial).' },
-        application: { type: 'string', description: 'Account-level Application classification, matched by substring against the description.' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group, matched by substring against the description.' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned.' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
       required: ['orgs'],
     },
@@ -829,11 +836,12 @@ CRITICAL RULES — these exist because guessing produced confidently wrong answe
 9. A region or country name the user mentions (e.g. "Europe", "APAC", "Hungary") is NOT itself a verified salesOrgId — NEVER pass it straight into aggregate's salesOrgId and trust whatever it happens to match. If baseFilters.salesOrgId is empty, ALWAYS call resolve_org_scope(term) first (see rule 5 for when baseFilters.salesOrgId is already set — skip this call entirely in that case). Then: matchType "single" → safe to use that one org directly (aggregate/count_quote_conversions or aggregate_by_org/count_quote_conversions_by_org with one org). matchType "multiple" or "region" → the user's term covers more than one real org — use aggregate_by_org or count_quote_conversions_by_org (whichever matches what's being computed) with the exact orgs array resolve_org_scope returned (never hand-build or guess an org list yourself, even for a region you think you recognize). matchType "ambiguous" or "none" → report success: false and ask the user to pick from the "candidates" resolve_org_scope returned — do not guess.
 10. If a per-org call inside an aggregate_by_org breakdown returns 0 while others succeed (e.g. one country in a multi-country sum didn't match), that org still appears as its own row in the breakdown — do not omit it or explain it away as unimportant; mention in your explanation if a 0 looks surprising (e.g. "United Kingdom returned 0 records — verify this org has data for the period asked").
 
-When you have a final answer (or have given up), respond with JSON only — no markdown fences, no prose before or after it, and critically: do NOT restate the per-org breakdown as a markdown table or bullet list before the JSON. The UI renders "breakdown" as a proper chart and table on its own — repeating the same data as text is pure waste and risks truncating the response before the JSON closes (observed live: a 31-org breakdown's response got cut off mid-JSON because the explanation repeated the whole table first). Keep "explanation" to 1-3 plain sentences summarizing what was computed, not a restatement of every row. "caveats" is shown to the user as "AI Insights" — use it for genuinely useful analytical observations computed from the data you already fetched (e.g. "the top 3 orgs account for X% of the total", "TSS Switzerland's average deal size is notably higher than the rest despite fewer records", a concentration or outlier worth flagging), NOT just technical disclaimers about field names or filters — those belong in "explanation" if needed at all. Only state an insight you can actually verify from the numbers in front of you (the breakdown/aggregate result) — never invent a trend, a win/loss comparison, or any figure you did not compute via a tool call this turn. If nothing analytically interesting stands out, leave caveats as a short, genuinely useful list rather than padding it. If you used aggregate_by_org (more than one org), set "breakdown" to its breakdown array and "value"/"recordsMatched" to its total/totalRecordsMatched. If you used count_quote_conversions_by_org, the tool's breakdown rows use different column names ({Org, "Total opportunities", "Converted to quote", "Conversion rate"}) — you MUST remap each row into the exact shape below ({"Org": org name, "Value": that row's "Converted to quote" count, "Records matched": that row's "Total opportunities"}) before putting it in "breakdown"; set "value" to the tool's convertedCount and "recordsMatched" to its totalOpportunities. Otherwise leave "breakdown" null:
+When you have a final answer (or have given up), respond with JSON only — no markdown fences, no prose before or after it, and critically: do NOT restate the per-org breakdown as a markdown table or bullet list before the JSON. The UI renders "breakdown" as a proper chart and table on its own — repeating the same data as text is pure waste and risks truncating the response before the JSON closes (observed live: a 31-org breakdown's response got cut off mid-JSON because the explanation repeated the whole table first). Keep "explanation" to 1-3 plain sentences summarizing what was computed, not a restatement of every row. "caveats" is shown to the user as "AI Insights" — use it for genuinely useful analytical observations computed from the data you already fetched (e.g. "the top 3 orgs account for X% of the total", "TSS Switzerland's average deal size is notably higher than the rest despite fewer records", a concentration or outlier worth flagging), NOT just technical disclaimers about field names or filters — those belong in "explanation" if needed at all. Only state an insight you can actually verify from the numbers in front of you (the breakdown/aggregate result) — never invent a trend, a win/loss comparison, or any figure you did not compute via a tool call this turn. If nothing analytically interesting stands out, leave caveats as a short, genuinely useful list rather than padding it. Set "unit" to tell the UI how to format "value" and every breakdown row's "Value" — this matters a lot: "currency" renders as "€1,234" (only correct for aggregate/aggregate_by_org on a money field), "count" renders as a plain number like "1,234" (use this for count_quote_conversions/count_quote_conversions_by_org, count_rfqs_from_quotes, or any aggregate call with aggregation="count"), "percent" renders as "12%". Getting this wrong is a real, visible bug — a conversion COUNT formatted as "currency" literally renders as "€1,027" on screen, which is nonsensical and was observed live. If you used aggregate_by_org (more than one org), set "breakdown" to its breakdown array, "value"/"recordsMatched" to its total/totalRecordsMatched, and "unit" to "currency" unless aggregation was "count". If you used count_quote_conversions_by_org, the tool's breakdown rows use different column names ({Org, "Total opportunities", "Converted to quote", "Conversion rate"}) — you MUST remap each row into the exact shape below ({"Org": org name, "Value": that row's "Converted to quote" count, "Records matched": that row's "Total opportunities"}) before putting it in "breakdown"; set "value" to the tool's convertedCount, "recordsMatched" to its totalOpportunities, "unit" to "count" (NEVER "currency"), and "fieldUsed" to a clean human label like "Opportunities Converted to Quote" — never the raw method name (e.g. "OpportunityBusinessTransactionDocumentReference") or a percentage mashed into the same field as a count. State the overall conversion rate as its own sentence in "explanation" (e.g. "Overall conversion rate across these orgs: 35%") since there is no separate structured field for it. Otherwise leave "breakdown" null:
 {
   "success": boolean,
   "value": number|null,
   "formattedValue": string|null,
+  "unit": "currency"|"count"|"percent",
   "fieldUsed": string|null,
   "entity": string|null,
   "aggregation": string|null,

@@ -22,10 +22,21 @@ const DATE_PRESETS = [
 // "Show details" toggle so the card isn't a wall of text by default.
 // aggregateByOrgs always forces the EUR-converted field for a multi-org
 // breakdown (see CURRENCY_SAFE_FIELD_MAP server-side), so € is always the
-// correct symbol here — not just a guess.
+// correct symbol here — not just a guess. ONLY call this for unit==='currency';
+// a count/percent value run through this renders nonsense like "€1,027" for
+// what's actually 1,027 converted opportunities (observed live).
 function formatEUR(v) {
   if (typeof v !== 'number') return v;
   return `€${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
+
+// Formats a breakdown row's Value according to the backend-determined unit
+// (never guessed client-side) — currency gets €, count/percent stay plain.
+function formatByUnit(v, unit) {
+  if (typeof v !== 'number') return v;
+  if (unit === 'percent') return `${v}%`;
+  if (unit === 'count') return v.toLocaleString();
+  return formatEUR(v);
 }
 
 function shortText(text, maxLen = 110) {
@@ -696,6 +707,7 @@ export default function CustomBuilder() {
                   const matched = all.filter((r) => (r['Records matched'] || 0) > 0).sort((a, b) => (b.Value || 0) - (a.Value || 0));
                   const unmatched = all.filter((r) => !((r['Records matched'] || 0) > 0));
                   const max = matched.length > 0 ? matched[0].Value || 1 : 1;
+                  const unit = result.total?.unit || 'currency';
                   return (
                     <div className="editorial-breakdown">
                       <p className="editorial-lead">
@@ -728,7 +740,7 @@ export default function CustomBuilder() {
                                   <rect x="0" y="1" width={Math.max(4, Math.round(((row.Value || 0) / max) * 420))} height="8" rx="4" className="editorial-spark-fill" />
                                 </svg>
                                 <div className="editorial-value-group">
-                                  <div className="editorial-value">{formatEUR(row.Value)}</div>
+                                  <div className="editorial-value">{formatByUnit(row.Value, unit)}</div>
                                   <div className="editorial-records">{records.toLocaleString()} rec.</div>
                                 </div>
                               </button>
@@ -737,7 +749,9 @@ export default function CustomBuilder() {
                                   <div><span className="editorial-detail-label">Rank</span>#{i + 1} of {matched.length}</div>
                                   <div><span className="editorial-detail-label">Records</span>{records.toLocaleString()}</div>
                                   <div><span className="editorial-detail-label">Share of total</span>{shareOfTotal.toFixed(1)}%</div>
-                                  <div><span className="editorial-detail-label">Avg. per record</span>{formatEUR(avgPerRecord)}</div>
+                                  {unit !== 'count' && (
+                                    <div><span className="editorial-detail-label">Avg. per record</span>{formatByUnit(avgPerRecord, unit)}</div>
+                                  )}
                                 </div>
                               )}
                             </div>
