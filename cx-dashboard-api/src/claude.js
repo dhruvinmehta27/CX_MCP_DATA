@@ -71,6 +71,39 @@ function extractFinalAnswerJson(text) {
   return null;
 }
 
+// Last-resort recovery if the final answer's JSON is truncated (e.g. a very
+// large breakdown exceeding max_tokens) and extractFinalAnswerJson can't
+// parse it as a whole. Each breakdown entry is a flat, self-contained object
+// ({"Org": ..., "Value": ..., "Records matched": ...} with no nested braces),
+// so individual complete entries can still be salvaged from an otherwise
+// truncated/invalid response — a partial, labeled-as-such answer is better
+// than a full "could not compute" for a query the agent actually resolved
+// correctly up to the point it got cut off.
+function salvagePartialBreakdown(text) {
+  if (!text) return null;
+  const entryRe = /\{\s*"Org"\s*:\s*"([^"]*)"\s*,\s*"Value"\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*"Records matched"\s*:\s*(-?\d+)\s*\}/g;
+  const breakdown = [];
+  let match;
+  while ((match = entryRe.exec(text)) !== null) {
+    breakdown.push({ Org: match[1], Value: parseFloat(match[2]), 'Records matched': parseInt(match[3], 10) });
+  }
+  if (breakdown.length === 0) return null;
+  const value = breakdown.reduce((sum, r) => sum + (r.Value || 0), 0);
+  const recordsMatched = breakdown.reduce((sum, r) => sum + (r['Records matched'] || 0), 0);
+  return {
+    success: true,
+    value,
+    formattedValue: null,
+    fieldUsed: null,
+    entity: null,
+    aggregation: 'sum',
+    recordsMatched,
+    breakdown,
+    explanation: `Recovered a partial result from a truncated response — ${breakdown.length} org(s) parsed successfully. The total above only reflects these orgs; some may be missing if the response was cut off before listing all of them.`,
+    caveats: ['This answer was recovered from a truncated AI response and may be incomplete — re-run the query to get a complete, verified result.'],
+  };
+}
+
 const VALID_ENDPOINTS = [
   'quotes/raw', 'quotes/by-status', 'quotes/by-sales-org', 'quotes/trend', 'quotes/by-biz-type',
   'opportunities/pipeline', 'opportunities/created-trend', 'opportunities/by-sales-org',
@@ -754,7 +787,7 @@ CRITICAL RULES — these exist because guessing produced confidently wrong answe
 9. A region or country name the user mentions (e.g. "Europe", "APAC", "Hungary") is NOT itself a verified salesOrgId — NEVER pass it straight into aggregate's salesOrgId and trust whatever it happens to match. If baseFilters.salesOrgId is empty, ALWAYS call resolve_org_scope(term) first (see rule 5 for when baseFilters.salesOrgId is already set — skip this call entirely in that case). Then: matchType "single" → safe to use that one org directly (aggregate or aggregate_by_org with one org). matchType "multiple" or "region" → the user's term covers more than one real org — use aggregate_by_org with the exact orgs array resolve_org_scope returned (never hand-build or guess an org list yourself, even for a region you think you recognize). matchType "ambiguous" or "none" → report success: false and ask the user to pick from the "candidates" resolve_org_scope returned — do not guess.
 10. If a per-org call inside an aggregate_by_org breakdown returns 0 while others succeed (e.g. one country in a multi-country sum didn't match), that org still appears as its own row in the breakdown — do not omit it or explain it away as unimportant; mention in your explanation if a 0 looks surprising (e.g. "United Kingdom returned 0 records — verify this org has data for the period asked").
 
-When you have a final answer (or have given up), respond with JSON only, no markdown fences. If you used aggregate_by_org (more than one org), set "breakdown" to its breakdown array and "value"/"recordsMatched" to its total/totalRecordsMatched; otherwise leave "breakdown" null:
+When you have a final answer (or have given up), respond with JSON only — no markdown fences, no prose before or after it, and critically: do NOT restate the per-org breakdown as a markdown table or bullet list before the JSON. The UI renders "breakdown" as a proper chart and table on its own — repeating the same data as text is pure waste and risks truncating the response before the JSON closes (observed live: a 31-org breakdown's response got cut off mid-JSON because the explanation repeated the whole table first). Keep "explanation" to 1-3 plain sentences summarizing what was computed, not a restatement of every row. If you used aggregate_by_org (more than one org), set "breakdown" to its breakdown array and "value"/"recordsMatched" to its total/totalRecordsMatched; otherwise leave "breakdown" null:
 {
   "success": boolean,
   "value": number|null,
@@ -774,7 +807,12 @@ When you have a final answer (or have given up), respond with JSON only, no mark
   for (let turn = 0; turn < CUSTOM_AGENT_MAX_TURNS; turn++) {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 2000,
+      // A large aggregate_by_org breakdown (dozens of orgs) plus the
+      // structured JSON answer can exceed 2000 tokens, truncating the
+      // response mid-JSON and making it unparseable — observed live with a
+      // 31-org Europe breakdown where the agent computed everything
+      // correctly but the final JSON got cut off. 8000 gives real headroom.
+      max_tokens: 8000,
       system: systemPrompt,
       tools: CUSTOM_AGENT_TOOLS,
       messages,
@@ -785,6 +823,8 @@ When you have a final answer (or have given up), respond with JSON only, no mark
       const text = extractText(response);
       const parsed = extractFinalAnswerJson(text);
       if (parsed) return parsed;
+      const salvaged = salvagePartialBreakdown(text);
+      if (salvaged) return salvaged;
       return { success: false, value: null, formattedValue: null, fieldUsed: null, entity: null, aggregation: null, recordsMatched: null, explanation: text || 'The agent did not return a parseable answer.', caveats: [] };
     }
 
