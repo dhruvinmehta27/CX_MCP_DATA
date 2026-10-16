@@ -7,7 +7,7 @@ import {
   fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
-  fetchAccountCountries, fetchOpportunityQuoteReferences, fetchQuoteItems,
+  fetchAccountCountries, fetchOpportunityQuoteReferences, fetchQuoteItems, fetchSalesOrgs,
 } from './c4c-client.js';
 import { getAccountCountryMap, enrichWithCountry } from './account-cache.js';
 import {
@@ -90,6 +90,108 @@ function matchesAccount(accountName, filterValue) {
   return !!accountName && accountName.toLowerCase().includes(filterValue.trim().toLowerCase());
 }
 
+// ---------------------------------------------------------------------------
+// Org/region master data — replaces letting the custom-aggregate agent guess
+// which real org(s) a free-text term like "Europe" or "Hungary" means. The
+// org catalog itself comes from C4C (fetchSalesOrgs, real org units); the
+// region groupings below are plain world geography (continents don't vary
+// per tenant), so hardcoding them is safe — unlike guessing SAP org codes.
+// ---------------------------------------------------------------------------
+
+let salesOrgsCache = null; // { expiresAt, promise } — shared across users, no PII
+async function getSalesOrgs(userJwt) {
+  if (salesOrgsCache && Date.now() < salesOrgsCache.expiresAt) return salesOrgsCache.promise;
+  const promise = fetchSalesOrgs(null, userJwt);
+  salesOrgsCache = { promise, expiresAt: Date.now() + 60 * 60_000 }; // 1h — org master data changes rarely
+  return promise;
+}
+
+const REGION_COUNTRIES = {
+  europe: ['germany', 'france', 'italy', 'spain', 'netherlands', 'sweden', 'poland', 'hungary', 'austria', 'belgium', 'switzerland', 'united kingdom', 'uk', 'ireland', 'denmark', 'norway', 'finland', 'portugal', 'czech', 'romania', 'slovakia', 'slovenia', 'croatia', 'greece'],
+  emea: ['germany', 'france', 'italy', 'spain', 'netherlands', 'sweden', 'poland', 'hungary', 'austria', 'belgium', 'switzerland', 'united kingdom', 'uk', 'ireland', 'denmark', 'norway', 'finland', 'portugal', 'czech', 'romania', 'slovakia', 'slovenia', 'croatia', 'greece', 'south africa', 'uae', 'saudi'],
+  dach: ['germany', 'austria', 'switzerland'],
+  nordics: ['sweden', 'norway', 'finland', 'denmark'],
+  americas: ['united states', 'usa', 'canada', 'mexico', 'brazil', 'argentina', 'chile', 'colombia'],
+  apac: ['china', 'japan', 'india', 'korea', 'australia', 'singapore', 'thailand', 'indonesia', 'malaysia', 'vietnam'],
+};
+
+// Resolves a free-text org/region term against the REAL org catalog —
+// returning validated org IDs the agent can trust, instead of letting it pass
+// an unverified string straight through to matchesOrg (which previously let
+// "Europe" silently match whatever single org record happened to contain
+// that substring, if any).
+async function resolveOrgScope(term, userJwt) {
+  const orgs = await getSalesOrgs(userJwt);
+  const t = (term || '').trim().toLowerCase();
+  if (!t) return { matchType: 'none', orgs: [] };
+
+  const regionKey = Object.keys(REGION_COUNTRIES).find((k) => k === t || t.includes(k));
+  if (regionKey) {
+    const countries = REGION_COUNTRIES[regionKey];
+    const matched = orgs.filter((o) =>
+      countries.some((c) => o.name.toLowerCase().includes(c) || o.id.toLowerCase().includes(c.replace(/\s+/g, '')))
+    );
+    return { matchType: matched.length ? 'region' : 'ambiguous', region: regionKey, orgs: matched, candidates: matched.length ? [] : orgs };
+  }
+
+  const direct = orgs.filter((o) => matchesOrg(o.id, o.name, t));
+  if (direct.length === 1) return { matchType: 'single', orgs: direct };
+  if (direct.length > 1) return { matchType: 'multiple', orgs: direct };
+
+  // No confident match — surface close-looking candidates (by word overlap) so
+  // the agent can ask the user to pick, instead of guessing.
+  const words = t.split(/\s+/).filter((w) => w.length > 2);
+  const candidates = orgs.filter((o) => words.some((w) => o.name.toLowerCase().includes(w) || o.id.toLowerCase().includes(w)));
+  return { matchType: 'none', orgs: [], candidates };
+}
+
+export async function resolveOrgScopeTool({ term }, userJwt) {
+  return resolveOrgScope(term, userJwt);
+}
+
+// Server-side fields that mix per-record transaction currency and have a
+// known EUR-converted equivalent — used to enforce currency safety in code
+// (not just via prompt instruction) whenever an aggregate spans >1 org.
+const CURRENCY_SAFE_FIELD_MAP = {
+  ExpectedRevenueAmount: 'ZBaseCurrency_KUTContent_KUT',
+};
+
+// Runs aggregateField once per resolved org, with a single consistent
+// fieldName/aggregation across all of them (enforced here, not left to the
+// agent to get right across repeated calls), returning a per-org breakdown
+// plus the total — the server, not the LLM, owns multi-org rollup math.
+export async function aggregateByOrgs({ entity, fieldName, aggregation, orgs, filters = {} }, userJwt, userEmail) {
+  let effectiveFieldName = fieldName;
+  let currencyOverrideApplied = false;
+  if (orgs.length > 1 && CURRENCY_SAFE_FIELD_MAP[fieldName]) {
+    effectiveFieldName = CURRENCY_SAFE_FIELD_MAP[fieldName];
+    currencyOverrideApplied = true;
+  }
+
+  const breakdown = [];
+  let total = 0;
+  let totalRecordsMatched = 0;
+  for (const org of orgs) {
+    const result = await aggregateField(
+      { entity, fieldName: effectiveFieldName, aggregation, filters: { ...filters, salesOrgId: org.id } },
+      userJwt,
+      userEmail
+    );
+    breakdown.push({ Org: org.name, Value: result.value, 'Records matched': result.recordsMatched });
+    total += result.value || 0;
+    totalRecordsMatched += result.recordsMatched || 0;
+  }
+
+  return {
+    fieldUsed: effectiveFieldName,
+    currencyOverrideApplied,
+    aggregation: aggregation || 'sum',
+    total,
+    totalRecordsMatched,
+    breakdown,
+  };
+}
+
 async function rawQuotes(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
   // SalesOrganisationID and BuyerPartyName both fail combined with the
@@ -143,6 +245,18 @@ const STATUS_FILTERS = {
  * caller via matchedValueCount so it can detect that case).
  */
 export async function aggregateField({ entity, fieldName, aggregation, filters = {} }, userJwt, userEmail) {
+  // Defense in depth: even if the agent bypasses aggregateByOrgs and passes a
+  // comma-separated salesOrgId straight to a single aggregate call, force the
+  // EUR-converted field for any field known to mix per-record transaction
+  // currencies — don't rely solely on the agent following the prompt rule.
+  let effectiveFieldName = fieldName;
+  let currencyOverrideApplied = false;
+  if (filters.salesOrgId && filters.salesOrgId.includes(',') && CURRENCY_SAFE_FIELD_MAP[fieldName]) {
+    effectiveFieldName = CURRENCY_SAFE_FIELD_MAP[fieldName];
+    currencyOverrideApplied = true;
+  }
+  fieldName = effectiveFieldName;
+
   const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
   const extraFields = [fieldName, filters.secondaryDateField].filter(Boolean);
   const fetchFilters = { ...filters, extraFields };
@@ -187,6 +301,7 @@ export async function aggregateField({ entity, fieldName, aggregation, filters =
     value,
     aggregation: aggregation || 'sum',
     fieldName,
+    currencyOverrideApplied,
     entity,
     recordsMatched: rows.length,
     valuesFound: values.length, // if 0 while recordsMatched > 0, fieldName is likely wrong/empty
