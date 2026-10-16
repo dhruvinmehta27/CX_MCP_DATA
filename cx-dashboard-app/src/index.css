@@ -579,8 +579,24 @@ button { font-family: inherit; }
   align-items: center; gap: 16px;
   padding: 11px 0;
   border-top: 1px solid var(--border);
+  width: 100%;
 }
-.editorial-row:first-child { border-top: none; }
+.editorial-list > div:first-child > .editorial-row { border-top: none; }
+.editorial-row-button {
+  background: none; border: none; border-radius: 0;
+  font: inherit; color: inherit; text-align: left;
+  cursor: pointer;
+}
+.editorial-row-button:hover .editorial-org { color: var(--primary); }
+.editorial-detail {
+  display: flex; flex-wrap: wrap; gap: 20px;
+  padding: 2px 0 14px 40px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.editorial-detail-label {
+  display: block; font-size: 10.5px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
+}
 .editorial-rank {
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 13px; color: var(--text-muted); text-align: right;
