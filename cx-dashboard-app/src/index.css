@@ -581,7 +581,7 @@ button { font-family: inherit; }
 .editorial-list { display: flex; flex-direction: column; }
 .editorial-row {
   display: grid;
-  grid-template-columns: 24px 160px 1fr 110px;
+  grid-template-columns: 24px 160px 1fr 120px;
   align-items: center; gap: 16px;
   padding: 11px 0;
   border-top: 1px solid var(--border);
@@ -611,16 +611,22 @@ button { font-family: inherit; }
 .editorial-spark { display: block; }
 .editorial-spark-track { fill: var(--border); }
 .editorial-spark-fill { fill: var(--primary); }
+.editorial-value-group { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .editorial-value {
   font-size: 14px; font-weight: 700; text-align: right;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+.editorial-records {
+  font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums;
 }
 
 .editorial-footnote {
   margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--border);
   font-size: 12px; color: var(--text-muted);
 }
+
+.applied-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .editorial-insights {
   margin: 16px 0 24px; padding: 14px 16px;
