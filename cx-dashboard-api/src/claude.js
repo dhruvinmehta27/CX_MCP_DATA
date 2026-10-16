@@ -684,6 +684,7 @@ const CUSTOM_AGENT_TOOLS = [
         secondaryDateField: { type: 'string' },
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
+        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it (e.g. "Industrial", "Automotive", "AUT") — resolved deterministically against this fixed, confirmed table, only applies to entity="opportunities".' },
       },
       required: ['entity', 'fieldName', 'aggregation', 'orgs'],
     },
@@ -705,6 +706,7 @@ const CUSTOM_AGENT_TOOLS = [
         secondaryDateField: { type: 'string', description: 'A different date field to also filter on, e.g. ZSOP for "start of production" (see glossary). Must be a real field confirmed via list_fields or the glossary.' },
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
+        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it — resolved deterministically against this fixed, confirmed table. Only applies to entity="opportunities".' },
       },
       required: ['entity', 'fieldName', 'aggregation'],
     },
@@ -772,6 +774,12 @@ ${pendingText || '  (none yet)'}
 AMBIGUOUS TERMS — check this list too, BEFORE assuming any mapping. These are cases where we found multiple real candidate fields and do not know which one the business means:
 ${ambiguousText || '  (none yet)'}
 If the user's term matches one of these, do NOT guess which field to use and do NOT pick the "more obviously named" one. Respond with success: false and a clarificationQuestion-style explanation asking the user to specify which field/number they mean, listing the real candidates you found. Picking wrong here silently is the exact failure this system exists to prevent — asking is always better than guessing.
+
+REAL BUT UNVERIFIED CLASSIFICATION DIMENSIONS — these are confirmed, real business concepts in this tenant (verified from real master-data code tables), but their exact OData field name on Opportunity/Quote is NOT yet confirmed, unlike "segment" (BUS_SEG_CDE) above which IS confirmed:
+  - Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Building & Construction" — MKT_SEG_GRP_CDE code table)
+  - Application (e.g. "Mechanical Seals", "Landing Gear" — ApplicationCode code table)
+  - Strategic Account classification (e.g. "Hunting", "Farming", "Housed Account", "Managed Account", "Focus Account" — StrategicAccount code table)
+If the user asks to filter/group by one of these, call list_fields on "opportunities" (and "opportunity-items" if relevant) to check for a matching field FIRST. If you find one, treat it as confirmed and use it (note the field name you used in your explanation, since it's being used for the first time). If you do NOT find a matching field, do not guess a field name or silently drop the filter — report success: false and explain that this classification isn't yet wired up as a filterable field in this system.
 
 CRITICAL RULES — these exist because guessing produced confidently wrong answers in production:
 1. NEVER invent, guess, or assume a field name exists. If a term isn't in the glossary above and you are not certain, call list_fields first.

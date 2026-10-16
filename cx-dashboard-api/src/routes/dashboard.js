@@ -72,6 +72,7 @@ function executeCustomAgentTool(req, resolvedSalesOrgId) {
         secondaryDateField: rest.secondaryDateField || null,
         secondaryDateFrom: rest.secondaryDateFrom || null,
         secondaryDateTo: rest.secondaryDateTo || null,
+        segment: rest.segment || null,
       };
       return aggregateField({ entity, fieldName, aggregation, filters }, req.userJwt, req.userEmail);
     }
@@ -100,6 +101,7 @@ function executeCustomAgentTool(req, resolvedSalesOrgId) {
         secondaryDateField: rest.secondaryDateField || null,
         secondaryDateFrom: rest.secondaryDateFrom || null,
         secondaryDateTo: rest.secondaryDateTo || null,
+        segment: rest.segment || null,
       };
       return aggregateByOrgs({ entity, fieldName, aggregation, orgs, filters }, req.userJwt, req.userEmail);
     }

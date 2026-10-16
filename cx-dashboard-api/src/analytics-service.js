@@ -57,8 +57,8 @@ function suggestCategories(keywords, items) {
  * exhausted memory on wide date ranges.
  */
 function baseFilters(filters = {}) {
-  const { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo } = filters;
-  return { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo };
+  const { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo, segment } = filters;
+  return { salesOrgId, ownerId, dateFrom, dateTo, account, secondaryDateField, secondaryDateFrom, secondaryDateTo, segment };
 }
 
 // Words too generic to use as an org-matching token on their own (would
@@ -88,6 +88,34 @@ function matchesOrg(orgId, orgName, filterValue) {
 function matchesAccount(accountName, filterValue) {
   if (!filterValue) return true;
   return !!accountName && accountName.toLowerCase().includes(filterValue.trim().toLowerCase());
+}
+
+// Business segment (BUS_SEG_CDE) — confirmed real master-data code table
+// (not guessed): AER/AUT/HM/IND are the live codes (HEA is disabled, HM
+// replaced it). BUS_SEG_CDE_KUT/BUS_SEG_CDE_KUTText are already fetched on
+// every opportunity (OPPORTUNITY_FIELDS), so this is a pure in-process
+// filter — no new OData call needed.
+const BUSINESS_SEGMENTS = {
+  AER: 'Aerospace',
+  AUT: 'Automotive',
+  HM: 'Healthcare & Medical',
+  IND: 'Industrial',
+};
+
+function matchesSegment(segCode, segText, filterValue) {
+  if (!filterValue) return true;
+  const v = filterValue.trim().toLowerCase();
+  const codeLower = (segCode || '').toLowerCase();
+  const textLower = (segText || '').toLowerCase();
+  // Resolve the filter term to a known code first (exact code, or a
+  // description match/substring against the confirmed table) — falls back to
+  // a direct substring check against the record's own text so an unexpected
+  // but real value still matches instead of silently excluding everything.
+  const matchedCode = Object.entries(BUSINESS_SEGMENTS).find(
+    ([code, desc]) => code.toLowerCase() === v || desc.toLowerCase() === v || desc.toLowerCase().includes(v)
+  )?.[0];
+  if (matchedCode) return codeLower === matchedCode.toLowerCase();
+  return textLower.includes(v) || codeLower === v;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,10 +270,11 @@ async function rawOpportunities(filters, userJwt, userEmail) {
   const extraFields = filters.extraFields || [];
   const fetchKey = { ...base, salesOrgId: undefined, account: undefined, extraFields };
   const { data } = await getOrSet(userEmail, 'raw:opportunities', fetchKey, () => fetchOpportunities(fetchKey, userJwt));
-  if (!base.salesOrgId && !base.account) return data;
+  if (!base.salesOrgId && !base.account && !base.segment) return data;
   const results = data.results.filter((o) =>
     matchesOrg(o.SalesOrganisationID, o.SalesOrganisationName, base.salesOrgId) &&
-    matchesAccount(o.ProspectPartyName, base.account)
+    matchesAccount(o.ProspectPartyName, base.account) &&
+    matchesSegment(o.BUS_SEG_CDE_KUT, o.BUS_SEG_CDE_KUTText, base.segment)
   );
   return { ...data, results, total: results.length };
 }
