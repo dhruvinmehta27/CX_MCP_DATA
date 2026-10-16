@@ -412,12 +412,32 @@ async function getQuoteReferences(userJwt) {
   return promise;
 }
 
+// Normalizes the various ways C4C represents a boolean flag in OData
+// (true/false, 'X'/blank, '1'/'0', 'true'/'false' as strings) to a real
+// boolean — ZQuoteExist_KUT's exact representation hasn't been independently
+// confirmed yet, so this accepts the common C4C conventions rather than
+// assuming one specific format.
+function isFlagTrue(v) {
+  if (v === true || v === 1) return true;
+  if (typeof v === 'string') return ['x', 'true', '1', 'yes'].includes(v.trim().toLowerCase());
+  return false;
+}
+
 /**
- * Counts opportunities that have been converted to a Sales Quote — there is
- * no boolean flag for this on the Opportunity header; it's derived from
- * OpportunityBusinessTransactionDocumentReference (TypeCode=30 "Sales Quote",
- * relationship role "Successor"), confirmed against a live record. Used by
- * the custom-aggregate agent's count_quote_conversions tool.
+ * Counts opportunities that have been converted to a Sales Quote.
+ *
+ * Primary signal: ZQuoteExist_KUT — a direct flag on the Opportunity header,
+ * exposed specifically to make this count simple (no join needed). Used
+ * whenever it appears populated in the scoped result set (at least one
+ * true AND the field isn't just universally blank), since an all-false
+ * result set could genuinely mean zero conversions, not an unpopulated field.
+ *
+ * Fallback: OpportunityBusinessTransactionDocumentReference (TypeCode=30
+ * "Sales Quote", relationship role "Successor") — the original derivation,
+ * confirmed against a live record, kept in case ZQuoteExist_KUT isn't
+ * populated for a given org/scope (new field, may roll out gradually).
+ *
+ * Used by the custom-aggregate agent's count_quote_conversions tool.
  */
 export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail) {
   const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
@@ -426,20 +446,32 @@ export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail)
     getQuoteReferences(userJwt),
   ]);
 
-  const SUCCESSOR_ROLE_CODE = '2';
-  const convertedIds = new Set(
-    refs.results
-      .filter((r) => r.BusinessTransactionDocumentRelationshipRoleCode === SUCCESSOR_ROLE_CODE)
-      .map((r) => r.OpportunityID)
-  );
-
   const scoped = opps.results.filter(statusFilter);
-  const converted = scoped.filter((o) => convertedIds.has(o.ID));
+
+  const flagValues = scoped.map((o) => o.ZQuoteExist_KUT).filter((v) => v !== undefined && v !== null && v !== '');
+  const anyTrueViaFlag = scoped.some((o) => isFlagTrue(o.ZQuoteExist_KUT));
+  const flagLooksPopulated = flagValues.length > 0 && anyTrueViaFlag;
+
+  let converted, method;
+  if (flagLooksPopulated) {
+    converted = scoped.filter((o) => isFlagTrue(o.ZQuoteExist_KUT));
+    method = 'ZQuoteExist_KUT flag';
+  } else {
+    const SUCCESSOR_ROLE_CODE = '2';
+    const convertedIds = new Set(
+      refs.results
+        .filter((r) => r.BusinessTransactionDocumentRelationshipRoleCode === SUCCESSOR_ROLE_CODE)
+        .map((r) => r.OpportunityID)
+    );
+    converted = scoped.filter((o) => convertedIds.has(o.ID));
+    method = 'OpportunityBusinessTransactionDocumentReference (ZQuoteExist_KUT not populated for this scope)';
+  }
 
   return {
     totalOpportunities: scoped.length,
     convertedCount: converted.length,
     conversionRate: scoped.length ? Math.round((converted.length / scoped.length) * 100) : null,
+    method,
     sample: converted.slice(0, 10).map((o) => ({
       'Opportunity ID': o.ID,
       Name: o.Name,
