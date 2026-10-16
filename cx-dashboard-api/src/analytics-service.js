@@ -63,7 +63,11 @@ function baseFilters(filters = {}) {
 
 // Words too generic to use as an org-matching token on their own (would
 // false-match almost any org name/ID).
-const ORG_FILLER_WORDS = new Set(['the', 'sales', 'organization', 'organisation', 'org', 'for', 'and', 'in', 'a']);
+// 'tss'/'csc'/'tms' are tenant-wide org-ID prefixes (TSSGERMANY, CSC Germany,
+// TMS MD Germany, ...) present on nearly every real org — treating them as a
+// distinguishing token caused "TSS Germany" to match almost the entire org
+// catalog (confirmed live: a single-org query resolved to 60+ unrelated orgs).
+const ORG_FILLER_WORDS = new Set(['the', 'sales', 'organization', 'organisation', 'org', 'for', 'and', 'in', 'a', 'tss', 'csc', 'tms']);
 
 // Match org by exact ID code (e.g. "TSSGERMANY") OR by name substring (e.g. "CSC Germany").
 // Supports comma-separated values for multi-org filtering (e.g. "TSSCANADA,TSSMEXICO").
@@ -80,8 +84,19 @@ function matchesOrg(orgId, orgName, filterValue) {
     if (idLower === v) return true;
     if (idLower && (idLower.includes(v) || v.includes(idLower))) return true;
     if (nameLower && (nameLower.includes(v) || v.includes(nameLower))) return true;
+    // Space-stripped exact-ish match: "TSS Germany" -> "tssgermany" against
+    // the real ID "TSSGERMANY" — precise, single-org, and must be checked
+    // BEFORE the token fallback below so a real prefix+country phrase like
+    // this resolves to the one intended org instead of falling through to
+    // broad token matching once "tss" is stripped as filler.
+    const vNoSpace = v.replace(/\s+/g, '');
+    if (vNoSpace.length >= 5 && idLower && idLower.includes(vNoSpace)) return true;
     const tokens = v.split(/\s+/).filter((t) => t.length >= 3 && !ORG_FILLER_WORDS.has(t));
-    return tokens.some((t) => (idLower && idLower.includes(t)) || (nameLower && nameLower.includes(t)));
+    // ALL remaining tokens must match (not .some()) — with only filler words
+    // stripped, a single shared token (e.g. a country name alone) was
+    // matching far too broadly; requiring every distinguishing word to be
+    // present is what actually narrows down to the right org(s).
+    return tokens.length > 0 && tokens.every((t) => (idLower && idLower.includes(t)) || (nameLower && nameLower.includes(t)));
   });
 }
 
