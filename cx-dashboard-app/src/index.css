@@ -552,6 +552,55 @@ button { font-family: inherit; }
   white-space: pre-wrap;
 }
 
+/* Editorial result presentation: a narrative lead + ranked list, rather than
+   a dashboard widget — single-number and multi-org-breakdown custom/aggregate
+   answers both read as a short written finding. */
+.editorial-hero { padding: 24px 4px 12px; }
+.editorial-hero-value {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 44px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1;
+  color: var(--text);
+}
+.editorial-hero-sub { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+
+.editorial-breakdown { padding: 4px 4px 8px; }
+.editorial-lead {
+  margin: 0 0 24px;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 18px; line-height: 1.6; color: var(--text);
+  max-width: 640px;
+}
+.editorial-lead strong { font-weight: 600; }
+
+.editorial-list { display: flex; flex-direction: column; }
+.editorial-row {
+  display: grid;
+  grid-template-columns: 24px 160px 1fr 110px;
+  align-items: center; gap: 16px;
+  padding: 11px 0;
+  border-top: 1px solid var(--border);
+}
+.editorial-row:first-child { border-top: none; }
+.editorial-rank {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 13px; color: var(--text-muted); text-align: right;
+}
+.editorial-org { font-size: 13.5px; font-weight: 500; color: var(--text); }
+.editorial-spark { display: block; }
+.editorial-spark-track { fill: var(--border); }
+.editorial-spark-fill { fill: var(--primary); }
+.editorial-value {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 14px; font-weight: 600; text-align: right;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.editorial-footnote {
+  margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted);
+}
+
 /* ---------- Modal (full-screen chart) ---------- */
 .modal-backdrop {
   position: fixed; inset: 0;
