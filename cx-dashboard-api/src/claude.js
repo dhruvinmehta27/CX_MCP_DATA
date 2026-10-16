@@ -633,6 +633,41 @@ const AMBIGUOUS_TERMS = [
 ];
 
 
+// --- Shared filter-param fragments ---------------------------------------
+// Single source of truth, spread into every tool below that needs them.
+// This exists specifically so a new counting/aggregation tool can't quietly
+// omit one of these the way count_rfqs_from_quotes did (date-only for weeks
+// while every other tool gained org/segment/account support) — and so a
+// wording fix only has to happen in one place, not five.
+//
+// NOTE: a tool's input_schema spreading these is a promise the BACKEND
+// handler actually implements them — never add these to a tool whose
+// executeCustomAgentTool handler doesn't honor them yet, that would be worse
+// than not having the param (silently accepted, silently ignored).
+const CUSTOM_AGENT_CLASSIFICATION_PARAMS = {
+  segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it (e.g. "Industrial", "Automotive", "AUT") — resolved deterministically against this fixed, confirmed table. Only applies to entity="opportunities".' },
+  application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+  marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
+  strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
+};
+const CUSTOM_AGENT_SINGLE_ORG_PARAM = {
+  salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
+};
+const CUSTOM_AGENT_ACCOUNT_PARAM = {
+  account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+};
+const CUSTOM_AGENT_MULTI_ORG_PARAM = {
+  orgs: {
+    type: 'array',
+    description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
+    items: {
+      type: 'object',
+      properties: { id: { type: 'string' }, name: { type: 'string' } },
+      required: ['id', 'name'],
+    },
+  },
+};
+
 const CUSTOM_AGENT_TOOLS = [
   {
     name: 'list_fields',
@@ -669,25 +704,14 @@ const CUSTOM_AGENT_TOOLS = [
         entity: { type: 'string', enum: ['opportunities', 'quotes'] },
         fieldName: { type: 'string', description: 'The exact field name (from the glossary or list_fields). May be auto-upgraded to the EUR-converted equivalent for currency safety.' },
         aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
-        orgs: {
-          type: 'array',
-          description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
-          items: {
-            type: 'object',
-            properties: { id: { type: 'string' }, name: { type: 'string' } },
-            required: ['id', 'name'],
-          },
-        },
+        ...CUSTOM_AGENT_MULTI_ORG_PARAM,
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Default "all".' },
         dateFrom: { type: 'string' },
         dateTo: { type: 'string' },
         secondaryDateField: { type: 'string' },
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it (e.g. "Industrial", "Automotive", "AUT") — resolved deterministically against this fixed, confirmed table, only applies to entity="opportunities".' },
-        application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
       required: ['entity', 'fieldName', 'aggregation', 'orgs'],
     },
@@ -702,17 +726,14 @@ const CUSTOM_AGENT_TOOLS = [
         fieldName: { type: 'string', description: 'The exact field name as returned by list_fields.' },
         aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter by opportunity lifecycle outcome. Only meaningful for entity="opportunities". Default "all".' },
-        salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
-        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters on CreationDateTime.' },
         secondaryDateField: { type: 'string', description: 'A different date field to also filter on, e.g. ZSOP for "start of production" (see glossary). Must be a real field confirmed via list_fields or the glossary.' },
         secondaryDateFrom: { type: 'string' },
         secondaryDateTo: { type: 'string' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial). Pass the segment name or code as the user said it — resolved deterministically against this fixed, confirmed table. Only applies to entity="opportunities".' },
-        application: { type: 'string', description: 'Account-level Application classification (e.g. "Mechanical Seals", "Landing Gear") — a real, confirmed field (ApplicationCode/ApplicationCodeText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group (e.g. "Aerospace", "Automotive Light Vehicles", "Medical Device") — a real, confirmed field (MKT_SEG_GRP_CDE/MKT_SEG_GRP_CDEText on the Account entity, joined via ProspectPartyID), matched by substring against the description. Only applies to entity="opportunities".' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned (StrategicAccount_KUT on the Account entity, joined via ProspectPartyID). Only applies to entity="opportunities".' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
       required: ['entity', 'fieldName', 'aggregation'],
     },
@@ -724,14 +745,11 @@ const CUSTOM_AGENT_TOOLS = [
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome before checking conversion. Default "all".' },
-        salesOrgId: { type: 'string', description: 'Sales org ID or country/region name only (e.g. "Hungary", not "Hungary sales organization"), if the user specified one. Keep it to the bare name/code — extra words weaken the match.' },
-        account: { type: 'string', description: 'Customer/account name substring, if the user specified one.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
         dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial).' },
-        application: { type: 'string', description: 'Account-level Application classification, matched by substring against the description.' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group, matched by substring against the description.' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned.' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
     },
   },
@@ -741,23 +759,12 @@ const CUSTOM_AGENT_TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        orgs: {
-          type: 'array',
-          description: 'The exact org list from a resolve_org_scope result (its "orgs" array) — do not hand-build this list.',
-          items: {
-            type: 'object',
-            properties: { id: { type: 'string' }, name: { type: 'string' } },
-            required: ['id', 'name'],
-          },
-        },
+        ...CUSTOM_AGENT_MULTI_ORG_PARAM,
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Default "all".' },
-        account: { type: 'string' },
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string' },
         dateTo: { type: 'string' },
-        segment: { type: 'string', description: 'Business segment — confirmed real codes: AER (Aerospace), AUT (Automotive), HM (Healthcare & Medical), IND (Industrial).' },
-        application: { type: 'string', description: 'Account-level Application classification, matched by substring against the description.' },
-        marketSegmentGroup: { type: 'string', description: 'Account-level Market Segment Group, matched by substring against the description.' },
-        strategicAccount: { type: 'string', description: 'Account-level Strategic Account classification — confirmed real codes: Strategic Prospect, Hunting, Farming, Housed Account, Managed Account, Focus Account, Not Assigned.' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
       required: ['orgs'],
     },
