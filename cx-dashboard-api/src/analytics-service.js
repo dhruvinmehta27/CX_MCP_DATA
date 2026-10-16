@@ -125,18 +125,35 @@ async function resolveOrgScope(term, userJwt) {
   const t = (term || '').trim().toLowerCase();
   if (!t) return { matchType: 'none', orgs: [] };
 
+  // Check BOTH interpretations before deciding anything — some tenants have
+  // real orgs literally named after a region (e.g. "TSS Auto Europe", "TSS
+  // E-Mobility Europe") that are business-unit-level, NOT a roll-up of every
+  // country org. Silently preferring our own geography guess (REGION_COUNTRIES)
+  // over real org data would repeat the exact mistake this system exists to
+  // prevent — so when both exist and disagree, this is genuinely ambiguous
+  // and must be asked, not assumed either way.
+  const direct = orgs.filter((o) => matchesOrg(o.id, o.name, t));
   const regionKey = Object.keys(REGION_COUNTRIES).find((k) => k === t || t.includes(k));
-  if (regionKey) {
-    const countries = REGION_COUNTRIES[regionKey];
-    const matched = orgs.filter((o) =>
-      countries.some((c) => o.name.toLowerCase().includes(c) || o.id.toLowerCase().includes(c.replace(/\s+/g, '')))
-    );
-    return { matchType: matched.length ? 'region' : 'ambiguous', region: regionKey, orgs: matched, candidates: matched.length ? [] : orgs };
+  const regionMatched = regionKey
+    ? orgs.filter((o) =>
+        REGION_COUNTRIES[regionKey].some((c) => o.name.toLowerCase().includes(c) || o.id.toLowerCase().includes(c.replace(/\s+/g, '')))
+      )
+    : [];
+
+  const directIds = new Set(direct.map((o) => o.id));
+  const regionOnlyMatches = regionMatched.filter((o) => !directIds.has(o.id));
+  if (direct.length > 0 && regionOnlyMatches.length > 0) {
+    return {
+      matchType: 'ambiguous',
+      note: `"${term}" matches real orgs named after it directly (e.g. business-unit-level orgs) AND separately matches country-level orgs in that geographic region — these are two different real interpretations and the correct scope is not known. Ask the user which they mean.`,
+      candidates: [...direct, ...regionOnlyMatches],
+    };
   }
 
-  const direct = orgs.filter((o) => matchesOrg(o.id, o.name, t));
   if (direct.length === 1) return { matchType: 'single', orgs: direct };
   if (direct.length > 1) return { matchType: 'multiple', orgs: direct };
+  if (regionMatched.length > 0) return { matchType: 'region', region: regionKey, orgs: regionMatched };
+  if (regionKey) return { matchType: 'ambiguous', region: regionKey, orgs: [], candidates: orgs };
 
   // No confident match — surface close-looking candidates (by word overlap) so
   // the agent can ask the user to pick, instead of guessing.
