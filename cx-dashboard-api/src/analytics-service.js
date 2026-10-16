@@ -147,6 +147,11 @@ async function resolveOrgScope(term, userJwt) {
       matchType: 'ambiguous',
       note: `"${term}" matches real orgs named after it directly (e.g. business-unit-level orgs) AND separately matches country-level orgs in that geographic region — these are two different real interpretations and the correct scope is not known. Ask the user which they mean.`,
       candidates: [...direct, ...regionOnlyMatches],
+      // Kept separate (not just merged into candidates) so the UI can offer
+      // one-click options for each real interpretation instead of making the
+      // user retype their answer as free text.
+      directOrgs: direct,
+      regionOrgs: regionOnlyMatches,
     };
   }
 
