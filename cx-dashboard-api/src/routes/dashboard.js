@@ -35,8 +35,22 @@ function pickFilters(source = {}) {
 // Executes the custom-aggregate agent's tool calls against real C4C data.
 // Injected into runCustomAggregateAgent so claude.js stays free of
 // C4C/analytics-service imports.
-function executeCustomAgentTool(req) {
+// resolvedSalesOrgId: the salesOrgId already resolved on the Confirm screen
+// (if any). Passed in so resolve_org_scope can be short-circuited in CODE,
+// not just discouraged by a prompt rule — this makes it structurally
+// impossible for the agent to re-discover and re-ask an org ambiguity the
+// user already answered, regardless of whether it reads/follows that rule.
+function executeCustomAgentTool(req, resolvedSalesOrgId) {
   return async (name, input) => {
+    if (name === 'resolve_org_scope' && resolvedSalesOrgId) {
+      const ids = resolvedSalesOrgId.split(',').map((s) => s.trim()).filter(Boolean);
+      return {
+        matchType: ids.length > 1 ? 'multiple' : 'single',
+        orgs: ids.map((id) => ({ id, name: id })),
+        alreadyResolved: true,
+        note: 'This was already resolved on the Confirm screen — use it as-is, do not ask the user again.',
+      };
+    }
     if (name === 'list_fields') {
       const fields = await fetchCollectionFields(input.collection, req.userJwt);
       return { collection: input.collection, fields };
@@ -203,7 +217,7 @@ router.post('/generate', async (req, res, next) => {
       const agentResult = await runCustomAggregateAgent({
         userRequest,
         baseFilters: mergedFilters,
-        executeTool: executeCustomAgentTool(req),
+        executeTool: executeCustomAgentTool(req, mergedFilters.salesOrgId),
       });
 
       let rows;
