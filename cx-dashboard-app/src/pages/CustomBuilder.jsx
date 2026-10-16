@@ -203,6 +203,7 @@ export default function CustomBuilder() {
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);
   const [activeTab, setActiveTab] = useState('answer');
   const [showUnmatchedOrgs, setShowUnmatchedOrgs] = useState(false);
+  const [expandedOrg, setExpandedOrg] = useState(null);
   const [showInsightDetails, setShowInsightDetails] = useState(false);
   const [useRequestPeriod, setUseRequestPeriod] = useState(false);
   const [overrideDateFrom, setOverrideDateFrom] = useState(null);
@@ -276,6 +277,7 @@ export default function CustomBuilder() {
       setResult({ ...res, title: res.title || buildIntent.title });
       setActiveTab('answer');
       setShowUnmatchedOrgs(false);
+      setExpandedOrg(null);
       setStep(3);
     } catch (err) {
       setError(err);
@@ -693,17 +695,37 @@ export default function CustomBuilder() {
                         <strong>{(result.total?.recordsMatched ?? 0).toLocaleString()}</strong> records.
                       </p>
                       <div className="editorial-list">
-                        {matched.map((row, i) => (
-                          <div className="editorial-row" key={row.Org}>
-                            <div className="editorial-rank">{i + 1}</div>
-                            <div className="editorial-org">{row.Org}</div>
-                            <svg width="100%" height="10" viewBox="0 0 420 10" preserveAspectRatio="none" className="editorial-spark">
-                              <rect x="0" y="1" width="420" height="8" rx="4" className="editorial-spark-track" />
-                              <rect x="0" y="1" width={Math.max(4, Math.round(((row.Value || 0) / max) * 420))} height="8" rx="4" className="editorial-spark-fill" />
-                            </svg>
-                            <div className="editorial-value">{formatEUR(row.Value)}</div>
-                          </div>
-                        ))}
+                        {matched.map((row, i) => {
+                          const records = row['Records matched'] || 0;
+                          const shareOfTotal = result.total?.value ? ((row.Value || 0) / result.total.value) * 100 : 0;
+                          const avgPerRecord = records > 0 ? (row.Value || 0) / records : 0;
+                          const isOpen = expandedOrg === row.Org;
+                          return (
+                            <div key={row.Org}>
+                              <button
+                                className="editorial-row editorial-row-button"
+                                onClick={() => setExpandedOrg(isOpen ? null : row.Org)}
+                                aria-expanded={isOpen}
+                              >
+                                <div className="editorial-rank">{i + 1}</div>
+                                <div className="editorial-org">{row.Org}</div>
+                                <svg width="100%" height="10" viewBox="0 0 420 10" preserveAspectRatio="none" className="editorial-spark">
+                                  <rect x="0" y="1" width="420" height="8" rx="4" className="editorial-spark-track" />
+                                  <rect x="0" y="1" width={Math.max(4, Math.round(((row.Value || 0) / max) * 420))} height="8" rx="4" className="editorial-spark-fill" />
+                                </svg>
+                                <div className="editorial-value">{formatEUR(row.Value)}</div>
+                              </button>
+                              {isOpen && (
+                                <div className="editorial-detail">
+                                  <div><span className="editorial-detail-label">Rank</span>#{i + 1} of {matched.length}</div>
+                                  <div><span className="editorial-detail-label">Records</span>{records.toLocaleString()}</div>
+                                  <div><span className="editorial-detail-label">Share of total</span>{shareOfTotal.toFixed(1)}%</div>
+                                  <div><span className="editorial-detail-label">Avg. per record</span>{formatEUR(avgPerRecord)}</div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                       {unmatched.length > 0 && (
                         <p className="editorial-footnote">
