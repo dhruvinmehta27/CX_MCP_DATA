@@ -532,6 +532,26 @@ button { font-family: inherit; }
 .chart-card-actions { display: flex; gap: 2px; }
 .chart-card-body { min-height: 230px; position: relative; }
 
+.result-tabs {
+  display: flex; gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.result-tab {
+  background: none; border: none; cursor: pointer;
+  padding: 8px 4px; margin-right: 16px;
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+}
+.result-tab:hover { color: var(--text); }
+.result-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.result-explanation { padding: 4px 0 8px; }
+.result-explanation p {
+  font-size: 13.5px; line-height: 1.7; color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
 /* ---------- Modal (full-screen chart) ---------- */
 .modal-backdrop {
   position: fixed; inset: 0;
