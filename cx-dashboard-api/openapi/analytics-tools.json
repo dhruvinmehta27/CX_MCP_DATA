@@ -6,7 +6,7 @@
     "version": "1.0.0"
   },
   "servers": [
-    { "url": "https://REPLACE-WITH-CX-DASHBOARD-API-HOST/api/tools" }
+    { "url": "https://cx-dashboard-api.cfapps.eu10.hana.ondemand.com/api/tools" }
   ],
   "paths": {
     "/list_fields": {
