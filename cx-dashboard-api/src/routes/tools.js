@@ -29,6 +29,44 @@ import {
   getSalesOrgs,
 } from '../analytics-service.js';
 import { fetchCollectionFields } from '../c4c-client.js';
+import { getFieldDisplayLabel } from '../claude.js';
+
+// Deterministic response enrichment — the same principle as unitTracker in
+// routes/dashboard.js, just applied at the HTTP boundary instead of inside
+// an in-process tool-calling loop. An external agent (Foundry) only sees
+// these JSON responses, never our prompt rules, so anything we can decide
+// here with certainty should be decided here rather than written as an
+// instruction the far-side model has to remember and apply correctly every
+// time. This is what let the Foundry agent's own instructions stay shorter
+// than claude.js's system prompt without dropping any guarantee.
+function withUnit(result, unit, fieldLabel) {
+  return { ...result, unit, fieldLabel };
+}
+
+// A count_quote_conversions_by_org row uses different column names than
+// every other breakdown ({Org, "Total opportunities", "Converted to quote",
+// "Conversion rate"}) — remapped here, once, instead of leaving it as a
+// prompt instruction the far-side model has to get right on every call.
+function remapConversionBreakdown(breakdown = []) {
+  return breakdown.map((row) => ({
+    Org: row.Org,
+    Value: row['Converted to quote'],
+    'Records matched': row['Total opportunities'],
+    'Conversion rate': row['Conversion rate'],
+  }));
+}
+
+// aggregate/aggregate_by_org returning valuesFound: 0 while recordsMatched
+// > 0 means the field name was wrong or empty for every matched record —
+// flagged explicitly here (rather than left as "rule 4" for the model to
+// apply) so the far-side agent gets an unambiguous signal, not just numbers
+// it has to interpret correctly on its own.
+function withZeroValueFlag(result) {
+  const suspicious = result.recordsMatched > 0 && result.valuesFound === 0;
+  return suspicious
+    ? { ...result, likelyWrongField: true, warning: 'valuesFound is 0 while recordsMatched > 0 — this field name is likely wrong or empty for every matched record. Do not report this as a real "0" answer; try a different field from list_fields, or report that the value could not be computed.' }
+    : result;
+}
 
 const router = Router();
 
@@ -81,7 +119,8 @@ router.post('/aggregate', async (req, res, next) => {
       ...classificationFilters(rest),
     };
     const result = await aggregateField({ entity, fieldName, aggregation, filters }, req.userJwt, req.userEmail);
-    res.json(result);
+    const unit = aggregation === 'count' ? 'count' : 'currency';
+    res.json(withZeroValueFlag(withUnit(result, unit, getFieldDisplayLabel(result.fieldName))));
   } catch (err) {
     next(err);
   }
@@ -103,7 +142,8 @@ router.post('/aggregate_by_org', async (req, res, next) => {
       ...classificationFilters(rest),
     };
     const result = await aggregateByOrgs({ entity, fieldName, aggregation, orgs, filters }, req.userJwt, req.userEmail);
-    res.json(result);
+    const unit = aggregation === 'count' ? 'count' : 'currency';
+    res.json(withUnit(result, unit, getFieldDisplayLabel(result.fieldUsed || fieldName)));
   } catch (err) {
     next(err);
   }
@@ -121,7 +161,7 @@ router.post('/count_quote_conversions', async (req, res, next) => {
       ...classificationFilters(rest),
     };
     const result = await opportunitiesConvertedToQuote(filters, req.userJwt, req.userEmail);
-    res.json(result);
+    res.json(withUnit(result, 'count', 'Opportunities Converted to Quote'));
   } catch (err) {
     next(err);
   }
@@ -141,7 +181,10 @@ router.post('/count_quote_conversions_by_org', async (req, res, next) => {
       ...classificationFilters(rest),
     };
     const result = await countQuoteConversionsByOrgs({ orgs, filters }, req.userJwt, req.userEmail);
-    res.json(result);
+    res.json({
+      ...withUnit(result, 'count', 'Opportunities Converted to Quote'),
+      breakdown: remapConversionBreakdown(result.breakdown),
+    });
   } catch (err) {
     next(err);
   }
@@ -151,7 +194,10 @@ router.post('/count_rfqs_from_quotes', async (req, res, next) => {
   try {
     const { dateFrom, dateTo } = req.body || {};
     const result = await rfqsRaisedFromQuotes({ dateFrom: dateFrom || null, dateTo: dateTo || null }, req.userJwt, req.userEmail);
-    res.json(result);
+    const enriched = withUnit(result, 'count', 'RFQs Raised from Quotes');
+    res.json(result.uniqueRFQCount === 0
+      ? { ...enriched, warning: 'This field (RFQ_IDcontent_SDK) has not been observed populated in any sample record during development. Report this 0 as "the underlying field may not be populated by the current process" — not as a confident "no RFQs were raised".' }
+      : enriched);
   } catch (err) {
     next(err);
   }
