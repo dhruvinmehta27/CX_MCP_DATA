@@ -1,0 +1,236 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "CX Analytics Tools",
+    "description": "Real C4C CRM analytics tools (Opportunities, Quotes, org/account classification) for the AnalyticsAgent. Every call requires the calling user's own Azure AD Bearer token — this is per-user CRM data, not a shared service account; a call without a valid, forwarded user token will be rejected.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "https://REPLACE-WITH-CX-DASHBOARD-API-HOST/api/tools" }
+  ],
+  "paths": {
+    "/list_fields": {
+      "post": {
+        "operationId": "list_fields",
+        "summary": "List real field names on a C4C collection. Call this before aggregate whenever a field name isn't already confirmed via the glossary — never guess a field name.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "collection": {
+                    "type": "string",
+                    "enum": ["opportunities", "opportunity-items", "quotes", "quote-items", "rfqs"]
+                  }
+                },
+                "required": ["collection"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/resolve_org_scope": {
+      "post": {
+        "operationId": "resolve_org_scope",
+        "summary": "Resolve a free-text org/country/region term against the real C4C sales org catalog. Always call this before using any org/region term as a filter. Returns matchType: single, multiple, region, ambiguous, or none. On ambiguous, report failure and surface the real candidate names instead of guessing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "term": { "type": "string", "description": "e.g. \"Hungary\" or \"Europe\"" } },
+                "required": ["term"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/aggregate": {
+      "post": {
+        "operationId": "aggregate",
+        "summary": "Sum, count, or average ONE confirmed field across Opportunities or Quotes, scoped to at most one org. fieldName must come from list_fields or the glossary — a guessed field name silently returns zero, which must be treated as failure, not a real zero.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entity": { "type": "string", "enum": ["opportunities", "quotes"] },
+                  "fieldName": { "type": "string" },
+                  "aggregation": { "type": "string", "enum": ["sum", "count", "avg"] },
+                  "status": { "type": "string", "enum": ["won", "open", "lost", "all"] },
+                  "salesOrgId": { "type": "string", "description": "Bare org ID or country/region name only, if already resolved via resolve_org_scope." },
+                  "account": { "type": "string" },
+                  "dateFrom": { "type": "string" },
+                  "dateTo": { "type": "string" },
+                  "secondaryDateField": { "type": "string" },
+                  "secondaryDateFrom": { "type": "string" },
+                  "secondaryDateTo": { "type": "string" },
+                  "segment": { "type": "string", "description": "AER, AUT, HM, or IND (or the name)." },
+                  "application": { "type": "string" },
+                  "marketSegmentGroup": { "type": "string" },
+                  "strategicAccount": { "type": "string" }
+                },
+                "required": ["entity", "fieldName", "aggregation"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/aggregate_by_org": {
+      "post": {
+        "operationId": "aggregate_by_org",
+        "summary": "Per-org breakdown AND total of sum/count/avg across MULTIPLE orgs in one call — use whenever more than one org/country/region is involved, instead of calling aggregate once per org. Keeps currency-field choice consistent across every org and keeps 0-result orgs visible.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entity": { "type": "string", "enum": ["opportunities", "quotes"] },
+                  "fieldName": { "type": "string" },
+                  "aggregation": { "type": "string", "enum": ["sum", "count", "avg"] },
+                  "orgs": {
+                    "type": "array",
+                    "description": "The exact orgs array from a resolve_org_scope result — do not hand-build this list.",
+                    "items": {
+                      "type": "object",
+                      "properties": { "id": { "type": "string" }, "name": { "type": "string" } },
+                      "required": ["id", "name"]
+                    }
+                  },
+                  "status": { "type": "string", "enum": ["won", "open", "lost", "all"] },
+                  "dateFrom": { "type": "string" },
+                  "dateTo": { "type": "string" },
+                  "secondaryDateField": { "type": "string" },
+                  "secondaryDateFrom": { "type": "string" },
+                  "secondaryDateTo": { "type": "string" },
+                  "segment": { "type": "string" },
+                  "application": { "type": "string" },
+                  "marketSegmentGroup": { "type": "string" },
+                  "strategicAccount": { "type": "string" }
+                },
+                "required": ["entity", "fieldName", "aggregation", "orgs"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/count_quote_conversions": {
+      "post": {
+        "operationId": "count_quote_conversions",
+        "summary": "Count opportunities converted to a Sales Quote, scoped to at most one org. Internally prefers ZQuoteExist_KUT when populated, else falls back to the document-reference join; response includes which method was used. For more than one org use count_quote_conversions_by_org instead.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "enum": ["won", "open", "lost", "all"] },
+                  "salesOrgId": { "type": "string" },
+                  "account": { "type": "string" },
+                  "dateFrom": { "type": "string" },
+                  "dateTo": { "type": "string" },
+                  "segment": { "type": "string" },
+                  "application": { "type": "string" },
+                  "marketSegmentGroup": { "type": "string" },
+                  "strategicAccount": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/count_quote_conversions_by_org": {
+      "post": {
+        "operationId": "count_quote_conversions_by_org",
+        "summary": "Same as count_quote_conversions but across MULTIPLE orgs in one call. Runs the count once per org server-side with one consistent method, returning a per-org breakdown plus the combined total.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orgs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": { "id": { "type": "string" }, "name": { "type": "string" } },
+                      "required": ["id", "name"]
+                    }
+                  },
+                  "status": { "type": "string", "enum": ["won", "open", "lost", "all"] },
+                  "account": { "type": "string" },
+                  "dateFrom": { "type": "string" },
+                  "dateTo": { "type": "string" },
+                  "segment": { "type": "string" },
+                  "application": { "type": "string" },
+                  "marketSegmentGroup": { "type": "string" },
+                  "strategicAccount": { "type": "string" }
+                },
+                "required": ["orgs"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/count_rfqs_from_quotes": {
+      "post": {
+        "operationId": "count_rfqs_from_quotes",
+        "summary": "Count RFQs raised from quotes (derived from RFQ_IDcontent_SDK on SalesQuoteItem). CAVEAT: this field has not been observed populated in any sample record — a 0 result must be reported as 'field may not be populated by the current process', not as a confident 'no RFQs were raised'. No org/account filter yet.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dateFrom": { "type": "string" },
+                  "dateTo": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/sales_orgs": {
+      "get": {
+        "operationId": "list_sales_orgs",
+        "summary": "Full real sales org catalog (id + name). Useful for displaying readable org names after resolve_org_scope.",
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "The end user's own Azure AD access token, forwarded as-is from whatever called the agent. Not a service-account/API key."
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }]
+}
