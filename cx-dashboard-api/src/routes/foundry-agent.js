@@ -6,19 +6,29 @@
  * an arbitrary end user's identity). See foundry-tool-executor.js for the
  * actual tool logic; this file only drives the conversation loop.
  *
- * NOT YET LIVE-VERIFIED. Built from:
- *  - The real "Continue in code" snippet Cowork pulled for AnalyticsAgent
- *    (confirms: project endpoint, DefaultAzureCredential-style auth, and the
- *    conversations.create() + responses.create() shape — this is the OpenAI
- *    Responses API, not the older Assistants threads/runs API).
- *  - The well-documented, stable OpenAI Responses API tool-calling contract
- *    (function_call items in response.output; continue the turn by posting
- *    function_call_output items back) for the parts the snippet didn't show
- *    (the snippet was a no-tools "Hi" smoke test, not a tool-call example).
- * The exact Foundry REST path for the OpenAI-compatible endpoint under
- * FOUNDRY_PROJECT_ENDPOINT is inferred, not confirmed from a live call —
- * verify this against a real request (see the curl check in the module
- * comment below) before trusting it in a user-facing flow.
+ * LIVE-VERIFIED 2026-10-28 against AnalyticsAgent version 6 (8 function
+ * tools + web_search) via raw curl against FOUNDRY_PROJECT_ENDPOINT:
+ *  - POST /openai/v1/conversations (body {}) -> { id: "conv_..." }. No
+ *    api-version query param -- the /v1 path rejects it.
+ *  - POST /openai/v1/responses targets the agent via a top-level
+ *    agent_reference object: { type: "agent_reference", name: "<agent>" },
+ *    NOT a plain "agent": "<name>" string (that errors first with "Expected
+ *    object, got String", then, once wrapped in an object under the old key
+ *    name, with "The 'agent' property is deprecated. Use 'agent_reference'
+ *    instead.").
+ *  - A turn needing no tool call completes with status "completed" and an
+ *    output[] item of type "message" (content[].type "output_text",
+ *    content[].text holds the reply). There is no requires_action status in
+ *    this API -- that belongs to the older Assistants threads/runs API, not
+ *    this one.
+ *  - A turn that calls a tool ALSO completes with status "completed"; the
+ *    tool call shows up as an output[] item of type "function_call" with
+ *    fields id, call_id, name, arguments (a JSON string) -- exactly the
+ *    field names this file already assumed in the turn loop below. Confirmed
+ *    with list_fields({"collection":"opportunities"}).
+ *  - response.output_text (used by some official OpenAI client SDKs as a
+ *    convenience getter) is NOT present on the raw REST response in either
+ *    case -- see extractOutputText() below.
  */
 import { Router } from 'express';
 import axios from 'axios';
@@ -61,6 +71,19 @@ async function foundryRequest(path, body) {
 
 const MAX_TURNS = 10; // same ceiling as the in-process claude.js agent loop
 
+// response.output_text is NOT a field the raw REST API returns -- confirmed
+// live on 2026-10-28 against version 6 of AnalyticsAgent (neither a
+// no-tool-call nor a tool-call response included an output_text key at the
+// top level). It's a convenience getter some official OpenAI client SDKs
+// compute on the client side; since this file calls the endpoint directly
+// with axios, we have to pull the text out of response.output ourselves.
+function extractOutputText(response) {
+  const messageItem = (response.output || []).find((item) => item.type === 'message');
+  if (!messageItem) return null;
+  const textPart = (messageItem.content || []).find((part) => part.type === 'output_text');
+  return textPart?.text ?? null;
+}
+
 router.post('/ask', async (req, res, next) => {
   try {
     const { userRequest } = req.body || {};
@@ -73,7 +96,7 @@ router.post('/ask', async (req, res, next) => {
 
     const conversation = await foundryRequest('/openai/v1/conversations', {});
     let response = await foundryRequest('/openai/v1/responses', {
-      agent: FOUNDRY_AGENT_NAME,
+      agent_reference: { type: 'agent_reference', name: FOUNDRY_AGENT_NAME },
       conversation: conversation.id,
       input: [{ role: 'user', content: userRequest }],
     });
@@ -95,14 +118,14 @@ router.post('/ask', async (req, res, next) => {
       }
 
       response = await foundryRequest('/openai/v1/responses', {
-        agent: FOUNDRY_AGENT_NAME,
+        agent_reference: { type: 'agent_reference', name: FOUNDRY_AGENT_NAME },
         conversation: conversation.id,
         input: outputs,
       });
     }
 
     res.json({
-      outputText: response.output_text ?? null,
+      outputText: extractOutputText(response),
       raw: response, // kept for debugging while this path is unverified; drop once confirmed stable
     });
   } catch (err) {
@@ -115,21 +138,31 @@ export default router;
 /*
  * Manual verification checklist before wiring this into any user-facing UI:
  *
- * 1. Confirm the token scope and REST paths with a raw curl first:
- *      TOKEN=$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)
- *      curl -s -X POST "$FOUNDRY_PROJECT_ENDPOINT/openai/v1/conversations" \
- *        -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{}'
- *    If this 404s, the path is wrong, not the auth -- check the agent's
- *    "Continue in code" snippet's actual outbound network call (e.g. via a
- *    proxy/mitm, or by reading the azure-ai-projects SDK source for the path
- *    it builds) rather than guessing a second path.
+ * 1. DONE 2026-10-28 -- token scope + REST paths confirmed via raw curl
+ *    against the live endpoint (see the module comment above for the exact
+ *    contract found).
  *
- * 2. If step 1 works, confirm a no-tool-call round trip (ask AnalyticsAgent
- *    something that needs no tools) before testing the function_call loop.
+ * 2. DONE 2026-10-28 -- no-tool-call round trip against AnalyticsAgent
+ *    version 6 completed cleanly (status "completed", a message item in
+ *    output[], no schema errors).
  *
- * 3. Only then test a real question that triggers a tool call, and confirm
- *    the shape of a function_call item in response.output matches what this
- *    file assumes (type, name, arguments, call_id field names) -- these are
- *    assumed from the stable public OpenAI Responses API and may differ if
- *    Foundry's Agent Service wraps them differently.
+ * 3. DONE 2026-10-28 -- a real tool-triggering question confirmed the
+ *    function_call item shape (id, call_id, name, arguments) matches what
+ *    the turn loop above assumes.
+ *
+ * 4. REMAINING -- this file itself has only been edited to match the
+ *    curl-verified contract (agent_reference, extractOutputText); it has
+ *    NOT yet been run end-to-end. Before trusting it in a user-facing flow:
+ *      - npm install in cx-dashboard-api (axios, @azure/identity must
+ *        resolve).
+ *      - Start the server locally and hit POST /api/foundry/ask with a real
+ *        signed-in user's JWT, a userRequest that needs no tool (sanity
+ *        check outputText comes back non-null), then one that forces a tool
+ *        call (sanity check executeFoundryTool actually runs with the real
+ *        user's token and the loop terminates within MAX_TURNS).
+ *      - Confirm FOUNDRY_TOKEN_SCOPE ('https://ai.azure.com/.default') is
+ *        actually the scope DefaultAzureCredential needs in this app's
+ *        deployed identity context (managed identity on BTP/Cloud Foundry,
+ *        not the az-cli login used for the curl checks above) -- this has
+ *        NOT been separately verified yet.
  */
