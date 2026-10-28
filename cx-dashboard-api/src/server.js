@@ -5,6 +5,7 @@ import analyticsRoutes from './routes/analytics.js';
 import dashboardRoutes from './routes/dashboard.js';
 import cacheRoutes from './routes/cache.js';
 import toolsRoutes from './routes/tools.js';
+import foundryAgentRoutes from './routes/foundry-agent.js';
 
 if (process.env.NODE_ENV !== 'production') {
   const { config } = await import('dotenv');
@@ -43,6 +44,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/cache', cacheRoutes);
 app.use('/api/tools', toolsRoutes);
+app.use('/api/foundry', foundryAgentRoutes);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
