@@ -122,6 +122,12 @@ router.post('/ask', async (req, res, next) => {
           const args = JSON.parse(call.arguments || '{}');
           result = await executeFoundryTool(call.name, args, userJwt, userEmail);
         } catch (err) {
+          // A tool error still lets the turn continue (the agent sees
+          // { error } and can explain the failure in its answer), so this
+          // was previously invisible in CF logs -- a swallowed tool failure
+          // looked identical to a 200 success at the router level. Logged
+          // explicitly here so it actually shows up in `cf logs`.
+          console.error(`[foundry-agent] tool ${call.name} failed:`, err.message);
           result = { error: err.message };
         }
         outputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result) });
@@ -160,19 +166,32 @@ export default router;
  *    function_call item shape (id, call_id, name, arguments) matches what
  *    the turn loop above assumes.
  *
- * 4. REMAINING -- this file itself has only been edited to match the
- *    curl-verified contract (agent_reference, extractOutputText); it has
- *    NOT yet been run end-to-end. Before trusting it in a user-facing flow:
- *      - npm install in cx-dashboard-api (axios, @azure/identity must
- *        resolve).
- *      - Start the server locally and hit POST /api/foundry/ask with a real
- *        signed-in user's JWT, a userRequest that needs no tool (sanity
- *        check outputText comes back non-null), then one that forces a tool
- *        call (sanity check executeFoundryTool actually runs with the real
- *        user's token and the loop terminates within MAX_TURNS).
- *      - Confirm FOUNDRY_TOKEN_SCOPE ('https://ai.azure.com/.default') is
- *        actually the scope DefaultAzureCredential needs in this app's
- *        deployed identity context (managed identity on BTP/Cloud Foundry,
- *        not the az-cli login used for the curl checks above) -- this has
- *        NOT been separately verified yet.
+ * 4. DONE 2026-11-05 -- full end-to-end run against the deployed CF app,
+ *    with a real signed-in user's own token (captured from the dashboard
+ *    session, never logged/printed), confirmed on the live tenant:
+ *      - A no-tool question ("What can you help me with?") returned a real
+ *        outputText in ~17s.
+ *      - A tool-triggering question (opportunities converted to quote for
+ *        TSS Germany) returned a real, org-scoped breakdown (CSC Germany,
+ *        TMS LS/MD Germany) -- proof executeFoundryTool actually ran with
+ *        the real user's token and reached C4C correctly.
+ *      - A second, different tool (aggregate, total Estimated Peak
+ *        Turnover) returned a consistent answer -- its per-org record
+ *        counts matched the first question's exactly, a real cross-check
+ *        that both tool calls hit the same live data correctly.
+ *      - FOUNDRY_TOKEN_SCOPE ('https://ai.azure.com/.default') is confirmed
+ *        working under cx-dashboard-api's actual deployed identity
+ *        (ARZ-TSS-SAPBTP-MCP via AZURE_CLIENT_ID/SECRET/TENANT env vars on
+ *        Cloud Foundry, granted the Foundry User role on AZR-FOU-SC-CX) --
+ *        not just the az-cli login used for the earlier curl checks.
+ *      - Also caught and fixed live: the agent defaulted "this year" to
+ *        2025 on a November 2026 request, since its static instructions
+ *        have no way to know the real date -- fixed by prepending today's
+ *        real date to every request (see above).
+ *
+ * This route is now considered verified for real per-user use. Remaining
+ * open items, not blockers: the `raw` debug field below should come out
+ * before any UI consumes this directly, and a swallowed tool-level error
+ * (an { error } result that still lets the turn "succeed") is now logged
+ * via console.error but hasn't been deliberately triggered/tested.
  */
