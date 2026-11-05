@@ -94,11 +94,21 @@ router.post('/ask', async (req, res, next) => {
     // C4C with the right visibility. This is the whole point of this route.
     const { userJwt, userEmail } = req;
 
+    // AnalyticsAgent's instructions are static text pasted into Foundry once
+    // -- they can't carry a live date the way claude.js's system prompt does
+    // (rebuilt fresh on every request with today's real date interpolated
+    // in). Confirmed live: without this, the agent defaulted "this year" to
+    // 2025 on a request made in November 2026. Same fix as claude.js's rule
+    // 7, applied here instead since this is the one place per request we
+    // control.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const dateQualifiedRequest = `Today's date is ${todayIso}. Resolve any relative time period in the question below (e.g. "this year", "this quarter") against that real date, not an assumed one.\n\n${userRequest}`;
+
     const conversation = await foundryRequest('/openai/v1/conversations', {});
     let response = await foundryRequest('/openai/v1/responses', {
       agent_reference: { type: 'agent_reference', name: FOUNDRY_AGENT_NAME },
       conversation: conversation.id,
-      input: [{ role: 'user', content: userRequest }],
+      input: [{ role: 'user', content: dateQualifiedRequest }],
     });
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
