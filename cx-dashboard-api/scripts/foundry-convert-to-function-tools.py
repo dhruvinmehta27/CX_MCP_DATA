@@ -181,6 +181,35 @@ FUNCTION_TOOLS = [
         },
     ),
     FunctionTool(
+        name="count_quotes_from_opportunities",
+        strict=True,
+        description=(
+            "Count how many QUOTES were created from opportunities in scope -- NOT "
+            "how many opportunities converted (that is count_quote_conversions, a "
+            "boolean-per-opportunity metric). One opportunity can produce more than "
+            "one quote, so this counts quote-reference rows directly, which can "
+            "exceed the opportunity count. No flag-based fast path exists "
+            "(ZQuoteExist_KUT is boolean, cannot answer 'how many') -- always uses "
+            "the OpportunityBusinessTransactionDocumentReference join. Scoped to at "
+            "most one org."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["won", "open", "lost", "all"]},
+                "salesOrgId": {"type": "string"},
+                "account": {"type": "string"},
+                "dateFrom": {"type": "string"},
+                "dateTo": {"type": "string"},
+                "segment": {"type": "string"},
+                "application": {"type": "string"},
+                "marketSegmentGroup": {"type": "string"},
+                "strategicAccount": {"type": "string"},
+            },
+            "required": [],
+        },
+    ),
+    FunctionTool(
         name="count_quote_conversions_by_org",
         strict=True,
         description=(

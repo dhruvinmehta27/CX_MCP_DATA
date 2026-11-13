@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import { parseIntent, sanitizeIntent, generateChartConfig, generateMultiCharts, generateInlineHtml, generateBrief, generateChartMeta, parseBriefIntent, runCustomAggregateAgent, getFieldDisplayLabel } from '../claude.js';
-import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, rfqsRaisedFromQuotes, resolveOrgScopeTool, aggregateByOrgs, getSalesOrgs, countQuoteConversionsByOrgs } from '../analytics-service.js';
+import { ENDPOINT_HANDLERS, briefStats, briefData, aggregateField, opportunitiesConvertedToQuote, countQuotesFromOpportunities, rfqsRaisedFromQuotes, resolveOrgScopeTool, aggregateByOrgs, getSalesOrgs, countQuoteConversionsByOrgs } from '../analytics-service.js';
 import { fetchCollectionFields } from '../c4c-client.js';
 import { buildEChartsOption, renderChartPng } from '../chart-render.js';
 
@@ -72,6 +72,10 @@ function executeCustomAgentTool(req, resolvedSalesOrgId, appliedFilters = {}, un
       unitTracker.value = 'count';
       unitTracker.label = 'RFQs Raised from Quotes';
     }
+    if (name === 'count_quotes_from_opportunities') {
+      unitTracker.value = 'count';
+      unitTracker.label = 'Quotes Created from Opportunities';
+    }
     if (name === 'resolve_org_scope' && resolvedSalesOrgId) {
       const ids = resolvedSalesOrgId.split(',').map((s) => s.trim()).filter(Boolean);
       // Look up real display names for these IDs so the breakdown shows
@@ -126,6 +130,24 @@ function executeCustomAgentTool(req, resolvedSalesOrgId, appliedFilters = {}, un
       if (input.marketSegmentGroup) appliedFilters.marketSegmentGroup = input.marketSegmentGroup;
       if (input.strategicAccount) appliedFilters.strategicAccount = input.strategicAccount;
       return opportunitiesConvertedToQuote(filters, req.userJwt, req.userEmail);
+    }
+    if (name === 'count_quotes_from_opportunities') {
+      const filters = {
+        salesOrgId: input.salesOrgId || null,
+        account: input.account || null,
+        dateFrom: input.dateFrom || null,
+        dateTo: input.dateTo || null,
+        status: input.status || 'all',
+        segment: input.segment || null,
+        application: input.application || null,
+        marketSegmentGroup: input.marketSegmentGroup || null,
+        strategicAccount: input.strategicAccount || null,
+      };
+      if (input.segment) appliedFilters.segment = input.segment;
+      if (input.application) appliedFilters.application = input.application;
+      if (input.marketSegmentGroup) appliedFilters.marketSegmentGroup = input.marketSegmentGroup;
+      if (input.strategicAccount) appliedFilters.strategicAccount = input.strategicAccount;
+      return countQuotesFromOpportunities(filters, req.userJwt, req.userEmail);
     }
     if (name === 'count_quote_conversions_by_org') {
       const { orgs, ...rest } = input;

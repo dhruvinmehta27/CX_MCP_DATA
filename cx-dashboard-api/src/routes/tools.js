@@ -23,6 +23,7 @@ import {
   aggregateField,
   aggregateByOrgs,
   opportunitiesConvertedToQuote,
+  countQuotesFromOpportunities,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
   resolveOrgScopeTool,
@@ -162,6 +163,24 @@ router.post('/count_quote_conversions', async (req, res, next) => {
     };
     const result = await opportunitiesConvertedToQuote(filters, req.userJwt, req.userEmail);
     res.json(withUnit(result, 'count', 'Opportunities Converted to Quote'));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/count_quotes_from_opportunities', async (req, res, next) => {
+  try {
+    const rest = req.body || {};
+    const filters = {
+      salesOrgId: rest.salesOrgId || null,
+      account: rest.account || null,
+      dateFrom: rest.dateFrom || null,
+      dateTo: rest.dateTo || null,
+      status: rest.status || 'all',
+      ...classificationFilters(rest),
+    };
+    const result = await countQuotesFromOpportunities(filters, req.userJwt, req.userEmail);
+    res.json(withUnit(result, 'count', 'Quotes Created from Opportunities'));
   } catch (err) {
     next(err);
   }

@@ -517,6 +517,48 @@ export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail)
   };
 }
 
+/**
+ * Counts how many QUOTES were created from opportunities in scope -- NOT how
+ * many opportunities converted (that's opportunitiesConvertedToQuote, a
+ * boolean-per-opportunity metric). One opportunity can produce more than one
+ * quote (revisions, alternatives), so this counts reference rows directly
+ * instead of distinct opportunities.
+ *
+ * Can ONLY use the OpportunityBusinessTransactionDocumentReference join --
+ * ZQuoteExist_KUT is a boolean flag on the opportunity header and
+ * structurally cannot say "how many," only "at least one or none". There is
+ * no flag-based fast path here the way opportunitiesConvertedToQuote has one.
+ *
+ * Scoped by the OPPORTUNITY's own org/date/status/segment filters (not the
+ * quote's) -- confirmed as the intended scoping direction.
+ */
+export async function countQuotesFromOpportunities(filters, userJwt, userEmail) {
+  const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
+  const [opps, refs] = await Promise.all([
+    rawOpportunities(filters, userJwt, userEmail),
+    getQuoteReferences(userJwt),
+  ]);
+
+  const scoped = opps.results.filter(statusFilter);
+  const scopedIds = new Set(scoped.map((o) => o.ID));
+
+  const SUCCESSOR_ROLE_CODE = '2';
+  const matchingRefs = refs.results.filter((r) =>
+    r.BusinessTransactionDocumentRelationshipRoleCode === SUCCESSOR_ROLE_CODE && scopedIds.has(r.OpportunityID)
+  );
+
+  return {
+    totalOpportunities: scoped.length,
+    quoteCount: matchingRefs.length,
+    method: 'OpportunityBusinessTransactionDocumentReference (Successor rows counted directly, not deduplicated per opportunity)',
+    sample: matchingRefs.slice(0, 10).map((r) => ({
+      'Opportunity ID': r.OpportunityID,
+      'Quote ID': r.ID,
+    })),
+    truncated: !!opps.truncated,
+  };
+}
+
 // Runs opportunitiesConvertedToQuote once per resolved org, same pattern as
 // aggregateByOrgs — a per-org breakdown instead of one number flattened
 // across every org, and the LLM never has to loop this itself.

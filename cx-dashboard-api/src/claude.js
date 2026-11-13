@@ -774,6 +774,21 @@ const CUSTOM_AGENT_TOOLS = [
     },
   },
   {
+    name: 'count_quotes_from_opportunities',
+    description: 'Counts how many QUOTES were created from opportunities in scope — NOT how many opportunities converted (that is count_quote_conversions, a boolean-per-opportunity metric: did this opportunity get at least one quote, yes/no). One opportunity can produce more than one quote (revisions, alternatives), so this counts the actual quote-reference rows, which can be a HIGHER number than the opportunity count. Use this for "how many quotes came from opportunities", "how many quotes were generated from opportunity X", or any question that needs the true quote count rather than a conversion flag. This tool has no flag-based fast path (ZQuoteExist_KUT is a boolean and cannot answer "how many") — it always uses the OpportunityBusinessTransactionDocumentReference join. Scoped to the OPPORTUNITY\'s own org/date/status/segment filters, at most ONE org. Do not use count_quote_conversions for this question even though the names sound similar — they answer different things.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome. Default "all".' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
+        dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
+      },
+    },
+  },
+  {
     name: 'count_quote_conversions_by_org',
     description: 'Same as count_quote_conversions but across MULTIPLE orgs in one call — use this whenever the user asks about more than one org/region for quote conversion. Runs the count once per org server-side with one consistent method, returning a per-org breakdown (Org, Total opportunities, Converted to quote, Conversion rate) plus the combined total — the correct way to answer a rollup question, instead of calling count_quote_conversions once per org yourself.',
     input_schema: {

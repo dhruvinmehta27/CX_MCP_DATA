@@ -18,6 +18,7 @@ import {
   aggregateField,
   aggregateByOrgs,
   opportunitiesConvertedToQuote,
+  countQuotesFromOpportunities,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
   resolveOrgScopeTool,
@@ -110,6 +111,21 @@ export async function executeFoundryTool(name, args, userJwt, userEmail) {
       };
       const result = await opportunitiesConvertedToQuote(filters, userJwt, userEmail);
       return withUnit(result, 'count', 'Opportunities Converted to Quote');
+    }
+    case 'count_quotes_from_opportunities': {
+      const filters = {
+        salesOrgId: args.salesOrgId || null,
+        account: args.account || null,
+        dateFrom: args.dateFrom || null,
+        dateTo: args.dateTo || null,
+        status: args.status || 'all',
+        segment: args.segment || null,
+        application: args.application || null,
+        marketSegmentGroup: args.marketSegmentGroup || null,
+        strategicAccount: args.strategicAccount || null,
+      };
+      const result = await countQuotesFromOpportunities(filters, userJwt, userEmail);
+      return withUnit(result, 'count', 'Quotes Created from Opportunities');
     }
     case 'count_quote_conversions_by_org': {
       const { orgs, ...rest } = args;
