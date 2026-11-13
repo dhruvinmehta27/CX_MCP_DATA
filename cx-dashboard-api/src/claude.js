@@ -589,14 +589,14 @@ const BUSINESS_TERM_GLOSSARY = [
     entity: 'quotes',
     fieldName: 'ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b',
     displayLabel: 'Approval Total',
-    note: 'Confirmed via C4C UI model binding (/Root/ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b/content). This is a GUID-suffixed Key User Extensibility custom field — SAP\'s naming pattern for fields added via the UI "add field" wizard, NOT a hand-coded KUT/SDK field. Before using it in aggregate, call list_fields on "quotes" first to confirm this exact name is exposed in the OData service — GUID-suffixed extension fields sometimes differ slightly between the UI binding name and the actual OData property name, unlike the other entries in this glossary which are already verified end-to-end. Likely semantics (per business description, not yet independently verified): for opportunities/quotes with alternative item groups (AlternativeToItemID), only the highest-value item per group counts; otherwise equal to the item/quote total.',
+    note: 'Confirmed via C4C UI model binding (/Root/ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b/content). This is a GUID-suffixed Key User Extensibility custom field — SAP\'s naming pattern for fields added via the UI "add field" wizard, NOT a hand-coded KUT/SDK field. Before using it in aggregate, call list_fields on "quotes" first to confirm this exact name is exposed in the OData service — GUID-suffixed extension fields sometimes differ slightly between the UI binding name and the actual OData property name, unlike the other entries in this glossary which are already verified end-to-end. Likely semantics (per business description, not yet independently verified): for opportunities/quotes with alternative item groups (AlternativeToItemID), only the highest-value item per group counts; otherwise equal to the item/quote total. CONFIRMED (2026-11-13): this field is driven by the approval workflow — a quote that hasn\'t entered approval (e.g. ApprovalStatusCode "Not Started") legitimately omits it from the OData response entirely. Absence on a given record is NOT evidence the field is stale/dead — single-record field discovery (list_fields) can miss conditional fields like this one depending on which record happens to be sampled; only re-test against a quote that has actually gone through approval before concluding this field no longer exists.',
   },
   {
     terms: ['approval margin', 'approval margin percent'],
     entity: 'quotes',
     fieldName: 'ApprovalMarginPercent_106549400b2441d384f3008d5acf863e',
     displayLabel: 'Approval Margin %',
-    note: 'Confirmed via C4C UI model binding. Same caveat as ApprovalTotal above: GUID-suffixed Key User Extensibility field — verify via list_fields on "quotes" before using in aggregate, do not assume it matches the UI binding name exactly.',
+    note: 'Confirmed via C4C UI model binding. Same caveat as ApprovalTotal above: GUID-suffixed Key User Extensibility field — verify via list_fields on "quotes" before using in aggregate, do not assume it matches the UI binding name exactly. Also same approval-workflow caveat as ApprovalTotal: legitimately absent on a quote that hasn\'t entered approval — absence on one sampled record is not evidence the field is dead.',
   },
 ];
 
@@ -697,7 +697,7 @@ const CUSTOM_AGENT_TOOLS = [
       properties: {
         collection: {
           type: 'string',
-          enum: ['opportunities', 'opportunity-items', 'quotes', 'quote-items', 'rfqs'],
+          enum: ['opportunities', 'opportunity-items', 'quotes', 'quote-items', 'rfqs', 'rfq-items'],
           description: 'Which collection to inspect. Use "opportunities" or "quotes" for header-level fields, the "-items" variants for line-item fields.',
         },
       },
@@ -738,11 +738,11 @@ const CUSTOM_AGENT_TOOLS = [
   },
   {
     name: 'aggregate',
-    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities or Quotes, with optional filters, scoped to AT MOST ONE org. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero." For more than one org, use aggregate_by_org instead, after resolve_org_scope.',
+    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities, Quotes, or Quote Items, with optional filters. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero." For more than one org, use aggregate_by_org instead, after resolve_org_scope — NOTE: aggregate_by_org does NOT support entity="quote-items" (quote items have no org field and no org-level scoping exists yet; passing it per-org would silently return the same unscoped total for every org). For quote-items, only single-call aggregate (optionally with a single salesOrgId if that becomes supported) is valid.',
     input_schema: {
       type: 'object',
       properties: {
-        entity: { type: 'string', enum: ['opportunities', 'quotes'] },
+        entity: { type: 'string', enum: ['opportunities', 'quotes', 'quote-items'] },
         fieldName: { type: 'string', description: 'The exact field name as returned by list_fields.' },
         aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter by opportunity lifecycle outcome. Only meaningful for entity="opportunities". Default "all".' },
@@ -774,6 +774,68 @@ const CUSTOM_AGENT_TOOLS = [
     },
   },
   {
+    name: 'count_quotes_from_opportunities',
+    description: 'Counts how many QUOTES were created from opportunities in scope — NOT how many opportunities converted (that is count_quote_conversions, a boolean-per-opportunity metric: did this opportunity get at least one quote, yes/no). One opportunity can produce more than one quote (revisions, alternatives), so this counts the actual quote-reference rows, which can be a HIGHER number than the opportunity count. Use this for "how many quotes came from opportunities", "how many quotes were generated from opportunity X", or any question that needs the true quote count rather than a conversion flag. This tool has no flag-based fast path (ZQuoteExist_KUT is a boolean and cannot answer "how many") — it always uses the OpportunityBusinessTransactionDocumentReference join. Scoped to the OPPORTUNITY\'s own org/date/status/segment filters, at most ONE org. Do not use count_quote_conversions for this question even though the names sound similar — they answer different things.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome. Default "all".' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
+        dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
+      },
+    },
+  },
+  {
+    name: 'count_rfqs_from_opportunities',
+    description: 'Counts how many RFQs were raised from opportunities in scope (Process A: an opportunity item has no cost found, an RFQ is raised, and cost flows back into the opportunity item). This is the direct Opportunity-side counterpart to count_quotes_from_opportunities, but simpler: RFQRootCollection carries ParentOpportunityID/ParentOpportunityItemID directly (confirmed real and populated — no join/reference-table needed). Use this for "how many RFQs were raised from opportunities", "how many RFQs came from opportunity X", etc. Scoped to the OPPORTUNITY\'s own org/date/status/segment filters, at most ONE org. Do NOT confuse this with count_rfqs_from_quotes (Process B, the quote-side equivalent) — they count different, unrelated RFQ populations.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter opportunities by lifecycle outcome. Default "all".' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
+        dateFrom: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
+        ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
+      },
+    },
+  },
+  {
+    name: 'count_rfqs_by_product',
+    description: 'Counts DISTINCT RFQs whose line items match a product-category text filter, e.g. "how many RFQs were raised for piston seals this quarter". Matches against RFQItemCollection.ProductCategoryDescription/ProductSubCategoryDescription ONLY (confirmed-populated, human-readable fields, e.g. "Quad-Ring© Seal") — never the RFQ header\'s free-text "Name" field (user-typed, unreliable) and never ProductID (a generic placeholder, "CUSTOM_PROD" on the sample seen). productText is REQUIRED. Scoped to at most ONE org/date/segment via the RFQ header. If this returns 0, report that the product text may not match the real category wording — call list_fields on "rfq-items" or ask the user for the exact category name rather than guessing a different term yourself.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        productText: { type: 'string', description: 'e.g. "piston seal" or "Quad-Ring". Matched case-insensitively against ProductCategoryDescription/ProductSubCategoryDescription.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
+        dateFrom: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        segment: { type: 'string', description: 'AER, AUT, HM, or IND (or the name).' },
+      },
+      required: ['productText'],
+    },
+  },
+  {
+    name: 'count_rfqs_by_cost_threshold',
+    description: 'Count RFQs whose Opportunity Item cost (ExpectedNetAmount, the "EPT" value shown on the RFQ OWL) is below maxCost, broken down by product category and sales org. Cost is resolved ONLY via the RFQ\'s linked Opportunity Item (RFQRoot.ParentOpportunityID/ParentOpportunityItemID — a confirmed real, item-level link). RFQs linked to a Quote instead (no confirmed item-level quote cost link exists), or with no cost found, are reported under costUnknown and NEVER counted as matching the threshold — report costUnknown explicitly to the user rather than treating it as a real "<maxCost" answer.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        maxCost: { type: 'number', description: 'Upper bound, exclusive, in the Opportunity Item EPT currency.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
+        dateFrom: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        segment: { type: 'string', description: 'AER, AUT, HM, or IND (or the name).' },
+      },
+      required: ['maxCost'],
+    },
+  },
+  {
     name: 'count_quote_conversions_by_org',
     description: 'Same as count_quote_conversions but across MULTIPLE orgs in one call — use this whenever the user asks about more than one org/region for quote conversion. Runs the count once per org server-side with one consistent method, returning a per-org breakdown (Org, Total opportunities, Converted to quote, Conversion rate) plus the combined total — the correct way to answer a rollup question, instead of calling count_quote_conversions once per org yourself.',
     input_schema: {
@@ -791,7 +853,7 @@ const CUSTOM_AGENT_TOOLS = [
   },
   {
     name: 'count_rfqs_from_quotes',
-    description: 'Counts RFQs that have been raised FROM quotes (the reverse direction of count_quote_conversions) — i.e. quote line items that reference an RFQ they generated. Use this for "how many RFQs have been raised from quotes this quarter", "RFQs generated from quotes", etc. There is no boolean flag for this — it is derived from RFQ_IDcontent_SDK on SalesQuoteItem, which this tool handles internally. CAVEAT you must pass on to the user if the result is 0 or looks surprising: this field has not been seen populated in any sample record during development — if the count is 0, say that plainly rather than treating it as a confident "no RFQs were raised," since it could also mean this field isn\'t actually being populated by the current process. Only supports date filtering (no org/account filter yet).',
+    description: 'Counts RFQs that have been raised FROM quotes (the reverse direction of count_quote_conversions). Use this for "how many RFQs have been raised from quotes this quarter", "RFQs generated from quotes", etc. Prefers RFQRoot.FromQuote (a direct boolean flag on the RFQ itself, confirmed real) scoped by the RFQ\'s own CreationDateTime; falls back to SalesQuoteItem.RFQ_IDcontent_SDK if that looks unpopulated for the scope — the result\'s "method" field tells you which one was actually used, mention it in your explanation. CAVEAT you must pass on if the result is 0: NEITHER signal has been observed populated in any real sample during development (both are confirmed-real fields, not confirmed-populated behavior) — report a 0 as "the underlying signal may not be populated by the current process," not as a confident "no RFQs were raised." Only supports date filtering (no org/account filter yet).',
     input_schema: {
       type: 'object',
       properties: {

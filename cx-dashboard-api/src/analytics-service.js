@@ -4,7 +4,7 @@
  * Shared by the REST routes and the Claude-powered dashboard generator.
  */
 import {
-  fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs,
+  fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs, fetchRFQItems,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
   fetchAccountCountries, fetchOpportunityQuoteReferences, fetchQuoteItems, fetchSalesOrgs,
@@ -103,6 +103,24 @@ function matchesOrg(orgId, orgName, filterValue) {
 function matchesAccount(accountName, filterValue) {
   if (!filterValue) return true;
   return !!accountName && accountName.toLowerCase().includes(filterValue.trim().toLowerCase());
+}
+
+// Product text matching against RFQItemCollection.ProductCategoryDescription
+// / ProductSubCategoryDescription -- confirmed-populated, human-readable
+// fields (e.g. "Quad-Ring© Seal") against a live record (2026-11-13).
+// Deliberately NOT matching ProductID (a generic placeholder, "CUSTOM_PROD"
+// on the one sample seen) or the RFQ header's free-text "Name" field (user
+// input, unreliable) -- per explicit user instruction.
+function matchesProductText(item, filterValue) {
+  if (!filterValue) return true;
+  const v = filterValue.trim().toLowerCase();
+  const tokens = v.split(/\s+/).filter(Boolean);
+  const haystack = [item.ProductCategoryDescription, item.ProductSubCategoryDescription]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (!haystack) return false;
+  return tokens.every((t) => haystack.includes(t));
 }
 
 // Business segment (BUS_SEG_CDE) — confirmed real master-data code table
@@ -313,6 +331,17 @@ async function rawQuotes(filters, userJwt, userEmail) {
   return { ...data, results, total: results.length };
 }
 
+// Quote line items (SalesQuoteItemCollection) -- date-filtered only, no org/
+// account scoping yet (items carry no SalesOrganisationID of their own; that
+// would need a join back to the parent quote via ParentObjectID, which
+// doesn't exist yet -- kept minimal on purpose, matching the existing
+// fetchQuoteItems capability rather than adding new join logic).
+async function rawQuoteItems(filters, userJwt, userEmail) {
+  const fetchKey = { dateFrom: filters.dateFrom || null, dateTo: filters.dateTo || null, extraFields: filters.extraFields || [] };
+  const { data } = await getOrSet(userEmail, 'raw:quote-items', fetchKey, () => fetchQuoteItems(fetchKey, userJwt));
+  return data;
+}
+
 async function rawOpportunities(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
   // SalesOrganisationID and ProspectPartyName both fail combined with the
@@ -367,11 +396,30 @@ export async function aggregateField({ entity, fieldName, aggregation, filters =
   }
   fieldName = effectiveFieldName;
 
+  // rawQuoteItems has no org/account scoping (items carry no org field, no
+  // join to the parent quote's org exists yet) -- silently accepting these
+  // filters here would compute an unscoped total and present it as if it
+  // honored the filter, exactly the fabrication this project's rules
+  // elsewhere explicitly forbid. Fail loud instead.
+  if (entity === 'quote-items' && (filters.salesOrgId || filters.account)) {
+    throw new Error('aggregate on entity="quote-items" does not support salesOrgId/account filtering yet -- quote items have no org or account field, and no join to the parent quote exists. Remove this filter, or aggregate on entity="quotes"/"opportunities" instead if org/account scoping is required.');
+  }
+
+  // RFQRoot has no LifeCycleStatusCodeText (confirmed via metadata -- it
+  // uses RFQStatus/SystemStatus instead, a different concept) -- the
+  // won/open/lost STATUS_FILTERS would silently match nothing for every
+  // RFQ row rather than erroring, which is the exact silent-wrong-answer
+  // failure mode this project exists to prevent. Fail loud instead.
+  if (entity === 'rfqs' && filters.status && filters.status !== 'all') {
+    throw new Error(`aggregate on entity="rfqs" does not support status="${filters.status}" -- RFQs use RFQStatus/SystemStatus, not the won/open/lost lifecycle concept opportunities and quotes use. Omit status (defaults to all), or filter on a real RFQStatus/SystemStatus value via a future dedicated param.`);
+  }
+
   const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
   const extraFields = [fieldName, filters.secondaryDateField].filter(Boolean);
   const fetchFilters = { ...filters, extraFields };
-  const raw = entity === 'quotes'
-    ? await rawQuotes(fetchFilters, userJwt, userEmail)
+  const raw = entity === 'quotes' ? await rawQuotes(fetchFilters, userJwt, userEmail)
+    : entity === 'quote-items' ? await rawQuoteItems(fetchFilters, userJwt, userEmail)
+    : entity === 'rfqs' ? await rawRFQs(fetchFilters, userJwt, userEmail)
     : await rawOpportunities(fetchFilters, userJwt, userEmail);
 
   let rows = raw.results.filter(statusFilter);
@@ -497,6 +545,231 @@ export async function opportunitiesConvertedToQuote(filters, userJwt, userEmail)
   };
 }
 
+/**
+ * Counts how many QUOTES were created from opportunities in scope -- NOT how
+ * many opportunities converted (that's opportunitiesConvertedToQuote, a
+ * boolean-per-opportunity metric). One opportunity can produce more than one
+ * quote (revisions, alternatives), so this counts reference rows directly
+ * instead of distinct opportunities.
+ *
+ * Can ONLY use the OpportunityBusinessTransactionDocumentReference join --
+ * ZQuoteExist_KUT is a boolean flag on the opportunity header and
+ * structurally cannot say "how many," only "at least one or none". There is
+ * no flag-based fast path here the way opportunitiesConvertedToQuote has one.
+ *
+ * Scoped by the OPPORTUNITY's own org/date/status/segment filters (not the
+ * quote's) -- confirmed as the intended scoping direction.
+ */
+export async function countQuotesFromOpportunities(filters, userJwt, userEmail) {
+  const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
+  const [opps, refs] = await Promise.all([
+    rawOpportunities(filters, userJwt, userEmail),
+    getQuoteReferences(userJwt),
+  ]);
+
+  const scoped = opps.results.filter(statusFilter);
+  const scopedIds = new Set(scoped.map((o) => o.ID));
+
+  const SUCCESSOR_ROLE_CODE = '2';
+  const matchingRefs = refs.results.filter((r) =>
+    r.BusinessTransactionDocumentRelationshipRoleCode === SUCCESSOR_ROLE_CODE && scopedIds.has(r.OpportunityID)
+  );
+
+  return {
+    totalOpportunities: scoped.length,
+    quoteCount: matchingRefs.length,
+    method: 'OpportunityBusinessTransactionDocumentReference (Successor rows counted directly, not deduplicated per opportunity)',
+    sample: matchingRefs.slice(0, 10).map((r) => ({
+      'Opportunity ID': r.OpportunityID,
+      'Quote ID': r.ID,
+    })),
+    truncated: !!opps.truncated,
+  };
+}
+
+/**
+ * Counts how many RFQs were raised from opportunities in scope -- the
+ * direct Opportunity-side counterpart to countQuotesFromOpportunities, for
+ * Process A (opportunity item has no cost -> RFQ raised -> cost flows back
+ * into the opportunity item). Confirmed live (2026-11-13) that
+ * RFQRootCollection.ParentOpportunityID is a real, populated field on an
+ * actual Process-A RFQ -- no join/reference-table needed here, unlike the
+ * quote-side equivalent, since RFQRoot carries the link directly.
+ *
+ * Scoped by the OPPORTUNITY's own org/date/status/segment filters, same
+ * direction as countQuotesFromOpportunities, for consistency.
+ */
+export async function countRFQsFromOpportunities(filters, userJwt, userEmail) {
+  const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
+  const [opps, rfqs] = await Promise.all([
+    rawOpportunities(filters, userJwt, userEmail),
+    rawRFQs({}, userJwt, userEmail),
+  ]);
+
+  const scoped = opps.results.filter(statusFilter);
+  const scopedIds = new Set(scoped.map((o) => o.ID));
+
+  const matchingRFQs = rfqs.results.filter((r) => r.ParentOpportunityID && scopedIds.has(r.ParentOpportunityID));
+
+  return {
+    totalOpportunities: scoped.length,
+    rfqCount: matchingRFQs.length,
+    method: 'RFQRoot.ParentOpportunityID (direct link, confirmed real and populated)',
+    sample: matchingRFQs.slice(0, 10).map((r) => ({
+      'Opportunity ID': r.ParentOpportunityID,
+      'Opportunity Item ID': r.ParentOpportunityItemID,
+      'RFQ ID': r.ID,
+    })),
+    truncated: !!opps.truncated || !!rfqs.truncated,
+  };
+}
+
+/**
+ * Counts DISTINCT RFQs whose line items match a product-category text filter
+ * (e.g. "piston seals"), scoped by the RFQ header's own org/date/segment
+ * filters (RFQRootCollection.CreationDateTime etc.) -- the item collection
+ * has no date/org field of its own, so items are joined back to their header
+ * via ParentObjectID/HeaderObjectID === RFQRoot.ObjectID, same join shape as
+ * OpportunityItemCollection -> OpportunityCollection elsewhere in this file.
+ *
+ * productText is REQUIRED -- this function answers "how many RFQs for
+ * <product>", not "how many RFQs total" (that's countRFQsFromOpportunities /
+ * aggregateField with entity="rfqs").
+ */
+export async function countRFQsByProduct(filters, userJwt, userEmail) {
+  if (!filters.productText) {
+    throw new Error('productText is required for countRFQsByProduct — use count_rfqs_from_opportunities or aggregate(entity="rfqs") for an unfiltered RFQ count.');
+  }
+  const [rfqs, items] = await Promise.all([
+    rawRFQs(filters, userJwt, userEmail),
+    getOrSet(userEmail, 'raw:rfq-items', {}, () => fetchRFQItems(userJwt)),
+  ]);
+
+  const headerIds = new Set(rfqs.results.map((r) => r.ObjectID));
+  const matchingItems = items.data.results.filter(
+    (i) => headerIds.has(i.HeaderObjectID) && matchesProductText(i, filters.productText)
+  );
+  const matchingRFQIds = new Set(matchingItems.map((i) => i.HeaderObjectID));
+  const rfqById = new Map(rfqs.results.map((r) => [r.ObjectID, r]));
+
+  return {
+    totalRFQsInScope: rfqs.results.length,
+    rfqCount: matchingRFQIds.size,
+    method: 'RFQItem.ProductCategoryDescription/ProductSubCategoryDescription text match, joined to RFQRoot via HeaderObjectID',
+    sample: [...matchingRFQIds].slice(0, 10).map((id) => ({
+      'RFQ ID': rfqById.get(id)?.ID,
+      'Product Category': matchingItems.find((i) => i.HeaderObjectID === id)?.ProductCategoryDescription,
+    })),
+    truncated: !!rfqs.truncated || !!items.data.truncated,
+  };
+}
+
+/**
+ * Counts RFQs whose linked cost is below maxCost, broken down by product
+ * category and sales org. Scoped by the RFQ header's own org/date/account/
+ * segment filters (same scope as countRFQsByProduct).
+ *
+ * Cost source is fixed to the Opportunity Item side: every RFQ in this
+ * tenant is linked to either an opportunity item or a quote, never
+ * standalone (confirmed by the user), and RFQRoot carries
+ * ParentOpportunityID/ParentOpportunityItemID directly -- the same
+ * confirmed-real, confirmed-populated link countRFQsFromOpportunities
+ * already relies on. The join key is OpportunityItem.OpportunityID +
+ * OpportunityItem.ID (matching ParentOpportunityID/ParentOpportunityItemID
+ * as business IDs), NOT ObjectID -- same join shape already proven correct
+ * for the header-level ParentOpportunityID -> Opportunity.ID match.
+ * ExpectedNetAmount is the confirmed field matching what the user
+ * identified as "Opportunity EPT" on the RFQ OWL screen.
+ *
+ * Quote-linked RFQs are NOT resolved to a cost here: RFQRoot.ParentQuoteIDRoot
+ * is only the quote HEADER id, and a quote can have multiple items with
+ * different NetAmount values, so there is no safe way to pick "the" cost
+ * without guessing. Those RFQs -- and any RFQ with no cost found at all --
+ * are reported separately under costUnknown and are NEVER counted as
+ * matching the threshold. A missing cost must never be silently treated
+ * as 0.
+ */
+export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
+  if (filters.maxCost === undefined || filters.maxCost === null || filters.maxCost === '') {
+    throw new Error('maxCost is required for countRFQsByCostThreshold');
+  }
+  const maxCost = toNumber(filters.maxCost);
+
+  const [rfqs, itemsResult, rfqItemsResult] = await Promise.all([
+    rawRFQs(filters, userJwt, userEmail),
+    getOrSet(userEmail, 'raw:opportunity-items-all', {}, () => fetchOpportunityItems(userJwt)),
+    getOrSet(userEmail, 'raw:rfq-items', {}, () => fetchRFQItems(userJwt)),
+  ]);
+
+  const itemByKey = new Map(
+    itemsResult.data.results.map((i) => [`${i.OpportunityID}::${i.ID}`, i])
+  );
+
+  const rfqItemsByHeader = new Map();
+  for (const it of rfqItemsResult.data.results) {
+    if (!rfqItemsByHeader.has(it.HeaderObjectID)) rfqItemsByHeader.set(it.HeaderObjectID, []);
+    rfqItemsByHeader.get(it.HeaderObjectID).push(it);
+  }
+
+  const underThreshold = [];
+  const costUnknown = [];
+
+  for (const rfq of rfqs.results) {
+    let costValue = null;
+    if (rfq.ParentOpportunityID && rfq.ParentOpportunityItemID) {
+      const item = itemByKey.get(`${rfq.ParentOpportunityID}::${rfq.ParentOpportunityItemID}`);
+      const raw = item?.ExpectedNetAmount;
+      if (item && raw !== undefined && raw !== null && raw !== '') {
+        costValue = toNumber(raw);
+      }
+    }
+
+    const productCategory = (rfqItemsByHeader.get(rfq.ObjectID) || [])
+      .map((i) => i.ProductCategoryDescription)
+      .find(Boolean) || null;
+
+    const row = {
+      'RFQ ID': rfq.ID,
+      'Sales Org': rfq.OrgName || null,
+      'Product Category': productCategory,
+      'Cost (EPT)': costValue,
+    };
+
+    if (costValue === null) {
+      costUnknown.push({
+        ...row,
+        reason: rfq.ParentQuoteIDRoot
+          ? 'RFQ is linked to a Quote, not an Opportunity Item -- no confirmed item-level link to a single quote line cost, so cost cannot be resolved without guessing'
+          : 'No linked Opportunity Item cost (ExpectedNetAmount) found for this RFQ',
+      });
+    } else if (costValue < maxCost) {
+      underThreshold.push(row);
+    }
+  }
+
+  const byProductCategory = {};
+  const bySalesOrg = {};
+  for (const row of underThreshold) {
+    const cat = row['Product Category'] || 'Uncategorized';
+    byProductCategory[cat] = (byProductCategory[cat] || 0) + 1;
+    const org = row['Sales Org'] || 'Unknown';
+    bySalesOrg[org] = (bySalesOrg[org] || 0) + 1;
+  }
+
+  return {
+    totalRFQsInScope: rfqs.results.length,
+    rfqCount: underThreshold.length,
+    costUnknownCount: costUnknown.length,
+    maxCost,
+    method: 'Opportunity Item ExpectedNetAmount ("EPT"), joined via RFQRoot.ParentOpportunityID/ParentOpportunityItemID (confirmed real, item-level link). Quote-linked RFQs cannot be resolved to a single cost yet and are reported under costUnknown, never guessed or treated as 0.',
+    byProductCategory: Object.entries(byProductCategory).map(([k, v]) => ({ 'Product Category': k, Count: v })),
+    bySalesOrg: Object.entries(bySalesOrg).map(([k, v]) => ({ 'Sales Org': k, Count: v })),
+    sample: underThreshold.slice(0, 10),
+    costUnknownSample: costUnknown.slice(0, 10),
+    truncated: !!rfqs.truncated || !!itemsResult.data.truncated || !!rfqItemsResult.data.truncated,
+  };
+}
+
 // Runs opportunitiesConvertedToQuote once per resolved org, same pattern as
 // aggregateByOrgs — a per-org breakdown instead of one number flattened
 // across every org, and the LLM never has to loop this itself.
@@ -540,35 +813,80 @@ export async function countQuoteConversionsByOrgs({ orgs, filters = {} }, userJw
  * record. Results should be treated as provisional until validated
  * against at least one confirmed real RFQ-linked quote item.
  */
+/**
+ * Counts RFQs raised from quotes. Confirmed live (2026-11-13) that
+ * RFQRootCollection carries FromQuote (boolean) and ParentQuoteIDRoot/
+ * ParentQuoteIDItemIDRoot -- a direct, per-RFQ reverse link -- so this is
+ * now the PRIMARY method, filtering real RFQ rows by FromQuote=true and
+ * scoping on the RFQ's own CreationDateTime.
+ *
+ * Fallback: the original method (SalesQuoteItem.RFQ_IDcontent_SDK) -- kept
+ * because it was already live and in case FromQuote isn't populated for a
+ * given scope, same "prefer the newer confirmed signal, fall back if it
+ * looks unpopulated" pattern as opportunitiesConvertedToQuote's
+ * ZQuoteExist_KUT vs. reference-join logic. Neither method has actually
+ * been seen populated yet in a real Process-B sample (RFQ raised from a
+ * quote) -- both are confirmed-real fields, not confirmed-populated
+ * behavior, and the result's "method" field says which one actually
+ * produced the count so that caveat can be surfaced to the user.
+ */
 export async function rfqsRaisedFromQuotes(filters, userJwt, userEmail) {
+  const rfqFilters = { dateFrom: filters.dateFrom || null, dateTo: filters.dateTo || null };
+  const rfqs = await rawRFQs(rfqFilters, userJwt, userEmail);
+  const fromQuoteRows = rfqs.results.filter((r) => isFlagTrue(r.FromQuote));
+
+  if (fromQuoteRows.length > 0) {
+    return {
+      rfqsChecked: rfqs.total,
+      uniqueRFQCount: fromQuoteRows.length,
+      method: 'RFQRoot.FromQuote (direct reverse link, confirmed real field)',
+      sample: fromQuoteRows.slice(0, 10).map((r) => ({
+        'RFQ ID': r.ID,
+        'Quote ID': r.ParentQuoteIDRoot,
+      })),
+      truncated: !!rfqs.truncated,
+    };
+  }
+
   const fetchFilters = { dateFrom: filters.dateFrom || null, dateTo: filters.dateTo || null };
   const { data } = await getOrSet(userEmail, 'quote-items:rfq-linked', fetchFilters, () => fetchQuoteItems(fetchFilters, userJwt));
   const linked = data.results.filter((i) => i.RFQ_IDcontent_SDK);
   const uniqueRFQIds = new Set(linked.map((i) => i.RFQ_IDcontent_SDK));
 
   return {
+    rfqsChecked: rfqs.total,
     quoteItemsChecked: data.total,
     quoteItemsWithRFQLink: linked.length,
     uniqueRFQCount: uniqueRFQIds.size,
+    method: 'SalesQuoteItem.RFQ_IDcontent_SDK (fallback -- RFQRoot.FromQuote was not populated for this scope)',
     sample: linked.slice(0, 10).map((i) => ({
       'Quote ID': i.QuoteID,
       'Item ID': i.ItemID,
       'RFQ ID': i.RFQ_IDcontent_SDK,
     })),
-    truncated: !!data.truncated,
+    truncated: !!data.truncated || !!rfqs.truncated,
   };
 }
 
 async function rawRFQs(filters, userJwt, userEmail) {
-  const base = { ...baseFilters(filters), account: filters.account || null };
-  // Account can't be combined with the date-range filter server-side on the
-  // custom zrfq service (ABAP select-option error) — fetch without it (cached
-  // on date/owner only) and scope by account in-process, same pattern as
-  // sales-org scoping on Quotes/Opportunities.
-  const fetchKey = { ...base, account: undefined };
+  const base = { ...baseFilters(filters), account: filters.account || null, segment: filters.segment || null };
+  // Account/org/segment can't be combined with the date-range filter
+  // server-side on the custom zrfq service (ABAP select-option error) —
+  // fetch without them (cached on date/owner only) and scope in-process,
+  // same pattern as sales-org scoping on Quotes/Opportunities.
+  // OrgID/OrgName and BusSeg/BusSegText confirmed real+populated on a live
+  // RFQRootCollection record (2026-11-13) -- reusing matchesOrg and the
+  // existing BUSINESS_SEGMENTS table (BusSeg's "IND"/"Industrial" matched
+  // Opportunity/Quote's BUS_SEG_CDE_KUT table exactly on that same record).
+  const extraFields = filters.extraFields || [];
+  const fetchKey = { ...base, account: undefined, salesOrgId: undefined, segment: undefined, extraFields };
   const { data } = await getOrSet(userEmail, 'raw:rfqs', fetchKey, () => fetchRFQs(fetchKey, userJwt));
-  if (!base.account) return data;
-  const results = data.results.filter((r) => matchesAccount(r.AccountName, base.account));
+  if (!base.account && !base.salesOrgId && !base.segment) return data;
+  const results = data.results.filter((r) =>
+    matchesAccount(r.AccountName, base.account) &&
+    matchesOrg(r.OrgID, r.OrgName, base.salesOrgId) &&
+    matchesSegment(r.BusSeg, r.BusSegText, base.segment)
+  );
   return { ...data, results, total: results.length };
 }
 
