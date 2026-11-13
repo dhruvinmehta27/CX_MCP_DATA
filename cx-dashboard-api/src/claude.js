@@ -738,11 +738,11 @@ const CUSTOM_AGENT_TOOLS = [
   },
   {
     name: 'aggregate',
-    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities or Quotes, with optional filters, scoped to AT MOST ONE org. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero." For more than one org, use aggregate_by_org instead, after resolve_org_scope.',
+    description: 'Compute sum, count, or average of ONE real, already-verified field across Opportunities, Quotes, or Quote Items, with optional filters. fieldName MUST be a real field name you confirmed via list_fields — passing a guessed or invented field name will just return zero matched values, which you must treat as failure, not as "the value is zero." For more than one org, use aggregate_by_org instead, after resolve_org_scope — NOTE: aggregate_by_org does NOT support entity="quote-items" (quote items have no org field and no org-level scoping exists yet; passing it per-org would silently return the same unscoped total for every org). For quote-items, only single-call aggregate (optionally with a single salesOrgId if that becomes supported) is valid.',
     input_schema: {
       type: 'object',
       properties: {
-        entity: { type: 'string', enum: ['opportunities', 'quotes'] },
+        entity: { type: 'string', enum: ['opportunities', 'quotes', 'quote-items'] },
         fieldName: { type: 'string', description: 'The exact field name as returned by list_fields.' },
         aggregation: { type: 'string', enum: ['sum', 'count', 'avg'] },
         status: { type: 'string', enum: ['won', 'open', 'lost', 'all'], description: 'Filter by opportunity lifecycle outcome. Only meaningful for entity="opportunities". Default "all".' },

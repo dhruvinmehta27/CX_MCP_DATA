@@ -313,6 +313,17 @@ async function rawQuotes(filters, userJwt, userEmail) {
   return { ...data, results, total: results.length };
 }
 
+// Quote line items (SalesQuoteItemCollection) -- date-filtered only, no org/
+// account scoping yet (items carry no SalesOrganisationID of their own; that
+// would need a join back to the parent quote via ParentObjectID, which
+// doesn't exist yet -- kept minimal on purpose, matching the existing
+// fetchQuoteItems capability rather than adding new join logic).
+async function rawQuoteItems(filters, userJwt, userEmail) {
+  const fetchKey = { dateFrom: filters.dateFrom || null, dateTo: filters.dateTo || null, extraFields: filters.extraFields || [] };
+  const { data } = await getOrSet(userEmail, 'raw:quote-items', fetchKey, () => fetchQuoteItems(fetchKey, userJwt));
+  return data;
+}
+
 async function rawOpportunities(filters, userJwt, userEmail) {
   const base = baseFilters(filters);
   // SalesOrganisationID and ProspectPartyName both fail combined with the
@@ -367,11 +378,20 @@ export async function aggregateField({ entity, fieldName, aggregation, filters =
   }
   fieldName = effectiveFieldName;
 
+  // rawQuoteItems has no org/account scoping (items carry no org field, no
+  // join to the parent quote's org exists yet) -- silently accepting these
+  // filters here would compute an unscoped total and present it as if it
+  // honored the filter, exactly the fabrication this project's rules
+  // elsewhere explicitly forbid. Fail loud instead.
+  if (entity === 'quote-items' && (filters.salesOrgId || filters.account)) {
+    throw new Error('aggregate on entity="quote-items" does not support salesOrgId/account filtering yet -- quote items have no org or account field, and no join to the parent quote exists. Remove this filter, or aggregate on entity="quotes"/"opportunities" instead if org/account scoping is required.');
+  }
+
   const statusFilter = STATUS_FILTERS[filters.status] || STATUS_FILTERS.all;
   const extraFields = [fieldName, filters.secondaryDateField].filter(Boolean);
   const fetchFilters = { ...filters, extraFields };
-  const raw = entity === 'quotes'
-    ? await rawQuotes(fetchFilters, userJwt, userEmail)
+  const raw = entity === 'quotes' ? await rawQuotes(fetchFilters, userJwt, userEmail)
+    : entity === 'quote-items' ? await rawQuoteItems(fetchFilters, userJwt, userEmail)
     : await rawOpportunities(fetchFilters, userJwt, userEmail);
 
   let rows = raw.results.filter(statusFilter);
