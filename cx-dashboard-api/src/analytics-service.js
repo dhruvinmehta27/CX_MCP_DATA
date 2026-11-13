@@ -4,7 +4,7 @@
  * Shared by the REST routes and the Claude-powered dashboard generator.
  */
 import {
-  fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs,
+  fetchQuotes, fetchOpportunities, fetchOpportunityItems, fetchOpportunityItemsByParents, fetchRFQs, fetchRFQItems,
   fetchTasks, fetchVisits, fetchAppointments,
   countQuotes, countOpportunities, countRFQs,
   fetchAccountCountries, fetchOpportunityQuoteReferences, fetchQuoteItems, fetchSalesOrgs,
@@ -103,6 +103,24 @@ function matchesOrg(orgId, orgName, filterValue) {
 function matchesAccount(accountName, filterValue) {
   if (!filterValue) return true;
   return !!accountName && accountName.toLowerCase().includes(filterValue.trim().toLowerCase());
+}
+
+// Product text matching against RFQItemCollection.ProductCategoryDescription
+// / ProductSubCategoryDescription -- confirmed-populated, human-readable
+// fields (e.g. "Quad-Ring© Seal") against a live record (2026-11-13).
+// Deliberately NOT matching ProductID (a generic placeholder, "CUSTOM_PROD"
+// on the one sample seen) or the RFQ header's free-text "Name" field (user
+// input, unreliable) -- per explicit user instruction.
+function matchesProductText(item, filterValue) {
+  if (!filterValue) return true;
+  const v = filterValue.trim().toLowerCase();
+  const tokens = v.split(/\s+/).filter(Boolean);
+  const haystack = [item.ProductCategoryDescription, item.ProductSubCategoryDescription]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (!haystack) return false;
+  return tokens.every((t) => haystack.includes(t));
 }
 
 // Business segment (BUS_SEG_CDE) — confirmed real master-data code table
@@ -603,6 +621,46 @@ export async function countRFQsFromOpportunities(filters, userJwt, userEmail) {
       'RFQ ID': r.ID,
     })),
     truncated: !!opps.truncated || !!rfqs.truncated,
+  };
+}
+
+/**
+ * Counts DISTINCT RFQs whose line items match a product-category text filter
+ * (e.g. "piston seals"), scoped by the RFQ header's own org/date/segment
+ * filters (RFQRootCollection.CreationDateTime etc.) -- the item collection
+ * has no date/org field of its own, so items are joined back to their header
+ * via ParentObjectID/HeaderObjectID === RFQRoot.ObjectID, same join shape as
+ * OpportunityItemCollection -> OpportunityCollection elsewhere in this file.
+ *
+ * productText is REQUIRED -- this function answers "how many RFQs for
+ * <product>", not "how many RFQs total" (that's countRFQsFromOpportunities /
+ * aggregateField with entity="rfqs").
+ */
+export async function countRFQsByProduct(filters, userJwt, userEmail) {
+  if (!filters.productText) {
+    throw new Error('productText is required for countRFQsByProduct — use count_rfqs_from_opportunities or aggregate(entity="rfqs") for an unfiltered RFQ count.');
+  }
+  const [rfqs, items] = await Promise.all([
+    rawRFQs(filters, userJwt, userEmail),
+    getOrSet(userEmail, 'raw:rfq-items', {}, () => fetchRFQItems(userJwt)),
+  ]);
+
+  const headerIds = new Set(rfqs.results.map((r) => r.ObjectID));
+  const matchingItems = items.data.results.filter(
+    (i) => headerIds.has(i.HeaderObjectID) && matchesProductText(i, filters.productText)
+  );
+  const matchingRFQIds = new Set(matchingItems.map((i) => i.HeaderObjectID));
+  const rfqById = new Map(rfqs.results.map((r) => [r.ObjectID, r]));
+
+  return {
+    totalRFQsInScope: rfqs.results.length,
+    rfqCount: matchingRFQIds.size,
+    method: 'RFQItem.ProductCategoryDescription/ProductSubCategoryDescription text match, joined to RFQRoot via HeaderObjectID',
+    sample: [...matchingRFQIds].slice(0, 10).map((id) => ({
+      'RFQ ID': rfqById.get(id)?.ID,
+      'Product Category': matchingItems.find((i) => i.HeaderObjectID === id)?.ProductCategoryDescription,
+    })),
+    truncated: !!rfqs.truncated || !!items.data.truncated,
   };
 }
 

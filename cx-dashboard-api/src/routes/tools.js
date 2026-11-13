@@ -25,6 +25,7 @@ import {
   opportunitiesConvertedToQuote,
   countQuotesFromOpportunities,
   countRFQsFromOpportunities,
+  countRFQsByProduct,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
   resolveOrgScopeTool,
@@ -200,6 +201,25 @@ router.post('/count_rfqs_from_opportunities', async (req, res, next) => {
     };
     const result = await countRFQsFromOpportunities(filters, req.userJwt, req.userEmail);
     res.json(withUnit(result, 'count', 'RFQs Raised from Opportunities'));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/count_rfqs_by_product', async (req, res, next) => {
+  try {
+    const rest = req.body || {};
+    if (!rest.productText) return res.status(400).json({ error: 'productText is required' });
+    const filters = {
+      productText: rest.productText,
+      salesOrgId: rest.salesOrgId || null,
+      account: rest.account || null,
+      dateFrom: rest.dateFrom || null,
+      dateTo: rest.dateTo || null,
+      segment: rest.segment || null,
+    };
+    const result = await countRFQsByProduct(filters, req.userJwt, req.userEmail);
+    res.json(withUnit(result, 'count', 'RFQs by Product'));
   } catch (err) {
     next(err);
   }

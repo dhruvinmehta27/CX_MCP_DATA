@@ -20,6 +20,7 @@ import {
   opportunitiesConvertedToQuote,
   countQuotesFromOpportunities,
   countRFQsFromOpportunities,
+  countRFQsByProduct,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
   resolveOrgScopeTool,
@@ -142,6 +143,18 @@ export async function executeFoundryTool(name, args, userJwt, userEmail) {
       };
       const result = await countRFQsFromOpportunities(filters, userJwt, userEmail);
       return withUnit(result, 'count', 'RFQs Raised from Opportunities');
+    }
+    case 'count_rfqs_by_product': {
+      const filters = {
+        productText: args.productText,
+        salesOrgId: args.salesOrgId || null,
+        account: args.account || null,
+        dateFrom: args.dateFrom || null,
+        dateTo: args.dateTo || null,
+        segment: args.segment || null,
+      };
+      const result = await countRFQsByProduct(filters, userJwt, userEmail);
+      return withUnit(result, 'count', 'RFQs by Product');
     }
     case 'count_quote_conversions_by_org': {
       const { orgs, ...rest } = args;

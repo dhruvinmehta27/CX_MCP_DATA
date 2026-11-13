@@ -540,6 +540,7 @@ const FIELD_DISCOVERY_COLLECTIONS = {
   quotes: `${ODATA_BASE}/SalesQuoteCollection`,
   'quote-items': `${ODATA_BASE}/SalesQuoteItemCollection`,
   rfqs: `${CUSTOM_BASE}/zrfq/RFQRootCollection`,
+  'rfq-items': `${CUSTOM_BASE}/zrfq/RFQItemCollection`,
 };
 
 export async function fetchCollectionFields(collectionKey, userJwt) {
@@ -590,6 +591,35 @@ export async function fetchRFQs(filters = {}, userJwt) {
       ...extra,
     ],
     parts.join(' and '),
+    userJwt
+  );
+}
+
+// RFQ line items — confirmed field names against a live RFQItemCollection
+// record (2026-11-13). ProductID is a generic placeholder ("CUSTOM_PROD"),
+// NOT usable for product lookup. ProductDescription was blank in the one
+// sample seen. ProductCategoryDescription (+ ProductCategoryInternalID) is
+// the confirmed-populated, human-readable product-category field -- this is
+// what product-text questions ("how many RFQs for piston seals") must match
+// against. Explicitly NOT using the RFQ "Name" field for this (user input,
+// unreliable) per user instruction.
+const RFQ_ITEM_FIELDS = [
+  'ObjectID', 'ParentObjectID', 'HeaderObjectID', 'ItemID',
+  'ParentOpportunityItemID',
+  'ProductID', 'ProductDescription',
+  'ProductCategoryDescription', 'ProductCategoryInternalID',
+  'ProductSubCategoryDescription', 'ProductSubCategoryInternalID',
+  'Quantity', 'unitCode', 'unitCodeText',
+];
+
+export async function fetchRFQItems(userJwt) {
+  // No server-side date field on RFQ items -- fetch all, join to
+  // RFQRootCollection.CreationDateTime in-process (same pattern as
+  // OpportunityItemCollection).
+  return fetchAllPages(
+    `${CUSTOM_BASE}/zrfq/RFQItemCollection`,
+    RFQ_ITEM_FIELDS,
+    '',
     userJwt
   );
 }

@@ -697,7 +697,7 @@ const CUSTOM_AGENT_TOOLS = [
       properties: {
         collection: {
           type: 'string',
-          enum: ['opportunities', 'opportunity-items', 'quotes', 'quote-items', 'rfqs'],
+          enum: ['opportunities', 'opportunity-items', 'quotes', 'quote-items', 'rfqs', 'rfq-items'],
           description: 'Which collection to inspect. Use "opportunities" or "quotes" for header-level fields, the "-items" variants for line-item fields.',
         },
       },
@@ -801,6 +801,22 @@ const CUSTOM_AGENT_TOOLS = [
         dateTo: { type: 'string', description: 'ISO date, filters opportunities on CreationDateTime.' },
         ...CUSTOM_AGENT_CLASSIFICATION_PARAMS,
       },
+    },
+  },
+  {
+    name: 'count_rfqs_by_product',
+    description: 'Counts DISTINCT RFQs whose line items match a product-category text filter, e.g. "how many RFQs were raised for piston seals this quarter". Matches against RFQItemCollection.ProductCategoryDescription/ProductSubCategoryDescription ONLY (confirmed-populated, human-readable fields, e.g. "Quad-Ring© Seal") — never the RFQ header\'s free-text "Name" field (user-typed, unreliable) and never ProductID (a generic placeholder, "CUSTOM_PROD" on the sample seen). productText is REQUIRED. Scoped to at most ONE org/date/segment via the RFQ header. If this returns 0, report that the product text may not match the real category wording — call list_fields on "rfq-items" or ask the user for the exact category name rather than guessing a different term yourself.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        productText: { type: 'string', description: 'e.g. "piston seal" or "Quad-Ring". Matched case-insensitively against ProductCategoryDescription/ProductSubCategoryDescription.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
+        dateFrom: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        segment: { type: 'string', description: 'AER, AUT, HM, or IND (or the name).' },
+      },
+      required: ['productText'],
     },
   },
   {
