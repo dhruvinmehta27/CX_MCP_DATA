@@ -689,22 +689,14 @@ export async function countRFQsByProduct(filters, userJwt, userEmail) {
  * matching the threshold. A missing cost must never be silently treated
  * as 0.
  *
- * CURRENCY: not every RFQ's Opportunity Item is priced in the same
- * transaction currency -- ExpectedNetAmountCurrencyCode varies per item,
- * and there is no confirmed EUR-converted base-currency field on
- * OpportunityItemCollection (unlike the Opportunity header's
- * ZBaseCurrency_KUTContent_KUT used elsewhere). Comparing a raw amount in
- * USD/GBP/etc. against a EUR threshold would silently produce a wrong
- * answer, so maxCost is matched against a required `currency` filter
- * (default 'EUR') and any item priced in a different currency is reported
- * under costUnknown with an explicit reason -- never converted or guessed.
+ * CURRENCY: per the user, this is a global system and ExpectedNetAmount is
+ * compared directly against maxCost with no currency filtering/conversion.
  */
 export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
   if (filters.maxCost === undefined || filters.maxCost === null || filters.maxCost === '') {
     throw new Error('maxCost is required for countRFQsByCostThreshold');
   }
   const maxCost = toNumber(filters.maxCost);
-  const currency = (filters.currency || 'EUR').toUpperCase();
 
   const [rfqs, itemsResult, rfqItemsResult] = await Promise.all([
     rawRFQs(filters, userJwt, userEmail),
@@ -727,17 +719,11 @@ export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
 
   for (const rfq of rfqs.results) {
     let costValue = null;
-    let currencyMismatch = null;
     if (rfq.ParentOpportunityID && rfq.ParentOpportunityItemID) {
       const item = itemByKey.get(`${rfq.ParentOpportunityID}::${rfq.ParentOpportunityItemID}`);
       const raw = item?.ExpectedNetAmount;
       if (item && raw !== undefined && raw !== null && raw !== '') {
-        const itemCurrency = (item.ExpectedNetAmountCurrencyCode || '').toUpperCase();
-        if (itemCurrency && itemCurrency !== currency) {
-          currencyMismatch = itemCurrency;
-        } else {
-          costValue = toNumber(raw);
-        }
+        costValue = toNumber(raw);
       }
     }
 
@@ -752,12 +738,7 @@ export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
       'Cost (EPT)': costValue,
     };
 
-    if (currencyMismatch) {
-      costUnknown.push({
-        ...row,
-        reason: `RFQ's Opportunity Item cost is priced in ${currencyMismatch}, not ${currency} -- no verified currency conversion available, so it cannot be safely compared against the ${currency} threshold`,
-      });
-    } else if (costValue === null) {
+    if (costValue === null) {
       costUnknown.push({
         ...row,
         reason: rfq.ParentQuoteIDRoot
@@ -783,8 +764,7 @@ export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
     rfqCount: underThreshold.length,
     costUnknownCount: costUnknown.length,
     maxCost,
-    currency,
-    method: `Opportunity Item ExpectedNetAmount ("EPT") in ${currency}, joined via RFQRoot.ParentOpportunityID/ParentOpportunityItemID (confirmed real, item-level link). Quote-linked RFQs, RFQs priced in a different currency, and RFQs with no resolvable cost are all reported under costUnknown and never guessed, converted, or treated as 0.`,
+    method: 'Opportunity Item ExpectedNetAmount ("EPT"), joined via RFQRoot.ParentOpportunityID/ParentOpportunityItemID (confirmed real, item-level link). Quote-linked RFQs and RFQs with no resolvable cost are reported under costUnknown and never guessed or treated as 0.',
     byProductCategory: Object.entries(byProductCategory).map(([k, v]) => ({ 'Product Category': k, Count: v })),
     bySalesOrg: Object.entries(bySalesOrg).map(([k, v]) => ({ 'Sales Org': k, Count: v })),
     sample: underThreshold.slice(0, 10),

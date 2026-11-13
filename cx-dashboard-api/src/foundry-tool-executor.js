@@ -185,7 +185,6 @@ export async function executeFoundryTool(name, args, userJwt, userEmail) {
     case 'count_rfqs_by_cost_threshold': {
       const filters = {
         maxCost: args.maxCost,
-        currency: args.currency || null,
         salesOrgId: args.salesOrgId || null,
         account: args.account || null,
         dateFrom: args.dateFrom || null,

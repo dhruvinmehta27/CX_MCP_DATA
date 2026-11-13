@@ -857,8 +857,7 @@ const CUSTOM_AGENT_TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        maxCost: { type: 'number', description: 'Upper bound, exclusive, in the given currency.' },
-        currency: { type: 'string', description: 'ISO currency code maxCost is denominated in, e.g. "EUR". Default "EUR". Any RFQ whose Opportunity Item cost is in a different currency is reported under costUnknown, never converted.' },
+        maxCost: { type: 'number', description: 'Upper bound, exclusive, compared directly against ExpectedNetAmount (this is a global system -- no currency filtering/conversion is applied).' },
         ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
         ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
