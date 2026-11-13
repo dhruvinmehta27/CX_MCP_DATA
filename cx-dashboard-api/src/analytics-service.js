@@ -664,6 +664,112 @@ export async function countRFQsByProduct(filters, userJwt, userEmail) {
   };
 }
 
+/**
+ * Counts RFQs whose linked cost is below maxCost, broken down by product
+ * category and sales org. Scoped by the RFQ header's own org/date/account/
+ * segment filters (same scope as countRFQsByProduct).
+ *
+ * Cost source is fixed to the Opportunity Item side: every RFQ in this
+ * tenant is linked to either an opportunity item or a quote, never
+ * standalone (confirmed by the user), and RFQRoot carries
+ * ParentOpportunityID/ParentOpportunityItemID directly -- the same
+ * confirmed-real, confirmed-populated link countRFQsFromOpportunities
+ * already relies on. The join key is OpportunityItem.OpportunityID +
+ * OpportunityItem.ID (matching ParentOpportunityID/ParentOpportunityItemID
+ * as business IDs), NOT ObjectID -- same join shape already proven correct
+ * for the header-level ParentOpportunityID -> Opportunity.ID match.
+ * ExpectedNetAmount is the confirmed field matching what the user
+ * identified as "Opportunity EPT" on the RFQ OWL screen.
+ *
+ * Quote-linked RFQs are NOT resolved to a cost here: RFQRoot.ParentQuoteIDRoot
+ * is only the quote HEADER id, and a quote can have multiple items with
+ * different NetAmount values, so there is no safe way to pick "the" cost
+ * without guessing. Those RFQs -- and any RFQ with no cost found at all --
+ * are reported separately under costUnknown and are NEVER counted as
+ * matching the threshold. A missing cost must never be silently treated
+ * as 0.
+ */
+export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
+  if (filters.maxCost === undefined || filters.maxCost === null || filters.maxCost === '') {
+    throw new Error('maxCost is required for countRFQsByCostThreshold');
+  }
+  const maxCost = toNumber(filters.maxCost);
+
+  const [rfqs, itemsResult, rfqItemsResult] = await Promise.all([
+    rawRFQs(filters, userJwt, userEmail),
+    getOrSet(userEmail, 'raw:opportunity-items-all', {}, () => fetchOpportunityItems(userJwt)),
+    getOrSet(userEmail, 'raw:rfq-items', {}, () => fetchRFQItems(userJwt)),
+  ]);
+
+  const itemByKey = new Map(
+    itemsResult.data.results.map((i) => [`${i.OpportunityID}::${i.ID}`, i])
+  );
+
+  const rfqItemsByHeader = new Map();
+  for (const it of rfqItemsResult.data.results) {
+    if (!rfqItemsByHeader.has(it.HeaderObjectID)) rfqItemsByHeader.set(it.HeaderObjectID, []);
+    rfqItemsByHeader.get(it.HeaderObjectID).push(it);
+  }
+
+  const underThreshold = [];
+  const costUnknown = [];
+
+  for (const rfq of rfqs.results) {
+    let costValue = null;
+    if (rfq.ParentOpportunityID && rfq.ParentOpportunityItemID) {
+      const item = itemByKey.get(`${rfq.ParentOpportunityID}::${rfq.ParentOpportunityItemID}`);
+      const raw = item?.ExpectedNetAmount;
+      if (item && raw !== undefined && raw !== null && raw !== '') {
+        costValue = toNumber(raw);
+      }
+    }
+
+    const productCategory = (rfqItemsByHeader.get(rfq.ObjectID) || [])
+      .map((i) => i.ProductCategoryDescription)
+      .find(Boolean) || null;
+
+    const row = {
+      'RFQ ID': rfq.ID,
+      'Sales Org': rfq.OrgName || null,
+      'Product Category': productCategory,
+      'Cost (EPT)': costValue,
+    };
+
+    if (costValue === null) {
+      costUnknown.push({
+        ...row,
+        reason: rfq.ParentQuoteIDRoot
+          ? 'RFQ is linked to a Quote, not an Opportunity Item -- no confirmed item-level link to a single quote line cost, so cost cannot be resolved without guessing'
+          : 'No linked Opportunity Item cost (ExpectedNetAmount) found for this RFQ',
+      });
+    } else if (costValue < maxCost) {
+      underThreshold.push(row);
+    }
+  }
+
+  const byProductCategory = {};
+  const bySalesOrg = {};
+  for (const row of underThreshold) {
+    const cat = row['Product Category'] || 'Uncategorized';
+    byProductCategory[cat] = (byProductCategory[cat] || 0) + 1;
+    const org = row['Sales Org'] || 'Unknown';
+    bySalesOrg[org] = (bySalesOrg[org] || 0) + 1;
+  }
+
+  return {
+    totalRFQsInScope: rfqs.results.length,
+    rfqCount: underThreshold.length,
+    costUnknownCount: costUnknown.length,
+    maxCost,
+    method: 'Opportunity Item ExpectedNetAmount ("EPT"), joined via RFQRoot.ParentOpportunityID/ParentOpportunityItemID (confirmed real, item-level link). Quote-linked RFQs cannot be resolved to a single cost yet and are reported under costUnknown, never guessed or treated as 0.',
+    byProductCategory: Object.entries(byProductCategory).map(([k, v]) => ({ 'Product Category': k, Count: v })),
+    bySalesOrg: Object.entries(bySalesOrg).map(([k, v]) => ({ 'Sales Org': k, Count: v })),
+    sample: underThreshold.slice(0, 10),
+    costUnknownSample: costUnknown.slice(0, 10),
+    truncated: !!rfqs.truncated || !!itemsResult.data.truncated || !!rfqItemsResult.data.truncated,
+  };
+}
+
 // Runs opportunitiesConvertedToQuote once per resolved org, same pattern as
 // aggregateByOrgs — a per-org breakdown instead of one number flattened
 // across every org, and the LLM never has to loop this itself.

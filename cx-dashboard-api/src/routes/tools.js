@@ -28,6 +28,7 @@ import {
   countRFQsByProduct,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
+  countRFQsByCostThreshold,
   resolveOrgScopeTool,
   getSalesOrgs,
 } from '../analytics-service.js';
@@ -256,6 +257,27 @@ router.post('/count_rfqs_from_quotes', async (req, res, next) => {
     res.json(result.uniqueRFQCount === 0
       ? { ...enriched, warning: `Neither RFQ-raised-from-quote signal (RFQRoot.FromQuote or SalesQuoteItem.RFQ_IDcontent_SDK) has been observed populated for this scope — this call used: ${result.method}. Report this 0 as "the underlying field may not be populated by the current process" — not as a confident "no RFQs were raised".` }
       : enriched);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/count_rfqs_by_cost_threshold', async (req, res, next) => {
+  try {
+    const rest = req.body || {};
+    if (rest.maxCost === undefined || rest.maxCost === null || rest.maxCost === '') {
+      return res.status(400).json({ error: 'maxCost is required' });
+    }
+    const filters = {
+      maxCost: rest.maxCost,
+      salesOrgId: rest.salesOrgId || null,
+      account: rest.account || null,
+      dateFrom: rest.dateFrom || null,
+      dateTo: rest.dateTo || null,
+      segment: rest.segment || null,
+    };
+    const result = await countRFQsByCostThreshold(filters, req.userJwt, req.userEmail);
+    res.json(withUnit(result, 'count', 'RFQs Under Cost Threshold'));
   } catch (err) {
     next(err);
   }

@@ -23,6 +23,7 @@ import {
   countRFQsByProduct,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
+  countRFQsByCostThreshold,
   resolveOrgScopeTool,
   getSalesOrgs,
 } from './analytics-service.js';
@@ -180,6 +181,18 @@ export async function executeFoundryTool(name, args, userJwt, userEmail) {
       return result.uniqueRFQCount === 0
         ? { ...enriched, warning: `Neither RFQ-raised-from-quote signal (RFQRoot.FromQuote or SalesQuoteItem.RFQ_IDcontent_SDK) has been observed populated for this scope — this call used: ${result.method}. Report this 0 as "the underlying field may not be populated by the current process" — not as a confident "no RFQs were raised".` }
         : enriched;
+    }
+    case 'count_rfqs_by_cost_threshold': {
+      const filters = {
+        maxCost: args.maxCost,
+        salesOrgId: args.salesOrgId || null,
+        account: args.account || null,
+        dateFrom: args.dateFrom || null,
+        dateTo: args.dateTo || null,
+        segment: args.segment || null,
+      };
+      const result = await countRFQsByCostThreshold(filters, userJwt, userEmail);
+      return withUnit(result, 'count', 'RFQs Under Cost Threshold');
     }
     case 'list_sales_orgs': {
       const orgs = await getSalesOrgs(userJwt);

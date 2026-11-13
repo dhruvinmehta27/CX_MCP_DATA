@@ -820,6 +820,22 @@ const CUSTOM_AGENT_TOOLS = [
     },
   },
   {
+    name: 'count_rfqs_by_cost_threshold',
+    description: 'Count RFQs whose Opportunity Item cost (ExpectedNetAmount, the "EPT" value shown on the RFQ OWL) is below maxCost, broken down by product category and sales org. Cost is resolved ONLY via the RFQ\'s linked Opportunity Item (RFQRoot.ParentOpportunityID/ParentOpportunityItemID — a confirmed real, item-level link). RFQs linked to a Quote instead (no confirmed item-level quote cost link exists), or with no cost found, are reported under costUnknown and NEVER counted as matching the threshold — report costUnknown explicitly to the user rather than treating it as a real "<maxCost" answer.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        maxCost: { type: 'number', description: 'Upper bound, exclusive, in the Opportunity Item EPT currency.' },
+        ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
+        ...CUSTOM_AGENT_ACCOUNT_PARAM,
+        dateFrom: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        dateTo: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },
+        segment: { type: 'string', description: 'AER, AUT, HM, or IND (or the name).' },
+      },
+      required: ['maxCost'],
+    },
+  },
+  {
     name: 'count_quote_conversions_by_org',
     description: 'Same as count_quote_conversions but across MULTIPLE orgs in one call — use this whenever the user asks about more than one org/region for quote conversion. Runs the count once per org server-side with one consistent method, returning a per-org breakdown (Org, Total opportunities, Converted to quote, Conversion rate) plus the combined total — the correct way to answer a rollup question, instead of calling count_quote_conversions once per org yourself.',
     input_schema: {
