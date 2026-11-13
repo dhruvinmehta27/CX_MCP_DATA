@@ -210,6 +210,35 @@ FUNCTION_TOOLS = [
         },
     ),
     FunctionTool(
+        name="count_rfqs_from_opportunities",
+        strict=True,
+        description=(
+            "Count how many RFQs were raised from opportunities in scope "
+            "(Process A). Direct Opportunity-side counterpart to "
+            "count_quotes_from_opportunities, simpler: RFQRootCollection "
+            "carries ParentOpportunityID/ParentOpportunityItemID directly "
+            "(confirmed real and populated), no join needed. Scoped to the "
+            "OPPORTUNITY's own org/date/status/segment filters. Do not confuse "
+            "with count_rfqs_from_quotes (Process B) -- different RFQ "
+            "populations."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["won", "open", "lost", "all"]},
+                "salesOrgId": {"type": "string"},
+                "account": {"type": "string"},
+                "dateFrom": {"type": "string"},
+                "dateTo": {"type": "string"},
+                "segment": {"type": "string"},
+                "application": {"type": "string"},
+                "marketSegmentGroup": {"type": "string"},
+                "strategicAccount": {"type": "string"},
+            },
+            "required": [],
+        },
+    ),
+    FunctionTool(
         name="count_quote_conversions_by_org",
         strict=True,
         description=(
@@ -244,11 +273,13 @@ FUNCTION_TOOLS = [
         name="count_rfqs_from_quotes",
         strict=True,
         description=(
-            "Count RFQs raised from quotes (derived from RFQ_IDcontent_SDK on "
-            "SalesQuoteItem). CAVEAT: this field has not been observed populated in "
-            "any sample record -- a 0 result must be reported as 'field may not be "
-            "populated by the current process', not as a confident 'no RFQs were "
-            "raised'. No org/account filter yet."
+            "Count RFQs raised from quotes. Prefers RFQRoot.FromQuote (direct "
+            "boolean on the RFQ), falls back to SalesQuoteItem.RFQ_IDcontent_SDK "
+            "-- response includes which method was used. CAVEAT: neither signal "
+            "has been observed populated in any real sample -- a 0 result must be "
+            "reported as 'the underlying signal may not be populated by the "
+            "current process', not as a confident 'no RFQs were raised'. No "
+            "org/account filter yet."
         ),
         parameters={
             "type": "object",

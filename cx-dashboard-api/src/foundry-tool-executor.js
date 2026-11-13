@@ -19,6 +19,7 @@ import {
   aggregateByOrgs,
   opportunitiesConvertedToQuote,
   countQuotesFromOpportunities,
+  countRFQsFromOpportunities,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
   resolveOrgScopeTool,
@@ -127,6 +128,21 @@ export async function executeFoundryTool(name, args, userJwt, userEmail) {
       const result = await countQuotesFromOpportunities(filters, userJwt, userEmail);
       return withUnit(result, 'count', 'Quotes Created from Opportunities');
     }
+    case 'count_rfqs_from_opportunities': {
+      const filters = {
+        salesOrgId: args.salesOrgId || null,
+        account: args.account || null,
+        dateFrom: args.dateFrom || null,
+        dateTo: args.dateTo || null,
+        status: args.status || 'all',
+        segment: args.segment || null,
+        application: args.application || null,
+        marketSegmentGroup: args.marketSegmentGroup || null,
+        strategicAccount: args.strategicAccount || null,
+      };
+      const result = await countRFQsFromOpportunities(filters, userJwt, userEmail);
+      return withUnit(result, 'count', 'RFQs Raised from Opportunities');
+    }
     case 'count_quote_conversions_by_org': {
       const { orgs, ...rest } = args;
       const filters = {
@@ -149,7 +165,7 @@ export async function executeFoundryTool(name, args, userJwt, userEmail) {
       const result = await rfqsRaisedFromQuotes({ dateFrom: args.dateFrom || null, dateTo: args.dateTo || null }, userJwt, userEmail);
       const enriched = withUnit(result, 'count', 'RFQs Raised from Quotes');
       return result.uniqueRFQCount === 0
-        ? { ...enriched, warning: 'This field (RFQ_IDcontent_SDK) has not been observed populated in any sample record during development. Report this 0 as "the underlying field may not be populated by the current process" — not as a confident "no RFQs were raised".' }
+        ? { ...enriched, warning: `Neither RFQ-raised-from-quote signal (RFQRoot.FromQuote or SalesQuoteItem.RFQ_IDcontent_SDK) has been observed populated for this scope — this call used: ${result.method}. Report this 0 as "the underlying field may not be populated by the current process" — not as a confident "no RFQs were raised".` }
         : enriched;
     }
     case 'list_sales_orgs': {

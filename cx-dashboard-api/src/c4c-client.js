@@ -566,11 +566,28 @@ export async function fetchRFQs(filters = {}, userJwt) {
   // same pattern as sales-org scoping on Quotes/Opportunities.
   if (filters.ownerId) parts.push(`substringof('${odataEscape(filters.ownerId)}',OwnerName)`);
   parts.push(...dateFilter('CreationDateTime', filters.dateFrom, filters.dateTo));
+  // OrgID/OrgName, BusSeg/BusSegText, ParentOpportunityID/ParentOpportunityItemID,
+  // FromQuote/ParentQuoteIDRoot, SystemStatus/SystemStatusText -- confirmed
+  // real and populated against a live RFQRootCollection record (2026-11-13).
+  // MarketSeg/AppCode deliberately NOT selected here yet -- confirmed real
+  // fields, but a different code space than Opportunity/Quote's
+  // marketSegmentGroup/application filters, not safe to alias to those.
+  const extra = (filters.extraFields || []).filter((f) => ![
+    'ObjectID', 'ID', 'Name', 'RFQStatus', 'RFQStatusText',
+    'AccountName', 'RFQDueDate', 'OwnerName', 'CreationDateTime',
+    'OrgID', 'OrgName', 'BusSeg', 'BusSegText',
+    'ParentOpportunityID', 'ParentOpportunityItemID',
+    'FromQuote', 'ParentQuoteIDRoot', 'SystemStatus', 'SystemStatusText',
+  ].includes(f));
   return fetchAllPages(
     `${CUSTOM_BASE}/zrfq/RFQRootCollection`,
     [
       'ObjectID', 'ID', 'Name', 'RFQStatus', 'RFQStatusText',
       'AccountName', 'RFQDueDate', 'OwnerName', 'CreationDateTime',
+      'OrgID', 'OrgName', 'BusSeg', 'BusSegText',
+      'ParentOpportunityID', 'ParentOpportunityItemID',
+      'FromQuote', 'ParentQuoteIDRoot', 'SystemStatus', 'SystemStatusText',
+      ...extra,
     ],
     parts.join(' and '),
     userJwt

@@ -24,6 +24,7 @@ import {
   aggregateByOrgs,
   opportunitiesConvertedToQuote,
   countQuotesFromOpportunities,
+  countRFQsFromOpportunities,
   countQuoteConversionsByOrgs,
   rfqsRaisedFromQuotes,
   resolveOrgScopeTool,
@@ -186,6 +187,24 @@ router.post('/count_quotes_from_opportunities', async (req, res, next) => {
   }
 });
 
+router.post('/count_rfqs_from_opportunities', async (req, res, next) => {
+  try {
+    const rest = req.body || {};
+    const filters = {
+      salesOrgId: rest.salesOrgId || null,
+      account: rest.account || null,
+      dateFrom: rest.dateFrom || null,
+      dateTo: rest.dateTo || null,
+      status: rest.status || 'all',
+      ...classificationFilters(rest),
+    };
+    const result = await countRFQsFromOpportunities(filters, req.userJwt, req.userEmail);
+    res.json(withUnit(result, 'count', 'RFQs Raised from Opportunities'));
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/count_quote_conversions_by_org', async (req, res, next) => {
   try {
     const { orgs, ...rest } = req.body || {};
@@ -215,7 +234,7 @@ router.post('/count_rfqs_from_quotes', async (req, res, next) => {
     const result = await rfqsRaisedFromQuotes({ dateFrom: dateFrom || null, dateTo: dateTo || null }, req.userJwt, req.userEmail);
     const enriched = withUnit(result, 'count', 'RFQs Raised from Quotes');
     res.json(result.uniqueRFQCount === 0
-      ? { ...enriched, warning: 'This field (RFQ_IDcontent_SDK) has not been observed populated in any sample record during development. Report this 0 as "the underlying field may not be populated by the current process" — not as a confident "no RFQs were raised".' }
+      ? { ...enriched, warning: `Neither RFQ-raised-from-quote signal (RFQRoot.FromQuote or SalesQuoteItem.RFQ_IDcontent_SDK) has been observed populated for this scope — this call used: ${result.method}. Report this 0 as "the underlying field may not be populated by the current process" — not as a confident "no RFQs were raised".` }
       : enriched);
   } catch (err) {
     next(err);
