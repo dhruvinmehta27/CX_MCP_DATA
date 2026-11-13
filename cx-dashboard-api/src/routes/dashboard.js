@@ -194,6 +194,7 @@ function executeCustomAgentTool(req, resolvedSalesOrgId, appliedFilters = {}, un
     if (name === 'count_rfqs_by_cost_threshold') {
       const filters = {
         maxCost: input.maxCost,
+        currency: input.currency || null,
         salesOrgId: input.salesOrgId || null,
         account: input.account || null,
         dateFrom: input.dateFrom || null,

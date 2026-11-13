@@ -135,7 +135,28 @@ const ITEMS_KEYWORDS = [
 
 function needsItemsEndpoint(userRequest) {
   const lower = (userRequest || '').toLowerCase();
+  // RFQ product/line-item/cost data lives in a different collection than
+  // Opportunity line items (RFQItemCollection vs OpportunityItemCollection) --
+  // never force opportunities/items for an RFQ request, no matter which
+  // product/cost keyword also appears. See needsRFQCustomAggregate below.
+  if (lower.includes('rfq')) return false;
   return ITEMS_KEYWORDS.some((k) => lower.includes(k));
+}
+
+// Keywords that deterministically force custom/aggregate for RFQ requests --
+// same "no LLM override possible" pattern as needsItemsEndpoint above. The
+// LLM's prose routing rules for this were observed to be inconsistently
+// followed (the "explanation" text would correctly describe the
+// custom/aggregate join while "endpoints" still listed opportunities/items),
+// so this is enforced deterministically instead of relying on prompt text.
+const RFQ_CUSTOM_KEYWORDS = [
+  'product id', 'product category', 'product description', 'line item', 'line-item',
+  'product type', 'cost', 'value', 'amount', 'price', 'eur', 'usd', 'threshold',
+];
+
+function needsRFQCustomAggregate(userRequest) {
+  const lower = (userRequest || '').toLowerCase();
+  return lower.includes('rfq') && RFQ_CUSTOM_KEYWORDS.some((k) => lower.includes(k));
 }
 
 // Subset of ITEMS_KEYWORDS that specifically signals the user wants raw,
@@ -187,6 +208,15 @@ export function sanitizeIntent(intent = {}, userRequest = '') {
   if (needsItemsEndpoint(userRequest)) {
     intent.endpoints = ['opportunities/items'];
     if (needsRawRows(userRequest)) intent.chartType = 'table';
+  }
+
+  // Hard override: RFQ product/cost questions always go through the
+  // verified custom/aggregate join -- RFQItemCollection/RFQ-cost data is a
+  // different collection than Opportunity line items, and the LLM's prose
+  // routing rules for this were observed to be inconsistently followed.
+  if (needsRFQCustomAggregate(userRequest)) {
+    intent.endpoints = ['custom/aggregate'];
+    intent.chartType = intent.chartType || 'table';
   }
 
   // Hard override: "top N users/reps by quote count" → aggregated endpoint, never raw
@@ -827,7 +857,8 @@ const CUSTOM_AGENT_TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        maxCost: { type: 'number', description: 'Upper bound, exclusive, in the Opportunity Item EPT currency.' },
+        maxCost: { type: 'number', description: 'Upper bound, exclusive, in the given currency.' },
+        currency: { type: 'string', description: 'ISO currency code maxCost is denominated in, e.g. "EUR". Default "EUR". Any RFQ whose Opportunity Item cost is in a different currency is reported under costUnknown, never converted.' },
         ...CUSTOM_AGENT_SINGLE_ORG_PARAM,
         ...CUSTOM_AGENT_ACCOUNT_PARAM,
         dateFrom: { type: 'string', description: 'ISO date, filters RFQs on CreationDateTime.' },

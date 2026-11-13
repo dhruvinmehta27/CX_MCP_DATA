@@ -299,7 +299,7 @@
     "/count_rfqs_by_cost_threshold": {
       "post": {
         "operationId": "count_rfqs_by_cost_threshold",
-        "summary": "Count RFQs whose Opportunity Item cost (ExpectedNetAmount, the 'EPT' value shown on the RFQ OWL) is below maxCost, broken down by product category and sales org. Cost is resolved only via RFQRoot.ParentOpportunityID/ParentOpportunityItemID -- a confirmed real, item-level link. RFQs linked to a Quote instead of an Opportunity Item (no confirmed item-level quote cost link exists), or with no cost found at all, are reported under costUnknown and are NEVER counted as under the threshold -- a missing cost must never be reported as a real match.",
+        "summary": "Count RFQs whose Opportunity Item cost (ExpectedNetAmount, the 'EPT' value shown on the RFQ OWL) is below maxCost (in the given currency, default EUR), broken down by product category and sales org. Cost is resolved only via RFQRoot.ParentOpportunityID/ParentOpportunityItemID -- a confirmed real, item-level link. RFQs linked to a Quote instead of an Opportunity Item, priced in a different currency than requested, or with no cost found at all, are reported under costUnknown and are NEVER counted as under the threshold -- a missing or uncomparable cost must never be reported as a real match.",
         "requestBody": {
           "required": true,
           "content": {
@@ -307,7 +307,8 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "maxCost": { "type": "number", "description": "Upper bound, exclusive, in the Opportunity Item's EPT currency." },
+                  "maxCost": { "type": "number", "description": "Upper bound, exclusive, in the given currency." },
+                  "currency": { "type": "string", "description": "ISO currency code maxCost is denominated in, e.g. \"EUR\". Default \"EUR\". An RFQ whose Opportunity Item cost is in a different currency is reported under costUnknown, never converted." },
                   "salesOrgId": { "type": "string" },
                   "account": { "type": "string" },
                   "dateFrom": { "type": "string" },

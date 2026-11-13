@@ -270,6 +270,7 @@ router.post('/count_rfqs_by_cost_threshold', async (req, res, next) => {
     }
     const filters = {
       maxCost: rest.maxCost,
+      currency: rest.currency || null,
       salesOrgId: rest.salesOrgId || null,
       account: rest.account || null,
       dateFrom: rest.dateFrom || null,
