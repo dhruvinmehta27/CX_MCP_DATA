@@ -688,6 +688,9 @@ export async function countRFQsByProduct(filters, userJwt, userEmail) {
  * are reported separately under costUnknown and are NEVER counted as
  * matching the threshold. A missing cost must never be silently treated
  * as 0.
+ *
+ * CURRENCY: per the user, this is a global system and ExpectedNetAmount is
+ * compared directly against maxCost with no currency filtering/conversion.
  */
 export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
   if (filters.maxCost === undefined || filters.maxCost === null || filters.maxCost === '') {
@@ -761,7 +764,7 @@ export async function countRFQsByCostThreshold(filters, userJwt, userEmail) {
     rfqCount: underThreshold.length,
     costUnknownCount: costUnknown.length,
     maxCost,
-    method: 'Opportunity Item ExpectedNetAmount ("EPT"), joined via RFQRoot.ParentOpportunityID/ParentOpportunityItemID (confirmed real, item-level link). Quote-linked RFQs cannot be resolved to a single cost yet and are reported under costUnknown, never guessed or treated as 0.',
+    method: 'Opportunity Item ExpectedNetAmount ("EPT"), joined via RFQRoot.ParentOpportunityID/ParentOpportunityItemID (confirmed real, item-level link). Quote-linked RFQs and RFQs with no resolvable cost are reported under costUnknown and never guessed or treated as 0.',
     byProductCategory: Object.entries(byProductCategory).map(([k, v]) => ({ 'Product Category': k, Count: v })),
     bySalesOrg: Object.entries(bySalesOrg).map(([k, v]) => ({ 'Sales Org': k, Count: v })),
     sample: underThreshold.slice(0, 10),
