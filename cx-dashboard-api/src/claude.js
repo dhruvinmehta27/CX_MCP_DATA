@@ -589,14 +589,14 @@ const BUSINESS_TERM_GLOSSARY = [
     entity: 'quotes',
     fieldName: 'ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b',
     displayLabel: 'Approval Total',
-    note: 'Confirmed via C4C UI model binding (/Root/ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b/content). This is a GUID-suffixed Key User Extensibility custom field — SAP\'s naming pattern for fields added via the UI "add field" wizard, NOT a hand-coded KUT/SDK field. Before using it in aggregate, call list_fields on "quotes" first to confirm this exact name is exposed in the OData service — GUID-suffixed extension fields sometimes differ slightly between the UI binding name and the actual OData property name, unlike the other entries in this glossary which are already verified end-to-end. Likely semantics (per business description, not yet independently verified): for opportunities/quotes with alternative item groups (AlternativeToItemID), only the highest-value item per group counts; otherwise equal to the item/quote total.',
+    note: 'Confirmed via C4C UI model binding (/Root/ApprovalTotal_19b842e8f51f440c90d08cb9eb677b1b/content). This is a GUID-suffixed Key User Extensibility custom field — SAP\'s naming pattern for fields added via the UI "add field" wizard, NOT a hand-coded KUT/SDK field. Before using it in aggregate, call list_fields on "quotes" first to confirm this exact name is exposed in the OData service — GUID-suffixed extension fields sometimes differ slightly between the UI binding name and the actual OData property name, unlike the other entries in this glossary which are already verified end-to-end. Likely semantics (per business description, not yet independently verified): for opportunities/quotes with alternative item groups (AlternativeToItemID), only the highest-value item per group counts; otherwise equal to the item/quote total. CONFIRMED (2026-11-13): this field is driven by the approval workflow — a quote that hasn\'t entered approval (e.g. ApprovalStatusCode "Not Started") legitimately omits it from the OData response entirely. Absence on a given record is NOT evidence the field is stale/dead — single-record field discovery (list_fields) can miss conditional fields like this one depending on which record happens to be sampled; only re-test against a quote that has actually gone through approval before concluding this field no longer exists.',
   },
   {
     terms: ['approval margin', 'approval margin percent'],
     entity: 'quotes',
     fieldName: 'ApprovalMarginPercent_106549400b2441d384f3008d5acf863e',
     displayLabel: 'Approval Margin %',
-    note: 'Confirmed via C4C UI model binding. Same caveat as ApprovalTotal above: GUID-suffixed Key User Extensibility field — verify via list_fields on "quotes" before using in aggregate, do not assume it matches the UI binding name exactly.',
+    note: 'Confirmed via C4C UI model binding. Same caveat as ApprovalTotal above: GUID-suffixed Key User Extensibility field — verify via list_fields on "quotes" before using in aggregate, do not assume it matches the UI binding name exactly. Also same approval-workflow caveat as ApprovalTotal: legitimately absent on a quote that hasn\'t entered approval — absence on one sampled record is not evidence the field is dead.',
   },
 ];
 
