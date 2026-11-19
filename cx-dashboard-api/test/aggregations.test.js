@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   parseODataDate, groupBy, countBy, sumBy, trendByMonth,
   pipelineStages, dailySummary, isOpenStatus, isRfqOpen, quotesByDayThisWeek,
-  pipelineOverview,
+  pipelineOverview, responseTime,
 } from '../src/aggregations.js';
 
 const NOW = new Date('2026-06-10T12:00:00Z');
@@ -132,5 +132,44 @@ const moreOpps = [...baseOpps, mkOpp('1', 'Identify', 'Open', 1000, 10, '2026-11
 const ovMore = pipelineOverview(moreOpps, NOW);
 assert.ok(ovMore.kpis.openOpportunities >= ov.kpis.openOpportunities, 'superset open >= subset open');
 assert.ok(ovMore.kpis.totalPipelineValue >= ov.kpis.totalPipelineValue, 'superset value >= subset value');
+
+// ---------------------------------------------------------------------------
+// responseTime — cycle/throughput analytics (Quote Response Time view)
+// ---------------------------------------------------------------------------
+const rtOpps = [
+  // closed WON — 10-day cycle, Level 2, closes May 2026
+  { LifeCycleStatusCodeText: 'Won', CreationDateTime: od('2026-05-20T00:00:00Z'), EntityLastChangedOn: od('2026-05-30T00:00:00Z'), OpportunityLevel_KUTText: 'Level 2 - Key Opportunity', SalesCyclePhaseCode: 'Z03', SalesCyclePhaseCodeText: 'Quotation' },
+  // closed LOST — 20-day cycle, Level 1, closes May 2026
+  { LifeCycleStatusCodeText: 'Lost', CreationDateTime: od('2026-05-01T00:00:00Z'), EntityLastChangedOn: od('2026-05-21T00:00:00Z'), OpportunityLevel_KUTText: 'Level 1 - Managed Opportunity', SalesCyclePhaseCode: 'Z02', SalesCyclePhaseCodeText: 'Qualify' },
+  // OPEN — age 9.5 d, phase Identify
+  { LifeCycleStatusCodeText: 'Open', CreationDateTime: od('2026-06-01T00:00:00Z'), SalesCyclePhaseCode: 'Z01', SalesCyclePhaseCodeText: 'Identify' },
+  // OPEN — age 30 d, phase Qualify
+  { LifeCycleStatusCodeText: 'In Process', CreationDateTime: od('2026-05-11T12:00:00Z'), SalesCyclePhaseCode: 'Z02', SalesCyclePhaseCodeText: 'Qualify' },
+];
+const rt = responseTime(rtOpps, NOW, 12);
+// tiles: closed cycle avg = (10+20)/2 = 15; won = 10; open age avg = (9.5+30)/2 = 19.8
+assert.equal(rt.tiles.opportunityCycle.days, 15);
+assert.equal(rt.tiles.opportunityCycle.n, 2);
+assert.equal(rt.tiles.wonCycle.days, 10);
+assert.equal(rt.tiles.wonCycle.n, 1);
+assert.equal(rt.tiles.openAge.days, 19.8);
+assert.equal(rt.tiles.openAge.n, 2);
+// phase breakdown = avg AGE of open deals by current phase, ordered by phase code
+assert.deepEqual(rt.byPhase.map((p) => p.phase), ['Identify', 'Qualify']);
+assert.equal(rt.byPhase[0].avgAgeDays, 9.5);
+assert.equal(rt.byPhase[1].avgAgeDays, 30);
+// monthly: 12 buckets, May-2026 holds both closed deals, avg cycle 15
+assert.equal(rt.monthly.length, 12);
+const may = rt.monthly.find((m) => m.month === '2026-05');
+assert.equal(may.count, 2);
+assert.equal(may.avgCycleDays, 15);
+// category throughput by OpportunityLevel
+assert.equal(rt.byCategory.find((c) => c.category === 'Level 2 - Key Opportunity').avgCycleDays, 10);
+assert.equal(rt.byCategory.find((c) => c.category === 'Level 1 - Managed Opportunity').avgCycleDays, 20);
+// DATA-HONESTY invariant: per-phase durations are never claimed available
+assert.equal(rt.meta.phaseDurationsAvailable, false);
+assert.equal(rt.meta.openCount + rt.meta.closedCount, rt.meta.total, 'open + closed == total');
+assert.equal(rt.meta.openCount, 2);
+assert.equal(rt.meta.closedCount, 2);
 
 console.log('✓ all aggregation tests passed');

@@ -385,6 +385,135 @@ export function funnelSnapshot(records) {
   return { stages, overallWinRate };
 }
 
+/**
+ * Response-time / cycle analytics for the "Quote Response Time" view.
+ *
+ * DATA HONESTY — the whole reason this function is careful: live C4C OData
+ * exposes creation timestamps and the CURRENT sales-cycle phase, but NOT the
+ * per-phase entry/exit timestamps. So true "time spent in each phase"
+ * (Solution Phase, RFQ Processing, Quote Prep …) CANNOT be derived here, and
+ * meta.phaseDurationsAvailable is false so the UI shows "—" for those splits.
+ * Everything returned is computed only from timestamps we can verify:
+ *   • open-deal age  = now − CreationDateTime                  (exact)
+ *   • closed cycle   = EntityLastChangedOn − CreationDateTime  (close ≈ last change)
+ *
+ * @param {object[]} records  opportunity rows (already filtered)
+ * @param {Date}     now
+ * @param {number}   months   trailing months for the monthly cycle trend
+ */
+export function responseTime(records, now = new Date(), months = 12) {
+  const open = records.filter((o) => isOpenStatus(o.LifeCycleStatusCodeText));
+  const closed = records.filter((o) => !isOpenStatus(o.LifeCycleStatusCodeText));
+  const won = closed.filter((o) => isWonStatus(o.LifeCycleStatusCodeText));
+
+  const DAY = 86_400_000;
+  const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
+  const avg = (nums) => (nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null);
+  const cycleDays = (o) => {
+    const c = parseODataDate(o.CreationDateTime);
+    const e = parseODataDate(o.EntityLastChangedOn);
+    return c && e && e > c ? (e - c) / DAY : null;
+  };
+  const ageDays = (o) => {
+    const c = parseODataDate(o.CreationDateTime);
+    return c && now > c ? (now - c) / DAY : null;
+  };
+
+  const closedCycles = closed.map(cycleDays).filter((d) => d != null);
+  const wonCycles = won.map(cycleDays).filter((d) => d != null);
+  const openAges = open.map(ageDays).filter((d) => d != null);
+
+  const tiles = {
+    opportunityCycle: {
+      label: 'Opportunity Cycle', days: round1(avg(closedCycles)), n: closedCycles.length,
+      hint: 'Average total days from creation to close, over closed opportunities (close ≈ last change).',
+    },
+    wonCycle: {
+      label: 'Won Deals', days: round1(avg(wonCycles)), n: wonCycles.length,
+      hint: 'Average creation-to-close days for won opportunities.',
+    },
+    openAge: {
+      label: 'Open Pipeline Age', days: round1(avg(openAges)), n: openAges.length,
+      hint: 'Average days since creation for opportunities still open.',
+    },
+  };
+
+  // Phase breakdown analog: AVG AGE of OPEN opps by their CURRENT phase
+  // (now − creation). This is "how long deals sitting in each phase have been
+  // alive", NOT time-in-phase (which needs transition timestamps we lack).
+  const phaseMap = new Map();
+  for (const o of open) {
+    const a = ageDays(o);
+    if (a == null) continue;
+    const phase = o.SalesCyclePhaseCodeText || 'Unknown';
+    const code = o.SalesCyclePhaseCode || '';
+    const cur = phaseMap.get(phase) || { phase, code, sum: 0, n: 0 };
+    cur.sum += a;
+    cur.n += 1;
+    if (code && (!cur.code || String(code) < String(cur.code))) cur.code = code;
+    phaseMap.set(phase, cur);
+  }
+  const byPhase = [...phaseMap.values()]
+    .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
+    .map(({ phase, n, sum }) => ({ phase, count: n, avgAgeDays: round1(sum / n) }));
+
+  // Monthly cycle trend: average closed-deal cycle bucketed by CLOSE month
+  // (EntityLastChangedOn), trailing `months`, gaps kept as null (no fake 0).
+  const monthBuckets = new Map();
+  const keys = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    keys.push(key);
+    monthBuckets.set(key, { sum: 0, n: 0 });
+  }
+  for (const o of closed) {
+    const e = parseODataDate(o.EntityLastChangedOn);
+    const d = cycleDays(o);
+    if (!e || d == null) continue;
+    const key = `${e.getUTCFullYear()}-${String(e.getUTCMonth() + 1).padStart(2, '0')}`;
+    const b = monthBuckets.get(key);
+    if (!b) continue;
+    b.sum += d;
+    b.n += 1;
+  }
+  const monthly = keys.map((k) => {
+    const b = monthBuckets.get(k);
+    return { month: k, avgCycleDays: b.n ? round1(b.sum / b.n) : null, count: b.n };
+  });
+
+  // Throughput by account/opportunity category (OpportunityLevel_KUTText —
+  // the Level 0/1/2/3 classification), average closed cycle per category.
+  const catMap = new Map();
+  for (const o of closed) {
+    const d = cycleDays(o);
+    if (d == null) continue;
+    const category = o.OpportunityLevel_KUTText || 'Unspecified';
+    const c = catMap.get(category) || { category, sum: 0, n: 0 };
+    c.sum += d;
+    c.n += 1;
+    catMap.set(category, c);
+  }
+  const byCategory = [...catMap.values()]
+    .map(({ category, sum, n }) => ({ category, avgCycleDays: round1(sum / n), count: n }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    tiles,
+    byPhase,
+    monthly,
+    byCategory,
+    meta: {
+      total: records.length,
+      closedCount: closed.length,
+      openCount: open.length,
+      wonCount: won.length,
+      // per-phase durations need transition timestamps absent from C4C OData
+      phaseDurationsAvailable: false,
+    },
+  };
+}
+
 function isSameDay(a, b) {
   return (
     a.getUTCFullYear() === b.getUTCFullYear() &&

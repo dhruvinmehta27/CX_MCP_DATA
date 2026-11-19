@@ -5,6 +5,7 @@ const NAV = [
   { to: '/', icon: 'home', label: 'Home', end: true },
   { to: '/builder', icon: 'sparkles', label: 'AI Report Builder' },
   { to: '/brief', icon: 'briefcase', label: 'Sales Brief' },
+  { to: '/response-time', icon: 'clock', label: 'Quote Response Time' },
   // Hidden — available when needed:
   // { to: '/', icon: 'grid', label: 'Dashboard', end: true },
   // { to: '/briefing', icon: 'sun', label: 'Daily Briefing' },

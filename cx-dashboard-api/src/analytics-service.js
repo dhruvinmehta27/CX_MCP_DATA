@@ -13,7 +13,7 @@ import { getAccountCountryMap, enrichWithCountry, enrichOpportunitiesWithAccount
 import {
   countBy, sumBy, trendByMonth, pipelineStages, dailySummary,
   quotesByDayThisWeek, isOpenStatus, isWonStatus, isRfqOpen, parseODataDate, toNumber,
-  pipelineOverview, funnelSnapshot, oppValue,
+  pipelineOverview, funnelSnapshot, oppValue, responseTime,
 } from './aggregations.js';
 import { getOrSet } from './cache.js';
 
@@ -1090,6 +1090,21 @@ export async function pipelineOverviewSvc(filters, userJwt, userEmail) {
       overview.meta.prevPeriod = { from: prevFilters.dateFrom, to: prevFilters.dateTo };
     }
     return overview;
+  });
+}
+
+/**
+ * Cycle / response-time analytics for the "Quote Response Time" view.
+ * Fail-closed: when the opportunity set exceeded the live-record cap the
+ * averages are over a partial set, so `truncated` is surfaced and the UI
+ * replaces the headline figures with "—".
+ */
+export async function opportunitiesResponseTime(filters, userJwt, userEmail) {
+  const months = Math.min(Math.max(parseInt(filters.months || '12', 10), 1), 24);
+  return getOrSet(userEmail, 'opportunities/response-time', { ...filters, months }, async () => {
+    const { results, truncated } = await rawOpportunities(filters, userJwt, userEmail);
+    const data = responseTime(results, new Date(), months);
+    return { ...data, truncated: Boolean(truncated) };
   });
 }
 

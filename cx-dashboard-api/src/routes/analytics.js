@@ -38,6 +38,7 @@ router.get('/opportunities/by-owner', handle(svc.opportunitiesByOwner));
 router.get('/opportunities/close-trend', handle(svc.opportunitiesCloseTrend));
 router.get('/opportunities/list', handle(svc.opportunitiesList));
 router.get('/quotes/top-creators', handle(svc.quotesTopCreators));
+router.get('/opportunities/response-time', handle(svc.opportunitiesResponseTime));
 router.get('/rfqs/by-status', handle(svc.rfqsByStatus));
 router.get('/rfqs/by-account', handle(svc.rfqsByAccount));
 router.get('/rfqs/trend', handle(svc.rfqsTrend));

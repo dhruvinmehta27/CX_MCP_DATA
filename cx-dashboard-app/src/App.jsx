@@ -15,6 +15,7 @@ import PipelineHealth from './pages/PipelineHealth';
 import RFQTracker from './pages/RFQTracker';
 import CustomBuilder from './pages/CustomBuilder';
 import SalesBrief from './pages/SalesBrief';
+import ResponseTime from './pages/ResponseTime';
 
 const PAGE_TITLES = {
   '/': ['Dashboard', 'Select a section to get started'],
@@ -22,6 +23,7 @@ const PAGE_TITLES = {
   '/quotes': ['Quote Analytics', 'Full quote analysis'],
   '/board': ['Pipeline Command Center', 'Kanban, funnel, forecast and flow — one shared filter set'],
   '/pipeline': ['Pipeline Health', 'Opportunity pipeline analysis'],
+  '/response-time': ['Quote Response Time', 'Deal cycle & throughput days across the sales process'],
   '/rfqs': ['RFQ Tracker', 'Request-for-quote status and due dates'],
   '/builder': ['AI Report Builder', 'Describe a report in plain English'],
   '/brief': ['Sales Brief', 'Audience-tailored, print-ready briefing'],
@@ -51,6 +53,7 @@ function Shell() {
             <Route path="/quotes" element={<QuoteAnalytics />} />
             <Route path="/board" element={<PipelineBoard />} />
             <Route path="/pipeline" element={<PipelineHealth />} />
+            <Route path="/response-time" element={<ResponseTime />} />
             <Route path="/rfqs" element={<RFQTracker />} />
             <Route path="/builder" element={<CustomBuilder />} />
             <Route path="/brief" element={<SalesBrief />} />

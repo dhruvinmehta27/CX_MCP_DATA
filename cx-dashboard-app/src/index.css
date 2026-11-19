@@ -460,6 +460,23 @@ button { font-family: inherit; }
   .page { padding: 16px; }
 }
 
+/* Informational note strip (data-honesty caveats, etc.) */
+.page-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--primary-tint);
+  color: var(--text-secondary, #475569);
+  border: 1px solid var(--border, #e2e8f0);
+  border-left: 3px solid var(--primary);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.page-note svg { color: var(--primary); flex-shrink: 0; margin-top: 2px; }
+.page-note strong { color: var(--text-primary, #0f172a); font-weight: 600; }
+
 /* ---------- Cards ---------- */
 .card {
   background: var(--card);
